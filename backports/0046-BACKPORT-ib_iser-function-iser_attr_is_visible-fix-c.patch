@@ -1,0 +1,36 @@
+From: Alex Tabachnik <alext@mellanox.com>
+Subject: [PATCH] BACKPORT: ib_iser: function iser_attr_is_visible fix compilation warning incompatible type return value
+
+Fix patch backports/0022-BACKPORT-iser-for-SLES11SP1.patch
+return value of function iser_attr_is_visible should be umode_t for kernels above 3.3.
+Sustain compatibility for RH/SLES distros.
+
+issue: 182534
+issue: 337228
+
+Change-Id: I28bab701399d6a13e8492afb66e8dc1bb15b91c4
+Signed-off-by: Alex Tabachnik <alext@mellanox.com>
+Signed-off-by: Max Gurtovoy <maxg@mellanox.com>
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.c |    7 +++++--
+ 1 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/infiniband/ulp/iser/iscsi_iser.c b/drivers/infiniband/ulp/iser/iscsi_iser.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/ulp/iser/iscsi_iser.c
++++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
+@@ -635,9 +635,12 @@ iscsi_iser_ep_disconnect(struct iscsi_endpoint *ep)
+ 	iser_info("ib conn %p state %d\n", ib_conn, ib_conn->state);
+ 	iser_conn_terminate(ib_conn);
+ }
+-
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0)) || defined(CONFIG_COMPAT_ISER_ATTR_IS_VISIBLE)
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0))
+ static umode_t iser_attr_is_visible(int param_type, int param)
++#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)) || defined(CONFIG_COMPAT_ISER_ATTR_IS_VISIBLE)
++static mode_t iser_attr_is_visible(int param_type, int param)
++#endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)) || defined(CONFIG_COMPAT_ISER_ATTR_IS_VISIBLE)
+ {
+ 	switch (param_type) {
+ 	case ISCSI_HOST_PARAM:

@@ -1,0 +1,61 @@
+From: Erez Shitrit <erezsh@mellanox.com>
+Subject: [PATCH] BACKPORTS: add lro to all kernels
+
+issue:294335
+
+Signed-off-by: Erez Shitrit <erezsh@mellanox.com>
+---
+ drivers/infiniband/ulp/ipoib/ipoib.h         |    7 +++++--
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c |    6 +++---
+ 2 files changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib.h b/drivers/infiniband/ulp/ipoib/ipoib.h
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/ulp/ipoib/ipoib.h
++++ b/drivers/infiniband/ulp/ipoib/ipoib.h
+@@ -44,9 +44,12 @@
+ #include <linux/if_infiniband.h>
+ #include <linux/mutex.h>
+ 
+-#ifdef CONFIG_COMPAT_USE_LRO
+-#include <linux/inet_lro.h>
++#ifndef CONFIG_COMPAT_USE_LRO
++#define CONFIG_COMPAT_USE_LRO
+ #endif
++
++#include <linux/inet_lro.h>
++
+ #include <net/neighbour.h>
+ #include <net/sch_generic.h>
+ 
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+@@ -469,7 +469,7 @@ static int ipoib_set_channels(struct net_device *dev,
+ }
+ #endif
+ 
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)) && defined (CONFIG_COMPAT_USE_LRO)
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)) && (LINUX_VERSION_CODE <  KERNEL_VERSION(3,3,0)) && defined (CONFIG_COMPAT_USE_LRO)
+ int ipoib_set_flags(struct net_device *dev, u32 data)
+ {
+        	if (data & ETH_FLAG_LRO)
+@@ -479,7 +479,7 @@ int ipoib_set_flags(struct net_device *dev, u32 data)
+ 	
+ 	return 0;
+ }
+-#elif defined (CONFIG_COMPAT_USE_LRO)
++#elif defined (CONFIG_COMPAT_USE_LRO) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))
+ int ipoib_set_flags(struct net_device *dev, u32 data)
+ {
+        	ethtool_op_set_flags(dev, data);
+@@ -512,7 +512,7 @@ static const struct ethtool_ops ipoib_ethtool_ops = {
+ 	.get_channels		= ipoib_get_channels,
+ 	.set_channels		= ipoib_set_channels,
+ #endif
+-#ifdef CONFIG_COMPAT_USE_LRO
++#if (LINUX_VERSION_CODE <  KERNEL_VERSION(3,3,0))
+ 	.set_flags		= ipoib_set_flags,
+ 	.get_flags              = ethtool_op_get_flags,
+ #endif

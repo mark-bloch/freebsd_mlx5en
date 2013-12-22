@@ -1,0 +1,604 @@
+                        Mellanox Technologies
+
+===============================================================================
+                       Mellanox OFED for Linux
+                      Version MLNX_OFED-2.0-3.1.0
+                      Last Modified on October, 2013
+===============================================================================
+
+===============================================================================
+Table of Contents
+===============================================================================
+1. Overview
+2. Changes in This Release
+3. Contents of Mellanox OFED for Linux
+4. Supported Platforms and Operating Systems
+5. Hardware and Software Requirements
+6. Supported HCAs
+7. Switch and Gateway Systems Used for Testing
+8. Compatibility
+9. Known Issues
+10. API Changes
+
+===============================================================================
+1. Overview
+===============================================================================
+These are the release notes of Mellanox OFED for Linux Driver, Rev 2.0-3.1.0.
+Mellanox OFED is a single Virtual Protocol Internconnect (VPI) software stack
+and operates across all Mellanox network adapter solutions supporting the
+following uplinks to servers:
+- 10, 20, 40 and 56 Gb/s InfiniBand (IB)
+- 10, 40 Gb/s Ethernet
+- 2.5 or 5.0 GT/s PCI Express 2.0
+- 8 GT/s PCI Express 3.0
+
+===============================================================================
+2. Main Features in This Release
+===============================================================================
+MLNX_OFED v2.0-3.1.0 provides the following changes and new features:
+
+ - SR-IOV for both Ethernet and InfiniBand
+ - RoCE over SR-IOV
+ - Port based QoS for both Ethernet and InfiniBand
+ - eIPoIB
+ - Connect-IB
+ - XRC
+ - Core-Direct support
+ - Dynamically Connected Transport (DCT) - alpha level
+ - Flow Steering
+ - Storage - iSER and SRP
+
+===============================================================================
+3. Content of Mellanox OFED for Linux
+===============================================================================
+Mellanox OFED for Linux software contains the following components:
+ - OpenFabrics core and ULPs:
+        - IB HCA drivers (mlx4, mlx5*)
+        - core
+        - Upper Layer Protocols: IPoIB, SRP and iSER Initiator
+
+ - OpenFabrics utilities:
+        - ib-bonding: Bonding driver for IPoIB interface
+        - OpenSM: IB Subnet Manager with Mellanox proprietary Adaptive Routing
+        - Diagnostic tools
+        - Performance tests
+
+ - MPI:
+        - OSU MPI (MVAPICH 1.9a) stack supporting the InfiniBand interface
+        - Open MPI stack 1.6.4 and later supporting the InfiniBand interface
+        - MPI benchmark tests (OSU benchmarks, Intel MPI benchmarks, Presta)
+
+- PGAS:
+        - ScalableSHMEM v2.2 supporting InfiniBand, MXM and FCA
+        - ScalableUPC v2.2 supporting InfiniBand, MXM and FCA
+
+- HPC Acceleration packages:
+        - Mellanox MXM v1.5 (p2p transport library acceleration over
+          Infiniband)
+        - Mellanox FCA v2.5 (MPI/PGAS collective operations acceleration
+          library over InfiniBand)
+        - KNEM, Linux kernel module enabling high-performance intra-node
+          MPI/PGAS communication for large messages
+
+ - Extra packages:
+        - ibutils2
+        - ibdump
+        - MFT
+
+ - Sources of all software modules (under conditions mentioned in the modules'
+   LICENSE files) except for OpenSM, ibutils2, and ibdump
+
+ - Documentation
+
+===============================================================================
+4. Supported Platforms and Operating Systems
+===============================================================================
+Summary of changes in the list of supported OSes:
+
+* RHEL/CentOS 6.2:                x86_64/i686
+* RHEL/CentOS 6.3:                x86_64/i686
+* RHEL/CentOS 6.4:                i686/x86_64/PPC64
+* SLES11 SP1:                     x86_64
+* SLES11 SP2:                     x86_64/PPC64/i686
+* SLES11 SP3:                     x86_64/i686
+* OEL 6.2:                        x86_64
+* OEL 6.3:                        x86_64
+* OEL 6.4:                        x86_64
+* Citrix XenServer Host 6.1.0:    i686
+* Fedora 14:                      x86_64
+* Fedora 16:                      x86_64
+* Fedora 17:                      x86_64
+* Ubuntu 12.04:                   x86_64
+
+   NOTE: If you wish to install OFED on a different kernel, you need to create a
+         new ISO image, using mlnx_add_kernel_support.sh script.
+         See the MLNX_OFED User Guide for instructions.
+
+   NOTE: Upgrading MLNX_OFED on your cluster requires upgrading
+         all of its nodes to the newest version as well.
+
+==============================================================================
+5. Hardware and Software Requirements
+==============================================================================
+
+1) Linux operating system (see Supported Platforms and Operating Systems above)
+
+2) Administrator privileges on your machine(s)
+
+3) Disk Space:  1GB
+
+4) For the OFED Distribution to compile on your machine, some software
+   packages of your operating system (OS) distribution are required. These
+   are listed here.
+
+OS Distribution         Required Packages
+---------------         ----------------------------------
+General:
+o  Common to all        gcc, glib, glib-devel, glibc, glibc-devel,
+                        glibc-devel-32bit (to build 32-bit libraries on x86_64
+                        and ppc64), zlib-devel, libstdc++-devel
+o  RedHat,              kernel-devel, rpm-build, redhat-rpm-config
+o  SLES                 kernel-source, kernel-syms, rpm
+
+Note:   To build 32-bit libraries on x86_64 and ppc64 platforms, the 32-bit
+        glibc-devel should be installed.
+
+Specific Component Requirements:
+o  Mvapich              a Fortran Compiler (such as gcc-g77, libgfortran)
+o  Mvapich2             libsysfs-devel
+o  Open MPI             libsysfs-devel
+o  ibutils              tcl, tcl-devel, tk, libstdc++-devel
+o  mstflint             libstdc++-devel (32-bit on ppc64), gcc-c++
+
+Note:   To build 32-bit libraries on x86_64 and ppc64 platforms, the 32-bit
+        glibc-devel should be installed.
+
+Note:   The installer will warn you if you attempt to compile any of the
+        above packages and do not have the prerequisites installed.
+        On SLES, some of required RPMs can be found on SLES SDK DVD.
+        E.g.: libgfortran43, kernel-source, ...
+
+===============================================================================
+6. Supported HCAs
+===============================================================================
+MLNX_OFED Rev 2.0-3.1.0 supports the following Mellanox network adapter cards:
+* Connect-IB (Rev 10.10.1000 and above)
+* ConnectX®-3 (Rev 2.30.3000 and above)
+* ConnectX®-2 (Rev 2.9.1000 and above)
+
+For official firmware versions please see:
+http://www.mellanox.com/content/pages.php?pg=firmware_download
+
+===============================================================================
+7. Compatibility
+===============================================================================
+MLNX_OFED Rev 2.0-3.1.0 is compatible with the following:
+
+* SwitchX®:
+        - InfiniBand - MSX6036, MSX6035, MSX6536 w/w MLNXOS® version 3.3.3000
+        - Ethernet - MSX1036, MSX1016, MSX1024 w/w MLNX-OS® version 3.3.3000
+
+* FabricIT EFM:
+        Tested IPoIB, Verbs and OpenSM priority handover
+            - SLES 11 x64 w/w ConnectX VPI PCIe 2.0 5GT/s - IB QSFP
+              QDR / 10GigE, ConnectX VPI - 10GigE / IB QDR
+            - IS5030 w/w FabricIT EFM version 1.1.2700
+
+* FabricIT BXM:
+        -MBX5020 w/w FabricIT BXM version 2.1.2000
+
+* Unified Fabric Manager (UFM®) v4.0
+* MXM v1.5
+* ScalableUPC v2.2
+* ScalableSHMEM v2.2
+* FCA v2.5
+* OMPI v1.6.4
+* MVAPICH v1.9a
+* CD v1.0
+
+===============================================================================
+8. Change Log History
+===============================================================================
+Changes in Rev 2.0-3.1.0 From Rev 2.0-3.0.0:
+
+SRP:
+    - Improved path-failover behavior
+    - Allow control over failover timeouts
+    - Enhanced srptools
+
+===============================================================================
+9. Known Issues
+===============================================================================
+The following is a list of general limitations and known issues of the various
+components of this Mellanox OFED for Linux release.
+
+IPoIB:
+ -  When user increases receive/send a buffer, it might
+    consume all the memory when few child's interfaces
+    are created.
+
+ -  The hardware address suffix of IPoIB interfaces in
+    MLNX_OFED v2.0-3.1.0 is 'a' instead of '8' to
+    indicate the TSS support.
+
+ -  LRO module parameter is supported only in kernel
+    versions 3.2 and below.
+    Trying to set it in newer kernels will result in IPoIB
+    module failing to load.
+
+ -  The size of send queue in Connect-IB cards cannot
+    exceed 1K.
+
+ -  In 32 bit devices, the maximum number of child
+    interfaces that can be created is 16. Creating more
+    that, might cause out-of-memory issues.
+
+ -  The default IPoIB operating mode in ConnectX®
+    family adapter cards is UD and CM in Connect-IB.
+
+ -  Changing the IPoIB mode (CM vs UD) requires the
+    interface to be in 'down' state.
+
+ -  IPoIB interface does not function properly if a third
+    party application changes the PKey table.
+    We recommend modifying PKey tables via OpenSM.
+
+ -  When creating a new child interface in an overloaded
+    kernel, a dmesg print is displayed advising the user
+    to try again in a few seconds.
+
+ -  Out-of memory issue might occur due to overload of
+    interfaces created.
+    workaround:
+    To calculate the allowed memory per each IPoIB interface check the following:
+    - Num-rings = min(num-cores-onthat-device, 16)
+    - Ring-size = 512 (by default, it is module parameter)
+    - UD memory: numrings * ring-size * 4K
+    - CM memory: ring-size * 64k
+    - Total memory = UD mem + CM mem
+
+ -  The physical port MTU (indicates the port capability)
+    default value was changed to 4k, whereas the IPoIB
+    port MTU ("logical" MTU ) default value is 2k as it
+    is set by the OpenSM.
+    workaround:
+    In order to change the IPoIB MTU to 4k, edit the OpenSM partition
+    file in the section of IPoIB setting as follow:
+    Default=0xffff, ipoib, mtu=5 : ALL=full;
+    * Where "mtu=5" indicates that all IPoIB ports in the fabric are
+      using 4k MTU, ("mtu=4" indicates 2k MTU)
+
+ -  Occasionally, when using IPoIB in Connected mode,
+    the connection might get closed and recovered only
+    after several minutes.
+    workaround:
+    Use the Datagram mode
+
+ -  Fallback to the primary slave of an IPoIB bond does
+    not work with ARP monitoring. (https://bugs.openfabrics.
+    org/show_bug.cgi?id=1990)
+
+ -  Whenever the IOMMU parameter is enabled in the
+    kernel it can decrease the number of child interfaces
+    on the device according to resource limitation.
+    The driver will stuck after unknown amount of child
+    interfaces creation.
+    workaround:
+    To avoid such issue:
+    - Decrease the amount of the RX receive buffers (module parameter,
+      the default is 512)
+    - Decrease the number of RX rings (sys/fs or ethtool in new kernels)
+    - Avoid using IOMMU if not required
+
+ -  Bonding over IPoIB interfaces does not work on kernels
+    newer than kernel 3.2
+
+
+eIPoIB:
+ -  eIPoIB cannot function if authentication over the
+    virsh exists.
+
+ -  No indication is received when eIPoIB is non functional.
+    workaround:
+    Run 'ps -ef | grep ipoibd' to verify its functionality.
+
+ -  eIPoIB requires libvirtd, python
+
+ -  eIPoIB supports only active-backup mode for bonding.
+
+ -  eIPoIB supports only VLAN Switch Tagging (VST) mode on guests.
+
+ -  Multicast and IPv6 are not supported in eIPoIB.
+
+
+XRC:
+ -  Legacy API is deprecated, thus when recompiling applications
+    over MLNX_OFED v2.0-3.x.x, warnings such as the below are displayed.
+    rdma.c:1699: warning: 'ibv_open_xrc_domain' is deprecated (declared at /usr/include/infiniband/ofa_verbs.h:72)
+    rdma.c:1706: warning: 'ibv_create_xrc_srq' is deprecated (declared at /usr/include/infiniband/ofa_verbs.h:89)
+    These warnings can be safely ignored.
+
+ -  XRC is not functional in heterogeneous clusters containing non Mellanox HCAs.
+
+ -  XRC options do not work when using qperf tool.
+    workaround:
+    Use perftest instead.
+
+ -  XRC over ROCE in SR-IOV mode is not functional.
+
+ -  Out-of memory issue might occur due to overload of
+    XRC receive QP with non zero receive queue size created.
+    XRC QPs do not have receive queues.
+
+
+mlx4_ib:
+ -  The dev_assign_str module parameter is not backward compatible.
+    In the current version, this parameter is using decimal number
+    to describe the InfiniBand device and not hexadecimal number as
+    it was in previous versions in order to uniform the mapping of
+    device function numbers to InfiniBand device numbers as defined
+    for other module parameters (e.g. num_vfs and probe_vf).
+
+
+ABI Compatibility:
+ -  MLNX_OFED Rev 2.0-3.1.0 is not ABI compatible with previous MLNX_OFED/OFED versions.
+    workarounf:
+    Recompile the application over the new MLNX_OFED version.
+
+
+System Time:
+ -  Loading the driver using the openibd script when no InfiniBand vendor
+    module is selected (for example mlx4_ib), may cause the execution of the
+    /sbin/start_udev script. In RedHat 6.x and OEL6.x this may change the local
+    system time.
+
+
+Verbs:
+ -  Verbs for the following features are subject to change:
+    - Core-Direct
+    - Shared memory region
+    - Contiguous pages
+    - Flow steering
+
+
+Driver Start:
+ -  When reloading the driver using the "/etc/init.d/openibd restart" command on
+    XenServer6.1, loading of mlx4_en driver might fail with "Unresolved Symbols" errors.
+    This message can safely be ignored.
+
+ -  "Out of memory" issues may rise during drivers load depending on the values
+    of the driver module parameters set (e.g. log_num_cq).
+
+ -  When reloading/starting the driver using the /etc/init.d/openibd the following
+    messages are displayed if there is a third party RPM or driver installed:
+    "Module mlx4_core does not belong to MLNX_OFED" or "Module mlx4_core belong
+    to <rpm name> which is not a part of MLNX_OFED"
+    workaround:
+    Remove the third party RPM/non MLNX_OFED drivers directory, run:
+    "depmod" and then rerun "/etc/init.d/openibd restart"
+
+ -  Occasionally, when trying to repetitively reload the nes hardware
+    driver on SLES11 SP2, a soft lockups occurs that required reboot.
+
+ -  In ConnectX-2, if the driver load succeeds, the informative message below
+    is presented conveying the below limitations:
+        - If port type is IB the number of maximum supported VLs is 4
+        - If port type is ETH then the maximum priority for VLAN tagged is 3
+        "mlx4_core 0000:0d:00.0: command SET_PORT (0xc) failed: in_param=0x120064000,
+        in_mod=0x2,op_mod=0x0, fw status = 0x40"
+
+
+EoIB:
+ -  EoIB vnic is in beta quality for SLES11.2 and RH6.4.
+
+
+Operation Systems:
+ -  RHEL 5.X and SLES 10 SPX are currently not supported.
+
+
+SRIOV:
+ -  When using legacy VMs with OFED 2.0-2.0.5 hypervisor, the 'enable_64b_cqe_eqe' parameter
+    must be set to zero on the hypervisor. It should be set in the same way that other module
+    parameters are set for mlx4_core at module load
+    time.
+    For example, add "options mlx4_core enable_64b_cqe_eqe=0" as a line in the file
+    /etc/modprobe.d/mlx4_core.conf.
+
+ -  Enabling SR-IOV requires appending the "intel_iommu=on" option to the relevant OS in
+    file /boot/grub/grub.conf/. Without that SR-IOV cannot be loaded.
+
+ -  rdma_cm does not support UD QPs.
+
+ -  SR-IOV can be enabled only when using the firmware version embedded in the MLNX_OFED
+    v2.0-3.1.0 driver.
+
+
+Port Type Management:
+ -  OpenSM must be stopped prior to changing the port protocol from InfiniBand to Ethernet.
+
+ -  After changing port type using connectx_port_config interface ports names
+    can be changed. For example. ib1 -> ib0 if port1 changed to be Ethernet port
+    and port2 left IB.
+    workarounf:
+    Use udev rules for persistent naming configuration. For further information,
+    please refer to the User Manual
+
+
+Flow Steering:
+ -  Flow Steering is disabled by default.
+    workaround:
+    To enable it, set the parameter below as follow: log_num_mgm_entry_size should set to -1
+
+
+Quality of Service:
+ -  QoS is not supported in XenServer.
+
+
+Driver Uninstall:
+ -  A Kernel panic occurs if you uninstall the driver without deleting the SR-IOV module params
+    (mlx4_core's num_vfs) in the file /etc/modprobe.d/mlx4_core.conf. On the next boot, you
+    will get the panic, and machine will boot up.
+    workaround:
+    Remove the module after uninstalling and prior to restarting the driver.
+
+
+Installation:
+ -  When upgrading from an earlier Mellanox OFED version, the installation script does not
+    stop the earlier version prior to uninstalling it.
+    workarounf:
+    Stop the old OFED stack (/etc/init.d/openibd stop) before upgrading to this new version.
+
+ -  Upgrading from the previous OFED installation to this release, does not unload the kernel module
+    ipoib_helper.
+    workaround:
+    Reboot after installing the driver.
+
+ -  Installation using Yum does not update HCA firmware.
+    workaround:
+    See "Updating Firmware After Installation" in OFED User Manual.
+
+
+Driver Unload:
+ -  "openibd stop" can sometime fail with the error: Unloading ib_cm [FAILED]
+    ERROR: Module ib_cm is in use by ib_ipoib
+    workaround:
+    Re-run "openibd stop"
+
+
+Fork Support:
+ -  Fork support from kernel 2.6.12 and above is available provided that
+    applications do not use threads. fork() is supported as long as the parent
+    process does not run before the child exits or calls exec(). The former can
+    be achieved by calling wait(childpid), and the latter can be achieved by
+    application specific means. The Posix system() call is supported.
+
+
+iSCSI over IPoIB:
+ -  When working with ISCSI over IPoIB, LRO must be disabled (even if IPoIB is
+    set to connected mode) due to a a bug in older kernels which causes a kernel
+    panic.
+
+
+MLNX_OFED sources:
+ -  MLNX_OFED includes the OFED source RPM packages used as a build platform for
+    kernel code but does not include the sources of Mellanox proprietary packages.
+
+
+Subnet Manager:
+ -  Running more than 2 instances of OpenSM in the same InfiniBand subnet has not been qualified.
+
+
+Infiniband Utils:
+ -  When running the ibdiagnet check nodes_info on the fabric, a warning specifying that the card
+    does not support general info capabilities for all the HCAs in the fabric will be displayed.
+    workaround:
+    Run ibdiagnet --skip nodes_info
+
+
+mlx5 Driver:
+ -  Atomic Operations over Connect-IB are not supported.
+
+
+General:
+ -  On ConnectX-2/ConnectX-3 Ethernet adapter cards, there is a mismatch between the GUID value
+    returned by firmware management tools and that returned by fabric/driver utilities that read
+    the GUID via device firmware (e.g., using ibstat). Mlxburn/flint return 0xffff as GUID while
+    the utilities return a value derived from the MAC address. For all driver/firmware/software
+    purposes, the latter value should be used.
+    workaround:
+    N/A. Please use the GUID value returned by the fabric/driver utilities (not 0xfffff).
+
+
+Resources Limitation:
+ -  The device capabilities reported may not be reached as it depends on the system on which
+    the device is installed and whether the resource is allocated in the kernel or the userspace.
+
+ -  Occasionally, a user process might experience some memory shortage and not function properly due to
+    Linux kernel occupation of the system's free memory for its internal cache.
+    workaround:
+    To free memory to allow it to be allocated in a user process, run the drop_caches procedure below.
+    Performing the following steps will cause the kernel to flush and free pages, dentries and inodes
+    caches from memory, causing that memory to become free.
+
+    Note: As this is a nondestructive operation and dirty objects are not freeable, run `sync' first
+    - To free the pagecache: echo 1 > /proc/sys/vm/drop_caches
+    - To free dentries and inodes: echo 2 > /proc/sys/vm/drop_caches
+    - To free pagecache, dentries and inodes: echo 3 > /proc/sys/vm/drop_caches
+
+
+SRP:
+ -  The stack was tested on the following OSes:
+    - RH6.3   2.6.32-279.9.1.el6.x86_64
+    - RH6.3   2.6.32-279.11.1.el6.x86_64
+    - OEL6.3  2.6.32-279.19.1.el6.x86_64
+    - OEL6.3  2.6.32-279.22.1.el6.x86_64
+
+ -  Older versions of rescan_scsi_bus.sh may not recognize some newly created
+    LUNs. It is recommended to upgrade to the latest script (sg3-utils package).
+
+ -  SRP daemon does not support non-default P_Key discovery.
+    Workaround:
+    Manually connect to non-default Pkey target using:
+        echo id_ext=<id_ext>,ioc_guid=<ioc_guid>,dgid=<dgid>,pkey=<non_default_pkey>,\
+        service_id=<service_id> > /sys/class/infiniband_srp/srp-mlx4_0-<port>/add_target
+
+ -  The driver is tested with Storage target vendors recommendations for
+    multipath.conf extensions (ZFS, DDN, TMS, Nimbus, NetApp).
+
+ -  SRP interop known issues:
+
+    * DDN Storage Fusion 10000 target
+      - DDN does not accept non-default P_Key connection establishment.
+
+    * Oracle Sun ZFS storage 7420
+      - ZFS does not accept non-default P_Key connection establishment.
+      - Occasionally the first command to a LUN may not be serviced,
+        aborted, and cause a successful re-connection to the target.
+
+    * Ungraceful power cycle of an initiator connected with Targets DDN, Nimbus, NetApp
+      may result in temporary "stale connection" messages when initiator reconnects.
+
+
+iSER:
+ -  ib_iser module does not get loaded on boot. On SLES11, the ib_iser module
+    does not get loaded on boot.
+    workaround:
+    Add a dummy interface using iscsiadm:
+    - iscsiadm -m iface -I ib_iser -o new
+    - iscsiadm -m iface -I ib_iser -o update -n iface.transport_name -v ib_iser
+
+===============================================================================
+10. API Changes
+===============================================================================
+XRC:
+The following verbs have become deprecated:
+ - struct ibv_xrc_domain *ibv_open_xrc_domain
+ - struct ibv_srq *ibv_create_xrc_srq
+ - int ibv_close_xrc_domain
+ - int ibv_create_xrc_rcv_qp
+ - int ibv_modify_xrc_rcv_qp
+ - int ibv_query_xrc_rcv_qp
+ - int ibv_reg_xrc_rcv_qp
+ - int ibv_unreg_xrc_rcv_qp
+
+Libibverbs:
+ - Extended speeds
+   - Missing the ext_active_speed attribute from the struct ibv_port_attr
+   - Removed function ibv_ext_rate_to_int
+   - Added functions ibv_rate_to_mbps and mbps_to_ibv_rate
+ - Raw QPs
+   - QP types IBV_QPT_RAW_PACKET and IBV_QPT_RAW_ETH are not supported
+ - Contiguous pages
+   - Added Contiguous pages support
+   - Added function ibv_reg_shared_mr
+
+Libmverbs:
+ -  The enumeration IBV_M_WR_CALC was renamed to IBV_M_WR_CALC_SEND
+ -  The enumeration IBV_M_WR_WRITE_WITH_IMM was added
+ -  In the structure ibv_m_send_wr, the union wr.send was renamed to wr.calc_send
+    and wr.rdma was added
+ -  The enumerations IBV_M_WQE_SQ_ENABLE_CAP, IBV_M_WQE_RQ_ENABLE_CAP,
+    IBV_M_WQE_CQE_WAIT_CAP and IBV_M_WQE_CALC_CAP
+    were renamed to IBV_M_WQE_CAP_SQ_ENABLE, IBV_M_WQE_CAP_RQ_ENABLE,
+    IBV_M_WQE_CAP_CQE_WAIT, IBV_M_WQE_CAP_CALC_SEND
+ -  The enumerations IBV_M_WQE_CAP_CALC_RDMA_WRITE_WITH_IMM was added

@@ -1,0 +1,25 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT/mlx4_en: Fix compilation on RHEL6.1
+
+issue: 345486
+
+Change-Id: Ie108218442753ce7548d7618240d585bf38ed6f0
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ drivers/net/ethernet/mellanox/mlx4/en_sysfs.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c b/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c
+@@ -174,7 +174,9 @@ static ssize_t mlx4_en_store_skprio2up(struct device *d,
+ 	if (i != MLX4_EN_NUM_SKPRIO)
+ 		goto bad_elem_count;
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)) || defined (CONFIG_COMPAT_NEW_TX_RING_SCHEME)
+ 	mlx4_en_setup_tc(dev, MLX4_EN_NUM_UP);
++#endif
+ 
+ 	for (i = 0; i < MLX4_EN_NUM_SKPRIO; i++)
+ 		netdev_set_prio_tc_map(dev, i, skprio2up[i]);

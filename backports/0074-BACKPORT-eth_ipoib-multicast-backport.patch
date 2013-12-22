@@ -1,0 +1,38 @@
+From: Erez Shitrit <erezsh@mellanox.com>
+Subject: [PATCH] BACKPORT: eth_ipoib multicast backport.
+
+issue: none
+
+Signed-off-by: Erez Shitrit <erezsh@mellanox.com>
+---
+ drivers/net/eipoib/eth_ipoib_main.c |    8 ++++++++
+ 1 files changed, 8 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/eipoib/eth_ipoib_main.c b/drivers/net/eipoib/eth_ipoib_main.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/eipoib/eth_ipoib_main.c
++++ b/drivers/net/eipoib/eth_ipoib_main.c
+@@ -1123,7 +1123,11 @@ static void slave_neigh_reap(struct parent *parent, struct slave *slave)
+ 
+ 				/* decrease ref count for kernel mc entry */
+ 				if (unlikely(is_mc_neigh))
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,34))
+ 					dev_mc_del(slave->dev, neigh->imac);
++#else
++					dev_mc_delete(slave->dev, neigh->imac, INFINIBAND_ALEN, 1);
++#endif
+ 			}
+ 		}
+ 	}
+@@ -1678,7 +1682,11 @@ int add_mc_neigh(struct slave *slave, __be32 ip)
+ 	}
+ 
+ 	/* cause ipoib_set_mcast_list -> ipoib: mcast_restart_task */
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,34))
+ 	ret = dev_mc_add(slave->dev, dst_mc_ib_mac_addr);
++#else 
++	ret = dev_mc_add(slave->dev, dst_mc_ib_mac_addr, INFINIBAND_ALEN, 1);
++#endif
+ 	if (ret)
+ 		pr_err("%s: Failed to add mc (dev:%s, mc: %pI6). ret:%d\n",
+ 		       __func__, slave->dev->name, dst_mc_ib_mac_addr + 4, ret);

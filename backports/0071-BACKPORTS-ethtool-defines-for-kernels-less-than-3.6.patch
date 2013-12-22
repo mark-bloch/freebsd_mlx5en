@@ -1,0 +1,31 @@
+From: Erez Shitrit <erezsh@mellanox.com>
+Subject: [PATCH] BACKPORTS: ethtool defines for kernels less than 3.6
+
+Signed-off-by: Erez Shitrit <erezsh@mellanox.com>
+---
+ drivers/infiniband/ulp/ipoib/ipoib_ethtool.c |   12 ++++++++++++
+ 1 files changed, 12 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+@@ -304,6 +304,18 @@ static int ipoib_get_sset_count(struct net_device *dev, int sset)
+ 	}
+ }
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)
++/* Add missing defines for supported and advertised speed features */
++#define SUPPORTED_40000baseKR4_Full     (1 << 23)
++#define SUPPORTED_40000baseCR4_Full     (1 << 24)
++#define SUPPORTED_40000baseSR4_Full     (1 << 25)
++#define SUPPORTED_40000baseLR4_Full     (1 << 26)
++#define ADVERTISED_40000baseKR4_Full    (1 << 23)
++#define ADVERTISED_40000baseCR4_Full    (1 << 24)
++#define ADVERTISED_40000baseSR4_Full    (1 << 25)
++#define ADVERTISED_40000baseLR4_Full    (1 << 26)
++#endif
++
+ static int ipoib_get_settings(struct net_device *dev, struct ethtool_cmd *ecmd)
+ {
+ 	struct ipoib_dev_priv *priv = netdev_priv(dev);

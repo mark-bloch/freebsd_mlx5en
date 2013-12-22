@@ -1,0 +1,32 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT: core/netlink for kernels <= 3.3
+
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ drivers/infiniband/core/netlink.c |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/infiniband/core/netlink.c b/drivers/infiniband/core/netlink.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/core/netlink.c
++++ b/drivers/infiniband/core/netlink.c
+@@ -155,6 +155,7 @@ static int ibnl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
+ 				return -EINVAL;
+ 
+ 			{
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)
+ 				struct netlink_dump_control c = {
+ 					.dump = client->cb_table[op].dump,
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
+@@ -162,6 +163,11 @@ static int ibnl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
+ #endif
+ 				};
+ 				return netlink_dump_start(nls, skb, nlh, &c);
++#else
++				return netlink_dump_start(nls, skb, nlh,
++							  client->cb_table[op].dump,
++							  NULL, 0);
++#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)) */
+ 			}
+ 		}
+ 	}

@@ -1,0 +1,9 @@
+#!/bin/bash
+
+make clean
+git reset --hard
+git checkout mlnx_ofed_2_1
+git branch -D backport-backports
+
+/bin/rm -f .backports_applied
+/bin/rm -rf drivers/infiniband/ulp/srp_2.0/

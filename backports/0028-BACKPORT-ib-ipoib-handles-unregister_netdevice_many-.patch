@@ -1,0 +1,45 @@
+From: Erez Shitrit <erezsh@mellanox.com>
+Subject: [PATCH] BACKPORT: ib/ipoib handles unregister_netdevice_many/queue
+
+for kernel < 2.6.33 replace callsto unregister_netdevice_many and
+unregister_netdevice_queue.
+
+Signed-off-by: Erez Shitrit <erezsh@mellanox.com>
+---
+ drivers/infiniband/ulp/ipoib/ipoib_main.c |   20 +++++++++++++-------
+ 1 files changed, 13 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_main.c b/drivers/infiniband/ulp/ipoib/ipoib_main.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/ulp/ipoib/ipoib_main.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_main.c
+@@ -1882,16 +1882,22 @@ void ipoib_dev_cleanup(struct net_device *dev)
+ 	ipoib_delete_debug_files(dev);
+ 
+ 	/* Delete any child interfaces first */
+-	list_for_each_entry_safe_reverse(cpriv, tcpriv,
+-					 &priv->child_intfs, list)
+-		unregister_netdevice_queue(cpriv->dev, &head);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
++        list_for_each_entry_safe_reverse(cpriv, tcpriv,
++                                         &priv->child_intfs, list)
++                unregister_netdevice_queue(cpriv->dev, &head);
+ 
+ 	/*
+-	 * the next function calls the ipoib_uninit which calls for
+-	 * ipoib_dev_cleanup for each devices at the head list.
+-	 */
++ 	 * the next function calls the ipoib_uninit which calls for
++ 	 * ipoib_dev_cleanup for each devices at the head list.
++ 	 */
+ 
+-	unregister_netdevice_many(&head);
++        unregister_netdevice_many(&head);
++#else
++        list_for_each_entry_safe(cpriv, tcpriv,
++				 &priv->child_intfs, list)
++		unregister_netdevice(cpriv->dev);
++#endif
+ 
+ 	ipoib_dev_uninit(dev);
+ 	/* ipoib_dev_uninit took rings lock can't release in case of reinit */

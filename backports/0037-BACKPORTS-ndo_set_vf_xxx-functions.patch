@@ -1,0 +1,123 @@
+From 6fbb66c3a52ddb18a28049e57dcf28ef87e716d2 Mon Sep 17 00:00:00 2001
+From: Or Gerlitz <ogerlitz@mellanox.com>
+Date: Thu, 14 Nov 2013 18:31:45 +0200
+Subject: [PATCH 37/83] BACKPORTS: ndo_set_vf_xxx functions
+
+Change-Id: Ica4812941b257a8d725d36c9805068f0795bab0c
+Signed-off-by: Jack Morgenstein <jackm@dev.mellanox.co.il>
+Signed-off-by: Yan Burman <yanb@mellanox.com>
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+---
+ drivers/net/ethernet/mellanox/mlx4/cmd.c       |    4 ++++
+ drivers/net/ethernet/mellanox/mlx4/en_netdev.c |   14 ++++++++++++++
+ include/linux/mlx4/cmd.h                       |    2 ++
+ 3 files changed, 20 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx4/cmd.c b/drivers/net/ethernet/mellanox/mlx4/cmd.c
+index 0d252cf..c1aaedb 100644
+--- a/drivers/net/ethernet/mellanox/mlx4/cmd.c
++++ b/drivers/net/ethernet/mellanox/mlx4/cmd.c
+@@ -2526,6 +2526,7 @@ int mlx4_set_vf_spoofchk(struct mlx4_dev *dev, int port, int vf, bool setting)
+ }
+ EXPORT_SYMBOL_GPL(mlx4_set_vf_spoofchk);
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,34)) || defined(CONFIG_COMPAT_NDO_VF_MAC_VLAN)
+ int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_info *ivf)
+ {
+ 	struct mlx4_priv *priv = mlx4_priv(dev);
+@@ -2553,11 +2554,14 @@ int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_in
+ 	ivf->vlan	= s_info->default_vlan;
+ 	ivf->qos	= s_info->default_qos;
+ 	ivf->tx_rate	= s_info->tx_rate;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	ivf->spoofchk	= s_info->spoofchk;
++#endif
+ 
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(mlx4_get_vf_config);
++#endif
+ 
+ int mlx4_set_vf_link_state(struct mlx4_dev *dev, int port, int vf, int link_state)
+ {
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
+index 39afc09..cd26b67 100644
+--- a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
+@@ -2179,6 +2179,7 @@ static int mlx4_en_set_features(struct net_device *netdev,
+ }
+ #endif
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,34)) || defined(CONFIG_COMPAT_NDO_VF_MAC_VLAN)
+ static int mlx4_en_set_vf_mac(struct net_device *dev, int queue, u8 *mac)
+ {
+ 	struct mlx4_en_priv *en_priv = netdev_priv(dev);
+@@ -2197,7 +2198,9 @@ static int mlx4_en_set_vf_vlan(struct net_device *dev, int vf, u16 vlan, u8 qos)
+ 
+ 	return mlx4_set_vf_vlan(mdev->dev, en_priv->port, vf, vlan, qos);
+ }
++#endif
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ static int mlx4_en_set_vf_spoofchk(struct net_device *dev, int vf, bool setting)
+ {
+ 	struct mlx4_en_priv *en_priv = netdev_priv(dev);
+@@ -2205,7 +2208,9 @@ static int mlx4_en_set_vf_spoofchk(struct net_device *dev, int vf, bool setting)
+ 
+ 	return mlx4_set_vf_spoofchk(mdev->dev, en_priv->port, vf, setting);
+ }
++#endif
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,34)) || defined(CONFIG_COMPAT_NDO_VF_MAC_VLAN)
+ int mlx4_en_get_vf_config(struct net_device *dev, int vf, struct ifla_vf_info *ivf)
+ {
+ 	struct mlx4_en_priv *en_priv = netdev_priv(dev);
+@@ -2213,6 +2218,7 @@ int mlx4_en_get_vf_config(struct net_device *dev, int vf, struct ifla_vf_info *i
+ 
+ 	return mlx4_get_vf_config(mdev->dev, en_priv->port, vf, ivf);
+ }
++#endif
+ 
+ static int mlx4_en_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
+ 			   struct net_device *dev,
+@@ -2337,15 +2343,23 @@ static const struct net_device_ops mlx4_netdev_ops_master = {
+ #endif
+ 	.ndo_vlan_rx_add_vid	= mlx4_en_vlan_rx_add_vid,
+ 	.ndo_vlan_rx_kill_vid	= mlx4_en_vlan_rx_kill_vid,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,34)) || defined(CONFIG_COMPAT_NDO_VF_MAC_VLAN)
+ 	.ndo_set_vf_mac		= mlx4_en_set_vf_mac,
+ 	.ndo_set_vf_vlan	= mlx4_en_set_vf_vlan,
++#endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	.ndo_set_vf_spoofchk	= mlx4_en_set_vf_spoofchk,
++#endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,34)) || defined(CONFIG_COMPAT_NDO_VF_MAC_VLAN)
+ 	.ndo_get_vf_config	= mlx4_en_get_vf_config,
++#endif
+ #ifdef CONFIG_NET_POLL_CONTROLLER
+ 	.ndo_poll_controller	= mlx4_en_netpoll,
+ #endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
+ 	.ndo_set_features	= mlx4_en_set_features,
+ 	.ndo_setup_tc		= mlx4_en_setup_tc,
++#endif
+ #ifdef CONFIG_RFS_ACCEL
+ 	.ndo_rx_flow_steer	= mlx4_en_filter_rfs,
+ #endif
+diff --git a/include/linux/mlx4/cmd.h b/include/linux/mlx4/cmd.h
+index f979e8d..b57d1a6 100644
+--- a/include/linux/mlx4/cmd.h
++++ b/include/linux/mlx4/cmd.h
+@@ -236,7 +236,9 @@ u32 mlx4_comm_get_version(void);
+ int mlx4_set_vf_mac(struct mlx4_dev *dev, int port, int vf, u8 *mac);
+ int mlx4_set_vf_vlan(struct mlx4_dev *dev, int port, int vf, u16 vlan, u8 qos);
+ int mlx4_set_vf_spoofchk(struct mlx4_dev *dev, int port, int vf, bool setting);
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,34)) || defined(CONFIG_COMPAT_NDO_VF_MAC_VLAN)
+ int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_info *ivf);
++#endif
+ int mlx4_set_vf_link_state(struct mlx4_dev *dev, int port, int vf, int link_state);
+ int mlx4_get_vf_link_state(struct mlx4_dev *dev, int port, int vf);
+ /*
+-- 
+1.7.1
+

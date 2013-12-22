@@ -1,0 +1,117 @@
+From b864ba2ebcbf19fcbb1d0c66fb0116f614ed98ff Mon Sep 17 00:00:00 2001
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Date: Thu, 14 Nov 2013 18:36:17 +0200
+Subject: [PATCH 77/80] BACKPORT: Added support for 3.11 kernel
+
+Change-Id: Iceda99fa5c90b4aa7a70ae1bc3889aabad1ace87
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ drivers/infiniband/hw/mlx4/main.c |    9 +++++++++
+ drivers/infiniband/hw/mlx5/main.c |    9 +++++++++
+ include/linux/mlx4/cmd.h          |    5 +++++
+ 3 files changed, 23 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/infiniband/hw/mlx4/main.c b/drivers/infiniband/hw/mlx4/main.c
+index 67f962b..6040fbe 100644
+--- a/drivers/infiniband/hw/mlx4/main.c
++++ b/drivers/infiniband/hw/mlx4/main.c
+@@ -721,8 +721,12 @@ static unsigned long mlx4_ib_get_unmapped_area(struct file *file,
+ 			unsigned long flags)
+ {
+ 	struct mm_struct *mm;
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0))
+ 	struct vm_area_struct *vma;
+ 	unsigned long start_addr;
++#else
++	struct vm_unmapped_area_info info;
++#endif
+ 	unsigned long page_size_order;
+ 	unsigned long  command;
+ 
+@@ -738,6 +742,7 @@ static unsigned long mlx4_ib_get_unmapped_area(struct file *file,
+ 						pgoff, flags);
+ 
+ 	page_size_order = pgoff >> MLX4_IB_MMAP_CMD_BITS;
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0))
+ 	/* code is based on the huge-pages get_unmapped_area code */
+ 	start_addr = mm->free_area_cache;
+ 
+@@ -762,6 +767,10 @@ full_search:
+ 			return addr;
+ 		addr = ALIGN(vma->vm_end, 1 << page_size_order);
+ 	}
++#else
++	return current->mm->get_unmapped_area(file, addr, len,
++					pgoff, flags);
++#endif
+ }
+ 
+ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
+diff --git a/drivers/infiniband/hw/mlx5/main.c b/drivers/infiniband/hw/mlx5/main.c
+index 5b68054..735b961 100644
+--- a/drivers/infiniband/hw/mlx5/main.c
++++ b/drivers/infiniband/hw/mlx5/main.c
+@@ -766,8 +766,12 @@ static unsigned long mlx5_ib_get_unmapped_area(struct file *file,
+ 					       unsigned long flags)
+ {
+ 	struct mm_struct *mm;
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0))
+ 	struct vm_area_struct *vma;
+ 	unsigned long start_addr;
++#else
++	struct vm_unmapped_area_info info;
++#endif
+ 	unsigned long order;
+ 	unsigned long command;
+ 
+@@ -785,6 +789,7 @@ static unsigned long mlx5_ib_get_unmapped_area(struct file *file,
+ 
+ 	order = get_pg_order(pgoff);
+ 
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0))
+ 	/*
+ 	 * code is based on the huge-pages get_unmapped_area code
+ 	 */
+@@ -807,6 +812,10 @@ full_search:
+ 			return addr;
+ 		addr = ALIGN(vma->vm_end, 1 << order);
+ 	}
++#else
++	return current->mm->get_unmapped_area(file, addr, len,
++					      pgoff, flags);
++#endif
+ }
+ 
+ 
+diff --git a/include/linux/mlx4/cmd.h b/include/linux/mlx4/cmd.h
+index eab2e8c..c32075e 100644
+--- a/include/linux/mlx4/cmd.h
++++ b/include/linux/mlx4/cmd.h
+@@ -34,6 +34,9 @@
+ #define MLX4_CMD_H
+ 
+ #include <linux/dma-mapping.h>
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0))
++#include <linux/if_link.h>
++#endif
+ 
+ enum {
+ 	/* initialization and general commands */
+@@ -248,12 +251,14 @@ int mlx4_get_vf_link_state(struct mlx4_dev *dev, int port, int vf);
+  */
+ bool mlx4_get_slave_default_vlan(struct mlx4_dev *dev, int port, int slave, u16 *vlan, u8 *qos);
+ 
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0))
+ enum {
+ 	IFLA_VF_LINK_STATE_AUTO,	/* link state of the uplink */
+ 	IFLA_VF_LINK_STATE_ENABLE,	/* link always up */
+ 	IFLA_VF_LINK_STATE_DISABLE,	/* link always down */
+ 	__IFLA_VF_LINK_STATE_MAX,
+ };
++#endif
+ 
+ #define MLX4_COMM_GET_IF_REV(cmd_chan_ver) (u8)((cmd_chan_ver) >> 8)
+ 
+-- 
+1.7.1
+

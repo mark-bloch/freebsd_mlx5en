@@ -1,0 +1,29 @@
+From: Ido Shamay <idos@mellanox.com>
+Subject: [PATCH] BACKPORT: Checking frag_list of SKB function name
+
+In linux-2.6.37, skb_has_frags function name changed to
+skb_has_frag_list for better pronunciation the its operation, since we
+are checking frag_list and frags, which are different.
+
+Change-Id: Iad61baf1b416aeb6b5c9b60afbfeb9c4194f4785
+Signed-off-by: Ido Shamay <idos@mellanox.com>
+---
+ drivers/infiniband/ulp/ipoib/ipoib_ib.c |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/infiniband/ulp/ipoib/ipoib_ib.c b/drivers/infiniband/ulp/ipoib/ipoib_ib.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/ulp/ipoib/ipoib_ib.c
++++ b/drivers/infiniband/ulp/ipoib/ipoib_ib.c
+@@ -297,7 +297,11 @@ static int ipoib_prepare_next_skb(struct net_device *dev,
+ 					      rx_skb->mapping[0],
+ 					      buf_size,
+ 					      DMA_FROM_DEVICE);
++#ifdef CONFIG_COMPAT_SKB_HAS_FRAG_LIST
+ 	if (skb_has_frag_list(rx_skb->skb))
++#else
++	if (skb_has_frags(rx_skb->skb))
++#endif
+ 		ipoib_skb_drop_fraglist(rx_skb->skb);
+ 
+ 	rx_ring->skb_index = next_skb_id;

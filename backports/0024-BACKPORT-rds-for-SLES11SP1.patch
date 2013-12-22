@@ -1,0 +1,22 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT: rds for SLES11SP1
+
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ net/rds/rds.h |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/net/rds/rds.h b/net/rds/rds.h
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/net/rds/rds.h
++++ b/net/rds/rds.h
+@@ -7,6 +7,9 @@
+ #include <rdma/rdma_cm.h>
+ #include <linux/mutex.h>
+ #include <linux/rds.h>
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
++#include <linux/printk.h>
++#endif
+ 
+ #include "info.h"
+ 

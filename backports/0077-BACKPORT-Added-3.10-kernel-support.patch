@@ -1,0 +1,195 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT: Added 3.10 kernel support
+
+Change-Id: I3ed434f1951ff8078add99fdb55914de663c670a
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ drivers/infiniband/debug/memtrack.c                |    9 +++++++++
+ drivers/infiniband/debug/mtrack.h                  |    4 ++++
+ drivers/infiniband/hw/mlx4/mr.c                    |   15 +++++++++++++++
+ drivers/infiniband/hw/qib/qib_file_ops.c           |    4 ++++
+ drivers/net/eipoib/eth_ipoib_main.c                |    4 ++++
+ drivers/net/ethernet/mellanox/mlx4/en_rx.c         |    4 ++++
+ 10 files changed, 64 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/infiniband/debug/memtrack.c b/drivers/infiniband/debug/memtrack.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/debug/memtrack.c
++++ b/drivers/infiniband/debug/memtrack.c
+@@ -794,11 +794,20 @@ static int create_procfs_tree(void)
+ 
+ 	for (i = 0, bit_mask = 1; i < MEMTRACK_NUM_OF_MEMTYPES; ++i, bit_mask <<= 1) {
+ 		if (bit_mask & track_mask) {
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+ 			proc_ent = create_proc_entry(rsc_names[i], S_IRUGO, memtrack_tree);
+ 			if (!proc_ent)
+ 				goto undo_create_root;
+ 
+ 			proc_ent->proc_fops = &memtrack_proc_fops;
++#else
++			proc_ent = proc_create_data(rsc_names[i], S_IRUGO, memtrack_tree, &memtrack_proc_fops, NULL);
++			if (!proc_ent) {
++				printk(KERN_INFO "Warning: Cannot create /proc/%s/%s\n",
++				       memtrack_proc_entry_name, rsc_names[i]);
++				goto undo_create_root;
++			}
++#endif
+ 		}
+ 	}
+ 
+diff --git a/drivers/infiniband/debug/mtrack.h b/drivers/infiniband/debug/mtrack.h
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/debug/mtrack.h
++++ b/drivers/infiniband/debug/mtrack.h
+@@ -740,6 +740,10 @@
+ })
+ #endif
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
++#define WQ_RESCUER 1 << 7 /* internal: workqueue has rescuer */
++#endif
++
+ #define create_workqueue(name)							\
+ 	alloc_workqueue((name), WQ_RESCUER, 1);
+ 
+diff --git a/drivers/infiniband/hw/mlx4/mr.c b/drivers/infiniband/hw/mlx4/mr.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/mr.c
++++ b/drivers/infiniband/hw/mlx4/mr.c
+@@ -69,9 +69,14 @@ static ssize_t shared_mr_proc_write(struct file *file,
+ static int shared_mr_mmap(struct file *filep, struct vm_area_struct *vma)
+ {
+ 
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+ 	struct proc_dir_entry *pde = PDE(filep->f_path.dentry->d_inode);
+ 	struct mlx4_shared_mr_info *smr_info =
+ 		(struct mlx4_shared_mr_info *)pde->data;
++#else
++	struct mlx4_shared_mr_info *smr_info =
++		(struct mlx4_shared_mr_info *)PDE_DATA(filep->f_path.dentry->d_inode);
++#endif
+ 
+ 	/* Prevent any mapping not on start of area */
+ 	if (vma->vm_pgoff != 0)
+@@ -436,6 +441,10 @@ static int prepare_shared_mr(struct mlx4_ib_mr *mr, int access_flags, int mr_id)
+ 	struct proc_dir_entry *mr_proc_entry;
+ 	mode_t mode = S_IFREG;
+ 	char name_buff[16];
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
++	kuid_t uid;
++	kgid_t gid;
++#endif
+ 
+ 	mode |= convert_shared_access(access_flags);
+ 	sprintf(name_buff, "%X", mr_id);
+@@ -454,8 +463,14 @@ static int prepare_shared_mr(struct mlx4_ib_mr *mr, int access_flags, int mr_id)
+ 		return -ENODEV;
+ 	}
+ 
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+ 	current_uid_gid(&(mr_proc_entry->uid), &(mr_proc_entry->gid));
+ 	mr_proc_entry->size = mr->umem->length;
++#else
++	current_uid_gid(&uid, &gid);
++	proc_set_user(mr_proc_entry, uid, gid);
++	proc_set_size(mr_proc_entry, mr->umem->length);
++#endif
+ 	return 0;
+ 
+ }
+diff --git a/drivers/infiniband/hw/qib/qib_file_ops.c b/drivers/infiniband/hw/qib/qib_file_ops.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/qib/qib_file_ops.c
++++ b/drivers/infiniband/hw/qib/qib_file_ops.c
+@@ -39,7 +39,11 @@
+ #include <linux/vmalloc.h>
+ #include <linux/highmem.h>
+ #include <linux/io.h>
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+ #include <linux/uio.h>
++#else
++#include <linux/aio.h>
++#endif
+ #include <linux/jiffies.h>
+ #include <asm/pgtable.h>
+ #include <linux/delay.h>
+diff --git a/drivers/net/eipoib/eth_ipoib_main.c b/drivers/net/eipoib/eth_ipoib_main.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/eipoib/eth_ipoib_main.c
++++ b/drivers/net/eipoib/eth_ipoib_main.c
+@@ -2049,7 +2049,11 @@ int add_vlan_and_send(struct parent *parent, int vlan_tag,
+ 
+ #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
+ 	if (vlan_tag) {
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+ 		skb = __vlan_hwaccel_put_tag(skb, vlan_tag);
++#else
++		skb =__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan_tag);
++#endif
+ 		if (!skb) {
+ 			pr_err("%s failed to insert VLAN tag\n",
+ 			       skb->dev->name);
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_clock.c b/drivers/net/ethernet/mellanox/mlx4/en_clock.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_clock.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_clock.c
+@@ -69,9 +69,15 @@ int mlx4_en_timestamp_config(struct net_device *dev, int tx_type, int rx_filter)
+ 	priv->hwtstamp_config.rx_filter = rx_filter;
+ 
+ 	if (rx_filter != HWTSTAMP_FILTER_NONE)
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
++		dev->features &= ~NETIF_F_HW_VLAN_RX;
++	else
++		dev->features |= NETIF_F_HW_VLAN_RX;
++#else
+ 		dev->features &= ~NETIF_F_HW_VLAN_CTAG_RX;
+ 	else
+ 		dev->features |= NETIF_F_HW_VLAN_CTAG_RX;
++#endif
+ 
+ 	if (tx_type != HWTSTAMP_TX_OFF)
+ 		dev->features &= ~NETIF_F_HW_VLAN_TX;
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_resources.c b/drivers/net/ethernet/mellanox/mlx4/en_resources.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_resources.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_resources.c
+@@ -81,7 +81,11 @@ void mlx4_en_fill_qp_context(struct mlx4_en_priv *priv, int size, int stride,
+ 	context->cqn_send = cpu_to_be32(cqn);
+ 	context->cqn_recv = cpu_to_be32(cqn);
+ 	context->db_rec_addr = cpu_to_be64(priv->res.db.dma << 2);
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
++	if (!(dev->features & NETIF_F_HW_VLAN_RX))
++#else
+ 	if (!(dev->features & NETIF_F_HW_VLAN_CTAG_RX))
++#endif
+ 		context->param3 |= cpu_to_be32(1 << 30);
+ }
+ 
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_rx.c b/drivers/net/ethernet/mellanox/mlx4/en_rx.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_rx.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_rx.c
+@@ -741,7 +741,11 @@ int mlx4_en_process_rx_cq(struct net_device *dev,
+ 		/* process VLAN traffic */
+ 		if ((be32_to_cpu(cqe->vlan_my_qpn) &
+ 		     MLX4_CQE_VLAN_PRESENT_MASK) &&
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
++		    (dev->features & NETIF_F_HW_VLAN_RX)) {
++#else
+ 		    (dev->features & NETIF_F_HW_VLAN_CTAG_RX)) {
++#endif
+ #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0))
+ 			if (priv->vlgrp) {
+ 				vlan_gro_receive(&cq->napi, priv->vlgrp,
+@@ -754,7 +754,11 @@ int mlx4_en_process_rx_cq(struct net_device *dev,
+ 				goto next;
+ 			}
+ #endif
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+ 			__vlan_hwaccel_put_tag(skb, be16_to_cpu(cqe->sl_vid));
++#else
++			__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), be16_to_cpu(cqe->sl_vid));
++#endif
+ 
+ 		/* process time stamps */
+ 		} else if (ring->hwtstamp_rx_filter == HWTSTAMP_FILTER_ALL) {

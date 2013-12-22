@@ -1,0 +1,191 @@
+From: Rony Efraim <ronye@mellanox.com>
+Subject: [PATCH] net/mlx4_en fdb_add for kernel < 3.5
+
+Change-Id: I1bf55b432489ca65437c36f906ac4f33046301ce
+---
+ drivers/net/ethernet/mellanox/mlx4/en_netdev.c |  124 ++++++++++++++++++++++++
+ 1 files changed, 124 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
+@@ -2008,6 +2008,110 @@ static ssize_t mlx4_en_store_vf_link_state(struct device *dev,
+ 
+ static DEVICE_ATTR(vf_link_state, S_IRUGO | S_IWUSR , mlx4_en_show_vf_link_state, mlx4_en_store_vf_link_state);
+ 
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0))
++static ssize_t mlx4_en_show_fdb(struct device *dev,
++				struct device_attribute *attr,
++				char *buf)
++{
++	struct net_device *netdev = to_net_dev(dev);
++	ssize_t len = 0;
++	struct netdev_hw_addr *ha;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
++	struct netdev_hw_addr *mc;
++#else
++	struct dev_addr_list *mc;
++#endif
++
++	netif_addr_lock_bh(netdev);
++
++	netdev_for_each_uc_addr(ha, netdev) {
++		len += sprintf(&buf[len], "%02x:%02x:%02x:%02x:%02x:%02x\n",
++				ha->addr[0], ha->addr[1], ha->addr[2],
++				ha->addr[3], ha->addr[4], ha->addr[5]);
++	}
++
++	netdev_for_each_mc_addr(mc, netdev) {
++		len += sprintf(&buf[len], "%02x:%02x:%02x:%02x:%02x:%02x\n",
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
++				mc->addr[0], mc->addr[1], mc->addr[2],
++				mc->addr[3], mc->addr[4], mc->addr[5]);
++#else
++				mc->da_addr[0], mc->da_addr[1], mc->da_addr[2],
++				mc->da_addr[3], mc->da_addr[4], mc->da_addr[5]);
++#endif
++	}
++
++	netif_addr_unlock_bh(netdev);
++
++	return len;
++}
++
++static ssize_t mlx4_en_set_fdb(struct device *dev,
++			       struct device_attribute *attr,
++			       const char *buf, size_t count)
++{
++	struct net_device *netdev = to_net_dev(dev);
++	struct mlx4_en_priv *priv = netdev_priv(netdev);
++	unsigned char mac[ETH_ALEN];
++	unsigned int tmp[ETH_ALEN];
++	int add = 0;
++	int err, i;
++
++	if (count < sizeof("-01:02:03:04:05:06"))
++		return -EINVAL;
++
++	switch (buf[0]) {
++	case '-':
++		break;
++	case '+':
++		add = 1;
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	err = sscanf(&buf[1], "%02x:%02x:%02x:%02x:%02x:%02x",
++		     &tmp[0], &tmp[1], &tmp[2], &tmp[3], &tmp[4], &tmp[5]);
++
++	if (err != ETH_ALEN)
++		return -EINVAL;
++
++	for (i = 0; i < ETH_ALEN; ++i)
++		mac[i] = tmp[i] & 0xff;
++
++	rtnl_lock();
++	if (is_unicast_ether_addr(mac)) {
++		if (add)
++			err = dev_uc_add_excl(netdev, mac);
++		else
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
++			err = dev_uc_del(netdev, mac);
++#else
++			err = dev_unicast_delete(netdev, mac);
++#endif
++	} else if (is_multicast_ether_addr(mac)) {
++		if (add)
++			err = dev_mc_add_excl(netdev, mac);
++		else
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
++			err = dev_mc_del(netdev, mac);
++#else
++			err = dev_mc_delete(netdev, mac, ETH_ALEN, true);
++#endif
++	} else {
++		rtnl_unlock();
++		return -EINVAL;
++	}
++	rtnl_unlock();
++
++	en_dbg(DRV, priv, "Port:%d: %s %pM\n", priv->port,
++	       (add ? "adding" : "removing"), mac);
++
++	return err ? err : count;
++}
++
++static DEVICE_ATTR(fdb, S_IRUGO | 002, mlx4_en_show_fdb, mlx4_en_set_fdb);
++#endif
+ 
+ void mlx4_en_destroy_netdev(struct net_device *dev)
+ {
+@@ -2024,6 +2128,10 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
+ 	if (mlx4_is_master(priv->mdev->dev))
+ 		device_remove_file(&dev->dev, &dev_attr_vf_link_state);
+ 
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0))
++	if (mlx4_is_mfunc(priv->mdev->dev))
++		device_remove_file(&dev->dev, &dev_attr_fdb);
++#endif
+ 	/* Unregister device - this will close the port if it was up */
+ 	if (priv->registered)
+ 		unregister_netdev(dev);
+@@ -2197,6 +2305,7 @@ int mlx4_en_get_vf_config(struct net_device *dev, int vf, struct ifla_vf_info *i
+ }
+ #endif
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ static int mlx4_en_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
+ 			   struct net_device *dev,
+ 			   const unsigned char *addr, u16 flags)
+@@ -2268,6 +2377,7 @@ static int mlx4_en_fdb_dump(struct sk_buff *skb,
+ 
+ 	return idx;
+ }
++#endif
+ 
+ static const struct net_device_ops mlx4_netdev_ops = {
+ 	.ndo_open		= mlx4_en_open,
+@@ -2299,9 +2409,11 @@ static const struct net_device_ops mlx4_netdev_ops = {
+ #ifdef CONFIG_NET_RX_BUSY_POLL
+ 	.ndo_busy_poll		= mlx4_en_low_latency_recv,
+ #endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.ndo_fdb_add		= mlx4_en_fdb_add,
+ 	.ndo_fdb_del		= mlx4_en_fdb_del,
+ 	.ndo_fdb_dump		= mlx4_en_fdb_dump,
++#endif
+ };
+ 
+ static const struct net_device_ops mlx4_netdev_ops_master = {
+@@ -2340,9 +2452,11 @@ static const struct net_device_ops mlx4_netdev_ops_master = {
+ #ifdef CONFIG_RFS_ACCEL
+ 	.ndo_rx_flow_steer	= mlx4_en_filter_rfs,
+ #endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.ndo_fdb_add		= mlx4_en_fdb_add,
+ 	.ndo_fdb_del		= mlx4_en_fdb_del,
+ 	.ndo_fdb_dump		= mlx4_en_fdb_dump,
++#endif
+ };
+ 
+ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+@@ -2564,6 +2678,16 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 	}
+ 	priv->registered = 1;
+ 
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0))
++	if (mlx4_is_mfunc(priv->mdev->dev)) {
++		err = device_create_file(&dev->dev, &dev_attr_fdb);
++		if (err) {
++			en_err(priv, "Sysfs registration failed for port %d\n", port);
++			goto out;
++		}
++	}
++#endif
++
+ 	en_warn(priv, "Using %d TX rings\n", prof->tx_ring_num);
+ 	en_warn(priv, "Using %d RX rings\n", prof->rx_ring_num);
+ 

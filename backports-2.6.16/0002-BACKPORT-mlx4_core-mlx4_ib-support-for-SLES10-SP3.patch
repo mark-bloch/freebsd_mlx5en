@@ -1,0 +1,1761 @@
+From: Yishai Hadas <yishaih@mellanox.com>
+Subject: [PATCH] BACKPORT: mlx4_core/mlx4_ib support for SLES10 SP3
+
+Change-Id: Idc909ce8a35ce0914262747f4c363e6180932314
+Signed-off-by: Yishai Hadas <yishaih@mellanox.com>
+---
+ drivers/infiniband/hw/mlx4/alias_GUID.c    |    7 +
+ drivers/infiniband/hw/mlx4/cq.c            |    3 +
+ drivers/infiniband/hw/mlx4/mad.c           |   48 +++++++
+ drivers/infiniband/hw/mlx4/main.c          |  187 ++++++++++++++++++++++++++++
+ drivers/infiniband/hw/mlx4/mcg.c           |   16 +++
+ drivers/infiniband/hw/mlx4/mlx4_ib.h       |   14 ++
+ drivers/infiniband/hw/mlx4/mr.c            |   14 ++
+ drivers/infiniband/hw/mlx4/qp.c            |   25 ++++
+ drivers/infiniband/hw/mlx4/sysfs.c         |   14 ++
+ drivers/infiniband/hw/mlx4/wc.c            |    5 +
+ drivers/net/ethernet/mellanox/mlx4/alloc.c |   24 ++++
+ drivers/net/ethernet/mellanox/mlx4/catas.c |   16 +++
+ drivers/net/ethernet/mellanox/mlx4/cmd.c   |   15 ++-
+ drivers/net/ethernet/mellanox/mlx4/fw.c    |    4 +
+ drivers/net/ethernet/mellanox/mlx4/icm.c   |    4 +
+ drivers/net/ethernet/mellanox/mlx4/main.c  |   40 ++++++-
+ drivers/net/ethernet/mellanox/mlx4/mr.c    |    4 +
+ drivers/net/ethernet/mellanox/mlx4/pd.c    |   12 ++-
+ drivers/net/ethernet/mellanox/mlx4/reset.c |   12 ++
+ include/linux/mlx4/device.h                |    4 +
+ 20 files changed, 465 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/infiniband/hw/mlx4/alias_GUID.c b/drivers/infiniband/hw/mlx4/alias_GUID.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/alias_GUID.c
++++ b/drivers/infiniband/hw/mlx4/alias_GUID.c
+@@ -32,6 +32,7 @@
+  /***********************************************************/
+ /*This file support the handling of the Alias GUID feature. */
+ /***********************************************************/
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ #include <rdma/ib_mad.h>
+ #include <rdma/ib_smi.h>
+ #include <rdma/ib_cache.h>
+@@ -470,6 +471,7 @@ void mlx4_ib_invalidate_all_guid_record(struct mlx4_ib_dev *dev, int port)
+ 		any context including IRQ handler
+ 		http://lxr.linux.no/linux+v3.7/kernel/workqueue.c#L2981
+ 		*/
++#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16)
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
+ 		__cancel_delayed_work(&dev->sriov.alias_guid.
+ 				      ports_guid[port - 1].alias_guid_work);
+@@ -477,6 +479,10 @@ void mlx4_ib_invalidate_all_guid_record(struct mlx4_ib_dev *dev, int port)
+ 		cancel_delayed_work(&dev->sriov.alias_guid.
+                                     ports_guid[port - 1].alias_guid_work);
+ #endif
++#else
++		cancel_delayed_work(&dev->sriov.alias_guid.
++                                    ports_guid[port - 1].alias_guid_work);
++#endif
+ 		queue_delayed_work(dev->sriov.alias_guid.ports_guid[port - 1].wq,
+ 				   &dev->sriov.alias_guid.ports_guid[port - 1].alias_guid_work,
+ 				   0);
+@@ -709,3 +715,4 @@ err_unregister:
+ 	pr_err("init_alias_guid_service: Failed. (ret:%d)\n", ret);
+ 	return ret;
+ }
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+diff --git a/drivers/infiniband/hw/mlx4/cq.c b/drivers/infiniband/hw/mlx4/cq.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/cq.c
++++ b/drivers/infiniband/hw/mlx4/cq.c
+@@ -35,6 +35,9 @@
+ #include <linux/mlx4/qp.h>
+ #include <linux/mlx4/srq.h>
+ #include <linux/slab.h>
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16))
++#include <linux/printk.h>
++#endif
+ 
+ #include "mlx4_ib.h"
+ #include "user.h"
+diff --git a/drivers/infiniband/hw/mlx4/mad.c b/drivers/infiniband/hw/mlx4/mad.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/mad.c
++++ b/drivers/infiniband/hw/mlx4/mad.c
+@@ -35,6 +35,9 @@
+ #include <rdma/ib_sa.h>
+ #include <rdma/ib_cache.h>
+ 
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16))
++#include <linux/printk.h>
++#endif
+ #include <linux/random.h>
+ #include <linux/mlx4/cmd.h>
+ #include <linux/gfp.h>
+@@ -55,6 +58,7 @@ enum {
+ #define MLX4_TUN_IS_RECV(a)  (((a) >>  MLX4_TUN_SEND_WRID_SHIFT) & 0x1)
+ #define MLX4_TUN_WRID_QPN(a) (((a) >> MLX4_TUN_QPN_SHIFT) & 0x3)
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+  /* Port mgmt change event handling */
+ 
+ #define GET_BLK_PTR_FROM_EQE(eqe) be32_to_cpu(eqe->event.port_mgmt_change.params.tbl_change_info.block_ptr)
+@@ -63,6 +67,7 @@ enum {
+ #define GUID_TBL_ENTRY_SIZE 8	   /* size in bytes */
+ #define GUID_TBL_BLK_NUM_ENTRIES 8
+ #define GUID_TBL_BLK_SIZE (GUID_TBL_ENTRY_SIZE * GUID_TBL_BLK_NUM_ENTRIES)
++#endif
+ 
+ struct mlx4_mad_rcv_buf {
+ 	struct ib_grh grh;
+@@ -86,9 +91,11 @@ struct mlx4_rcv_tunnel_mad {
+ } __packed;
+ 
+ static void handle_client_rereg_event(struct mlx4_ib_dev *dev, u8 port_num);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static void handle_lid_change_event(struct mlx4_ib_dev *dev, u8 port_num);
+ static void __propagate_pkey_ev(struct mlx4_ib_dev *dev, int port_num,
+ 				int block, u32 change_bitmap);
++#endif
+ 
+ __be64 mlx4_ib_gen_node_guid(void)
+ {
+@@ -239,7 +246,12 @@ static void smp_snoop(struct ib_device *ibdev, u8 port_num, struct ib_mad *mad,
+ 				handle_client_rereg_event(dev, port_num);
+ 
+ 			if (prev_lid != lid)
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 				handle_lid_change_event(dev, port_num);
++#else
++				mlx4_ib_dispatch_event(dev, port_num,
++						       IB_EVENT_LID_CHANGE);
++#endif
+ 			break;
+ 
+ 		case IB_SMP_ATTR_PKEY_TABLE:
+@@ -272,9 +284,11 @@ static void smp_snoop(struct ib_device *ibdev, u8 port_num, struct ib_mad *mad,
+ 			if (pkey_change_bitmap) {
+ 				mlx4_ib_dispatch_event(dev, port_num,
+ 						       IB_EVENT_PKEY_CHANGE);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 				if (!dev->sriov.is_going_down)
+ 					__propagate_pkey_ev(dev, port_num, bn,
+ 							    pkey_change_bitmap);
++#endif
+ 			}
+ 			break;
+ 
+@@ -283,6 +297,7 @@ static void smp_snoop(struct ib_device *ibdev, u8 port_num, struct ib_mad *mad,
+ 			if (!mlx4_is_master(dev->dev))
+ 				mlx4_ib_dispatch_event(dev, port_num,
+ 						       IB_EVENT_GID_CHANGE);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 			/*if master, notify relevant slaves*/
+ 			if (mlx4_is_master(dev->dev) &&
+ 			    !dev->sriov.is_going_down) {
+@@ -292,6 +307,7 @@ static void smp_snoop(struct ib_device *ibdev, u8 port_num, struct ib_mad *mad,
+ 				mlx4_ib_notify_slaves_on_guid_change(dev, bn, port_num,
+ 								     (u8 *)(&((struct ib_smp *)mad)->data));
+ 			}
++#endif
+ 			break;
+ 
+ 		default:
+@@ -299,6 +315,7 @@ static void smp_snoop(struct ib_device *ibdev, u8 port_num, struct ib_mad *mad,
+ 		}
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static void __propagate_pkey_ev(struct mlx4_ib_dev *dev, int port_num,
+ 				int block, u32 change_bitmap)
+ {
+@@ -332,6 +349,7 @@ static void __propagate_pkey_ev(struct mlx4_ib_dev *dev, int port_num,
+ 		}
+ 	}
+ }
++#endif
+ 
+ static void node_desc_override(struct ib_device *dev,
+ 			       struct ib_mad *mad)
+@@ -1100,6 +1118,7 @@ void mlx4_ib_mad_cleanup(struct mlx4_ib_dev *dev)
+ 	}
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static void handle_lid_change_event(struct mlx4_ib_dev *dev, u8 port_num)
+ {
+ 	mlx4_ib_dispatch_event(dev, port_num, IB_EVENT_LID_CHANGE);
+@@ -1108,22 +1127,28 @@ static void handle_lid_change_event(struct mlx4_ib_dev *dev, u8 port_num)
+ 		mlx4_gen_slaves_port_mgt_ev(dev->dev, port_num,
+ 					    MLX4_EQ_PORT_INFO_LID_CHANGE_MASK, 0, 0);
+ }
++#endif
+ 
+ static void handle_client_rereg_event(struct mlx4_ib_dev *dev, u8 port_num)
+ {
+ 	/* re-configure the alias-guid and mcg's */
+ 	if (mlx4_is_master(dev->dev)) {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		mlx4_ib_invalidate_all_guid_record(dev, port_num);
++#endif
+ 
+ 		if (!dev->sriov.is_going_down) {
+ 			mlx4_ib_mcg_port_cleanup(&dev->sriov.demux[port_num - 1], 0);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 			mlx4_gen_slaves_port_mgt_ev(dev->dev, port_num,
+ 						    MLX4_EQ_PORT_INFO_CLIENT_REREG_MASK, 0, 0);
++#endif
+ 		}
+ 	}
+ 	mlx4_ib_dispatch_event(dev, port_num, IB_EVENT_CLIENT_REREGISTER);
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static void propagate_pkey_ev(struct mlx4_ib_dev *dev, int port_num,
+ 			      struct mlx4_eqe *eqe)
+ {
+@@ -1183,6 +1208,7 @@ out:
+ 	kfree(out_mad);
+ 	return;
+ }
++#endif
+ 
+ void handle_port_mgmt_change_event(struct work_struct *work)
+ {
+@@ -1191,8 +1217,10 @@ void handle_port_mgmt_change_event(struct work_struct *work)
+ 	struct mlx4_eqe *eqe = &(ew->ib_eqe);
+ 	u8 port = eqe->event.port_mgmt_change.port;
+ 	u32 changed_attr;
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	u32 tbl_block;
+ 	u32 change_bitmap;
++#endif
+ 
+ 	switch (eqe->subtype) {
+ 	case MLX4_DEV_PMC_SUBTYPE_PORT_INFO:
+@@ -1205,23 +1233,31 @@ void handle_port_mgmt_change_event(struct work_struct *work)
+ 			u8 sl = eqe->event.port_mgmt_change.params.port_info.mstr_sm_sl & 0xf;
+ 			update_sm_ah(dev, port, lid, sl);
+ 			mlx4_ib_dispatch_event(dev, port, IB_EVENT_SM_CHANGE);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 			if (mlx4_is_master(dev->dev))
+ 				mlx4_gen_slaves_port_mgt_ev(dev->dev, port,
+ 							    changed_attr & MSTR_SM_CHANGE_MASK,
+ 							    lid, sl);
++#endif
+ 		}
+ 
+ 		/* Check if it is a lid change event */
+ 		if (changed_attr & MLX4_EQ_PORT_INFO_LID_CHANGE_MASK)
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 			handle_lid_change_event(dev, port);
++#else
++			mlx4_ib_dispatch_event(dev, port, IB_EVENT_LID_CHANGE);
++#endif
+ 
+ 		/* Generate GUID changed event */
+ 		if (changed_attr & MLX4_EQ_PORT_INFO_GID_PFX_CHANGE_MASK) {
+ 			mlx4_ib_dispatch_event(dev, port, IB_EVENT_GID_CHANGE);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 			/*if master, notify all slaves*/
+ 			if (mlx4_is_master(dev->dev))
+ 				mlx4_gen_slaves_port_mgt_ev(dev->dev, port,
+ 							    MLX4_EQ_PORT_INFO_GID_PFX_CHANGE_MASK, 0, 0);
++#endif
+ 		}
+ 
+ 		if (changed_attr & MLX4_EQ_PORT_INFO_CLIENT_REREG_MASK)
+@@ -1230,19 +1266,23 @@ void handle_port_mgmt_change_event(struct work_struct *work)
+ 
+ 	case MLX4_DEV_PMC_SUBTYPE_PKEY_TABLE:
+ 		mlx4_ib_dispatch_event(dev, port, IB_EVENT_PKEY_CHANGE);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		if (mlx4_is_master(dev->dev) && !dev->sriov.is_going_down)
+ 			propagate_pkey_ev(dev, port, eqe);
++#endif
+ 		break;
+ 	case MLX4_DEV_PMC_SUBTYPE_GUID_INFO:
+ 		/* paravirtualized master's guid is guid 0 -- does not change */
+ 		if (!mlx4_is_master(dev->dev))
+ 			mlx4_ib_dispatch_event(dev, port, IB_EVENT_GID_CHANGE);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		/*if master, notify relevant slaves*/
+ 		else if (!dev->sriov.is_going_down) {
+ 			tbl_block = GET_BLK_PTR_FROM_EQE(eqe);
+ 			change_bitmap = GET_MASK_FROM_EQE(eqe);
+ 			handle_slaves_guid_change(dev, port, tbl_block, change_bitmap);
+ 		}
++#endif
+ 		break;
+ 	default:
+ 		pr_warn("Unsupported subtype 0x%x for "
+@@ -2264,6 +2304,7 @@ int mlx4_ib_init_sriov(struct mlx4_ib_dev *dev)
+ 			mlx4_put_slave_node_guid(dev->dev, i, mlx4_ib_gen_node_guid());
+ 	}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	err = mlx4_ib_init_alias_guid_service(dev);
+ 	if (err) {
+ 		mlx4_ib_warn(&dev->ib_dev, "Failed init alias guid process.\n");
+@@ -2274,15 +2315,18 @@ int mlx4_ib_init_sriov(struct mlx4_ib_dev *dev)
+ 		mlx4_ib_warn(&dev->ib_dev, "Failed to register sysfs\n");
+ 		goto sysfs_err;
+ 	}
++#endif
+ 
+ 	mlx4_ib_warn(&dev->ib_dev, "initializing demux service for %d qp1 clients\n",
+ 		     dev->dev->caps.sqp_demux);
+ 	for (i = 0; i < dev->num_ports; i++) {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		union ib_gid gid;
+ 		err = __mlx4_ib_query_gid(&dev->ib_dev, i + 1, 0, &gid, 1);
+ 		if (err)
+ 			goto demux_err;
+ 		dev->sriov.demux[i].guid_cache[0] = gid.global.interface_id;
++#endif
+ 		err = alloc_pv_object(dev, mlx4_master_func_num(dev->dev), i + 1,
+ 				      &dev->sriov.sqps[i]);
+ 		if (err)
+@@ -2300,12 +2344,14 @@ demux_err:
+ 		mlx4_ib_free_demux_ctx(&dev->sriov.demux[i]);
+ 		--i;
+ 	}
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	mlx4_ib_device_unregister_sysfs(dev);
+ 
+ sysfs_err:
+ 	mlx4_ib_destroy_alias_guid_service(dev);
+ 
+ paravirt_err:
++#endif
+ 	mlx4_ib_cm_paravirt_clean(dev, -1);
+ 
+ 	return err;
+@@ -2332,7 +2378,9 @@ void mlx4_ib_close_sriov(struct mlx4_ib_dev *dev)
+ 		}
+ 
+ 		mlx4_ib_cm_paravirt_clean(dev, -1);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		mlx4_ib_destroy_alias_guid_service(dev);
+ 		mlx4_ib_device_unregister_sysfs(dev);
++#endif
+ 	}
+ }
+diff --git a/drivers/infiniband/hw/mlx4/main.c b/drivers/infiniband/hw/mlx4/main.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/main.c
++++ b/drivers/infiniband/hw/mlx4/main.c
+@@ -466,7 +466,9 @@ int __mlx4_ib_query_gid(struct ib_device *ibdev, u8 port, int index,
+ 	struct ib_smp *out_mad = NULL;
+ 	int err = -ENOMEM;
+ 	struct mlx4_ib_dev *dev = to_mdev(ibdev);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	int clear = 0;
++#endif
+ 	int mad_ifc_flags = MLX4_MAD_IFC_IGNORE_KEYS;
+ 
+ 	in_mad  = kzalloc(sizeof *in_mad, GFP_KERNEL);
+@@ -478,8 +480,10 @@ int __mlx4_ib_query_gid(struct ib_device *ibdev, u8 port, int index,
+ 	in_mad->attr_id  = IB_SMP_ATTR_PORT_INFO;
+ 	in_mad->attr_mod = cpu_to_be32(port);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (mlx4_is_mfunc(dev->dev) && netw_view)
+ 		mad_ifc_flags |= MLX4_MAD_IFC_NET_VIEW;
++#endif
+ 
+ 	err = mlx4_MAD_IFC(dev, mad_ifc_flags, port, NULL, NULL, in_mad, out_mad);
+ 	if (err)
+@@ -487,6 +491,7 @@ int __mlx4_ib_query_gid(struct ib_device *ibdev, u8 port, int index,
+ 
+ 	memcpy(gid->raw, out_mad->data + 8, 8);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (mlx4_is_mfunc(dev->dev) && !netw_view) {
+ 		if (index) {
+ 			/* For any index > 0, return the null guid */
+@@ -495,6 +500,7 @@ int __mlx4_ib_query_gid(struct ib_device *ibdev, u8 port, int index,
+ 			goto out;
+ 		}
+ 	}
++#endif
+ 
+ 	init_query_mad(in_mad);
+ 	in_mad->attr_id  = IB_SMP_ATTR_GUID_INFO;
+@@ -508,8 +514,10 @@ int __mlx4_ib_query_gid(struct ib_device *ibdev, u8 port, int index,
+ 	memcpy(gid->raw + 8, out_mad->data + (index % 8) * 8, 8);
+ 
+ out:
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (clear)
+ 		memset(gid->raw + 8, 0, 8);
++#endif
+ 	kfree(in_mad);
+ 	kfree(out_mad);
+ 	return err;
+@@ -733,6 +741,7 @@ static int mlx4_ib_dealloc_ucontext(struct ib_ucontext *ibcontext)
+ 	return 0;
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static unsigned long mlx4_ib_get_unmapped_area(struct file *file,
+ 			unsigned long addr,
+ 			unsigned long len, unsigned long pgoff,
+@@ -794,11 +803,14 @@ full_search:
+ 					pgoff, flags);
+ #endif
+ }
++#endif
+ 
+ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
+ {
+ 	struct mlx4_ib_dev *dev = to_mdev(context->device);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	int err;
++#endif
+ 
+ 	/* Last 8 bits hold the  command others are data per that command */
+ 	unsigned long  command = vma->vm_pgoff & MLX4_IB_MMAP_CMD_MASK;
+@@ -824,6 +836,7 @@ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
+ 				       dev->dev->caps.num_uars,
+ 				       PAGE_SIZE, vma->vm_page_prot))
+ 			return -EAGAIN;
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	} else if (command == MLX4_IB_MMAP_GET_CONTIGUOUS_PAGES) {
+ 		/* Getting contiguous physical pages */
+ 		unsigned long total_size = vma->vm_end - vma->vm_start;
+@@ -859,6 +872,7 @@ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
+ 				       >> PAGE_SHIFT,
+ 				       PAGE_SIZE, vma->vm_page_prot))
+ 			return -EAGAIN;
++#endif
+ 	} else
+ 		return -EINVAL;
+ 
+@@ -868,10 +882,13 @@ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
+ static int mlx4_ib_ioctl(struct ib_ucontext *context, unsigned int cmd,
+ 			 unsigned long arg)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct mlx4_ib_dev *dev = to_mdev(context->device);
++#endif
+ 	int ret;
+ 
+ 	switch (cmd) {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	case MLX4_IOCHWCLOCKOFFSET: {
+ 		struct mlx4_clock_params params;
+ 		int ret;
+@@ -884,6 +901,7 @@ static int mlx4_ib_ioctl(struct ib_ucontext *context, unsigned int cmd,
+ 			return ret;
+ 		}
+ 	}
++#endif
+ 	default: {
+ 		pr_err("mlx4_ib: invalid ioctl %u command with arg %lX\n",
+ 		       cmd, arg);
+@@ -897,6 +915,7 @@ static int mlx4_ib_ioctl(struct ib_ucontext *context, unsigned int cmd,
+ static int mlx4_ib_query_values(struct ib_device *device, int q_values,
+ 				struct ib_device_values *values)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct mlx4_ib_dev *dev = to_mdev(device);
+ 	cycle_t cycles;
+ 
+@@ -914,6 +933,9 @@ static int mlx4_ib_query_values(struct ib_device *device, int q_values,
+ 		return -ENOTTY;
+ 
+ 	return 0;
++#else
++	return -ENOSYS;
++#endif
+ }
+ 
+ static struct ib_pd *mlx4_ib_alloc_pd(struct ib_device *ibdev,
+@@ -1538,6 +1560,7 @@ out:
+ 	return err;
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static ssize_t show_hca(struct device *device, struct device_attribute *attr,
+ 			char *buf)
+ {
+@@ -1601,6 +1624,59 @@ static struct device_attribute *mlx4_class_attributes[] = {
+ 	&dev_attr_board_id,
+ 	&dev_attr_vsd
+ };
++#else /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
++static ssize_t show_hca(struct class_device *cdev, char *buf)
++{
++	struct mlx4_ib_dev *dev = container_of(cdev, struct mlx4_ib_dev, ib_dev.class_dev);
++	return sprintf(buf, "MT%d\n", dev->dev->pdev->device);
++}
++
++static ssize_t show_fw_ver(struct class_device *cdev, char *buf)
++{
++	struct mlx4_ib_dev *dev = container_of(cdev, struct mlx4_ib_dev, ib_dev.class_dev);
++	return sprintf(buf, "%d.%d.%d\n", (int) (dev->dev->caps.fw_ver >> 32),
++		       (int) (dev->dev->caps.fw_ver >> 16) & 0xffff,
++		       (int) dev->dev->caps.fw_ver & 0xffff);
++}
++
++static ssize_t show_rev(struct class_device *cdev, char *buf)
++{
++	struct mlx4_ib_dev *dev = container_of(cdev, struct mlx4_ib_dev, ib_dev.class_dev);
++	return sprintf(buf, "%x\n", dev->dev->rev_id);
++}
++
++static ssize_t show_board(struct class_device *cdev, char *buf)
++{
++	struct mlx4_ib_dev *dev = container_of(cdev, struct mlx4_ib_dev, ib_dev.class_dev);
++	return sprintf(buf, "%.*s\n", MLX4_BOARD_ID_LEN, dev->dev->board_id);
++}
++
++static ssize_t show_vsd(struct class_device *cdev, char *buf)
++{
++	struct mlx4_ib_dev *dev = container_of(cdev, struct mlx4_ib_dev, ib_dev.class_dev);
++	ssize_t len = MLX4_VSD_LEN;
++
++	if (dev->dev->vsd_vendor_id == PCI_VENDOR_ID_MELLANOX)
++		len = sprintf(buf, "%.*s\n", MLX4_VSD_LEN, dev->dev->vsd);
++	else
++		memcpy(buf, dev->dev->vsd, MLX4_VSD_LEN);
++
++	return len;
++}
++
++static CLASS_DEVICE_ATTR(hw_rev,   S_IRUGO, show_rev,    NULL);
++static CLASS_DEVICE_ATTR(fw_ver,   S_IRUGO, show_fw_ver, NULL);
++static CLASS_DEVICE_ATTR(hca_type, S_IRUGO, show_hca,    NULL);
++static CLASS_DEVICE_ATTR(board_id, S_IRUGO, show_board,  NULL);
++static CLASS_DEVICE_ATTR(vsd,	   S_IRUGO, show_vsd,	 NULL);
++
++static struct class_device_attribute *mlx4_class_attributes[] = {
++	&class_device_attr_hw_rev,
++	&class_device_attr_fw_ver,
++	&class_device_attr_hca_type,
++	&class_device_attr_board_id,
++	&class_device_attr_vsd
++};
+ 
+ static void mlx4_addrconf_ifid_eui48(u8 *eui, u16 vlan_id, struct net_device *dev)
+ {
+@@ -1652,6 +1728,7 @@ static void update_gids_task(struct work_struct *work)
+ free:
+ 	kfree(gw);
+ }
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+ 
+ static void reset_gids_task(struct work_struct *work)
+ {
+@@ -2001,11 +2078,16 @@ static void mlx4_ib_scan_netdevs(struct mlx4_ib_dev *ibdev,
+ static int mlx4_ib_netdev_event(struct notifier_block *this, unsigned long event,
+ 				void *ptr)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct net_device *dev = ptr;
+ 	struct mlx4_ib_dev *ibdev;
+ 
+ 	if (!net_eq(dev_net(dev), &init_net))
+ 		return NOTIFY_DONE;
++#else
++	struct net_device *dev = ptr;
++	struct mlx4_ib_dev *ibdev;
++#endif
+ 
+ 	ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb);
+ 	mlx4_ib_scan_netdevs(ibdev, dev, event);
+@@ -2128,6 +2210,7 @@ static void mlx4_ib_free_eqs(struct mlx4_dev *dev, struct mlx4_ib_dev *ibdev)
+  * create show function and a device_attribute struct pointing to
+  * the function for _name
+  */
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ #define DEVICE_DIAG_RPRT_ATTR(_name, _offset, _op_mod)		\
+ static ssize_t show_rprt_##_name(struct device *dev,		\
+ 				 struct device_attribute *attr,	\
+@@ -2135,9 +2218,18 @@ static ssize_t show_rprt_##_name(struct device *dev,		\
+ 	return show_diag_rprt(dev, buf, _offset, _op_mod);	\
+ }								\
+ static DEVICE_ATTR(_name, S_IRUGO, show_rprt_##_name, NULL);
++#else /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
++#define DEVICE_DIAG_RPRT_ATTR(_name, _offset, _op_mod)		\
++static ssize_t show_rprt_##_name(struct class_device *cdev,	\
++				 char *buf){			\
++	return show_diag_rprt(cdev, buf, _offset, _op_mod);	\
++}								\
++static CLASS_DEVICE_ATTR(_name, S_IRUGO, show_rprt_##_name, NULL);
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+ 
+ #define MLX4_DIAG_RPRT_CLEAR_DIAGS 3
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static size_t show_diag_rprt(struct device *device, char *buf,
+ 			     u32 offset, u8 op_modifier)
+ {
+@@ -2154,7 +2246,26 @@ static size_t show_diag_rprt(struct device *device, char *buf,
+ 
+ 	return sprintf(buf, "%d\n", diag_counter);
+ }
++#else /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
++static size_t show_diag_rprt(struct class_device *cdev, char *buf,
++                              u32 offset, u8 op_modifier)
++{
++	size_t ret;
++	u32 counter_offset = offset;
++	u32 diag_counter = 0;
++	struct mlx4_ib_dev *dev = container_of(cdev, struct mlx4_ib_dev,
++					       ib_dev.class_dev);
++
++	ret = mlx4_query_diag_counters(dev->dev, 1, op_modifier,
++				       &counter_offset, &diag_counter);
++	if (ret)
++		return ret;
++
++	return sprintf(buf,"%d\n", diag_counter);
++}
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static ssize_t clear_diag_counters(struct device *device,
+ 				   struct device_attribute *attr,
+ 				   const char *buf, size_t length)
+@@ -2170,6 +2281,22 @@ static ssize_t clear_diag_counters(struct device *device,
+ 
+ 	return length;
+ }
++#else
++static ssize_t clear_diag_counters(struct class_device *cdev,
++				   const char *buf, size_t length)
++{
++	size_t ret;
++	struct mlx4_ib_dev *dev = container_of(cdev, struct mlx4_ib_dev,
++					       ib_dev.class_dev);
++
++	ret = mlx4_query_diag_counters(dev->dev, 0, MLX4_DIAG_RPRT_CLEAR_DIAGS,
++				       NULL, NULL);
++	if (ret)
++		return ret;
++
++	return length;
++}
++#endif
+ 
+ DEVICE_DIAG_RPRT_ATTR(rq_num_lle	, 0x00, 2);
+ DEVICE_DIAG_RPRT_ATTR(sq_num_lle	, 0x04, 2);
+@@ -2200,6 +2327,7 @@ DEVICE_DIAG_RPRT_ATTR(num_cqovf		, 0x1A0, 2);
+ DEVICE_DIAG_RPRT_ATTR(num_eqovf		, 0x1A4, 2);
+ DEVICE_DIAG_RPRT_ATTR(num_baddb		, 0x1A8, 2);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static DEVICE_ATTR(clear_diag, S_IWUSR, NULL, clear_diag_counters);
+ 
+ static struct attribute *diag_rprt_attrs[] = {
+@@ -2234,6 +2362,42 @@ static struct attribute *diag_rprt_attrs[] = {
+ 	&dev_attr_clear_diag.attr,
+ 	NULL
+ };
++#else /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
++static CLASS_DEVICE_ATTR(clear_diag, S_IWUGO, NULL, clear_diag_counters);
++
++static struct attribute *diag_rprt_attrs[] = {
++	&class_device_attr_rq_num_lle.attr,
++	&class_device_attr_sq_num_lle.attr,
++	&class_device_attr_rq_num_lqpoe.attr,
++	&class_device_attr_sq_num_lqpoe.attr,
++	&class_device_attr_rq_num_lpe.attr,
++	&class_device_attr_sq_num_lpe.attr,
++	&class_device_attr_rq_num_wrfe.attr,
++	&class_device_attr_sq_num_wrfe.attr,
++	&class_device_attr_sq_num_mwbe.attr,
++	&class_device_attr_sq_num_bre.attr,
++	&class_device_attr_rq_num_lae.attr,
++	&class_device_attr_sq_num_rire.attr,
++	&class_device_attr_rq_num_rire.attr,
++	&class_device_attr_sq_num_rae.attr,
++	&class_device_attr_rq_num_rae.attr,
++	&class_device_attr_sq_num_roe.attr,
++	&class_device_attr_sq_num_tree.attr,
++	&class_device_attr_sq_num_rree.attr,
++	&class_device_attr_rq_num_rnr.attr,
++	&class_device_attr_sq_num_rnr.attr,
++	&class_device_attr_rq_num_oos.attr,
++	&class_device_attr_sq_num_oos.attr,
++	&class_device_attr_rq_num_mce.attr,
++	&class_device_attr_rq_num_udsdprd.attr,
++	&class_device_attr_rq_num_ucsdprd.attr,
++	&class_device_attr_num_cqovf.attr,
++	&class_device_attr_num_eqovf.attr,
++	&class_device_attr_num_baddb.attr,
++	&class_device_attr_clear_diag.attr,
++	NULL
++};
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+ 
+ static struct attribute_group diag_counters_group = {
+ 	.name  = "diag_counters",
+@@ -2277,6 +2441,7 @@ error:
+ 
+ static void init_dev_assign(void)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	int i = 1;
+ 
+ 	spin_lock_init(&dev_num_str_lock);
+@@ -2305,6 +2470,7 @@ err:
+ 	dev_num_str_bitmap = NULL;
+ 	pr_warn("mlx4_ib: The value of 'dev_assign_str' parameter "
+ 			    "is incorrect. The parameter value is discarded!");
++#endif
+ }
+ 
+ static int mlx4_ib_dev_idx(struct mlx4_dev *dev)
+@@ -2428,7 +2594,9 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
+ 	ibdev->ib_dev.alloc_ucontext	= mlx4_ib_alloc_ucontext;
+ 	ibdev->ib_dev.dealloc_ucontext	= mlx4_ib_dealloc_ucontext;
+ 	ibdev->ib_dev.mmap		= mlx4_ib_mmap;
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	ibdev->ib_dev.get_unmapped_area = mlx4_ib_get_unmapped_area;
++#endif
+ 	ibdev->ib_dev.alloc_pd		= mlx4_ib_alloc_pd;
+ 	ibdev->ib_dev.dealloc_pd	= mlx4_ib_dealloc_pd;
+ 	ibdev->ib_dev.create_ah		= mlx4_ib_create_ah;
+@@ -2606,6 +2774,7 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
+ #endif
+ 		mlx4_ib_scan_netdevs(ibdev, NULL, 0);
+ 	}
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	for (j = 0; j < ARRAY_SIZE(mlx4_class_attributes); ++j) {
+ 		if (device_create_file(&ibdev->ib_dev.dev,
+ 				       mlx4_class_attributes[j]))
+@@ -2613,6 +2782,16 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
+ 	}
+ 	if (sysfs_create_group(&ibdev->ib_dev.dev.kobj, &diag_counters_group))
+ 		goto err_notify;
++#else /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
++	for (j = 0; j < ARRAY_SIZE(mlx4_class_attributes); ++j) {
++		if (class_device_create_file(&ibdev->ib_dev.class_dev,
++					       mlx4_class_attributes[j]))
++			goto err_notify;
++	}
++
++	if(sysfs_create_group(&ibdev->ib_dev.class_dev.kobj, &diag_counters_group))
++		goto err_notify;
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+ 
+ 	ibdev->ib_active = true;
+ 
+@@ -2650,7 +2829,9 @@ err_notify:
+ #endif
+ 	flush_workqueue(wq);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	mlx4_ib_close_sriov(ibdev);
++#endif
+ 
+ err_mad:
+ 	mlx4_ib_mad_cleanup(ibdev);
+@@ -2773,7 +2954,11 @@ static void mlx4_ib_remove(struct mlx4_dev *dev, void *ibdev_ptr)
+ #endif
+ 
+ 	mlx4_ib_close_sriov(ibdev);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	sysfs_remove_group(&ibdev->ib_dev.dev.kobj, &diag_counters_group);
++#else
++	sysfs_remove_group(&ibdev->ib_dev.class_dev.kobj, &diag_counters_group);
++#endif
+ 	mlx4_ib_mad_cleanup(ibdev);
+ 	dev_idx = -1;
+ 	if (dr_active && !(ibdev->dev->flags & MLX4_FLAG_DEV_NUM_STR)) {
+@@ -2883,11 +3068,13 @@ static void mlx4_ib_event(struct mlx4_dev *dev, void *ibdev_ptr,
+ 	case MLX4_DEV_EVENT_PORT_UP:
+ 		if (p > ibdev->num_ports)
+ 			return;
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		if (mlx4_is_master(dev) &&
+ 		    rdma_port_get_link_layer(&ibdev->ib_dev, p) ==
+ 			IB_LINK_LAYER_INFINIBAND) {
+ 			mlx4_ib_invalidate_all_guid_record(ibdev, p);
+ 		}
++#endif
+ 		mlx4_ib_info((struct ib_device *) ibdev_ptr,
+ 			     "Port %d logical link is up\n", p);
+ 		ibev.event = IB_EVENT_PORT_ACTIVE;
+diff --git a/drivers/infiniband/hw/mlx4/mcg.c b/drivers/infiniband/hw/mlx4/mcg.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/mcg.c
++++ b/drivers/infiniband/hw/mlx4/mcg.c
+@@ -110,7 +110,9 @@ struct mcast_group {
+ 	__be64			last_req_tid;
+ 
+ 	char			name[33]; /* MGID string */
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct device_attribute	dentry;
++#endif
+ 
+ 	/* refcount is the reference count for the following:
+ 	   1. Each queued request
+@@ -447,8 +449,10 @@ static int release_group(struct mcast_group *group, int from_timeout_handler)
+ 		}
+ 
+ 		nzgroup = memcmp(&group->rec.mgid, &mgid0, sizeof mgid0);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		if (nzgroup)
+ 			del_sysfs_port_mcg_attr(ctx->dev, ctx->port, &group->dentry.attr);
++#endif
+ 		if (!list_empty(&group->pending_list))
+ 			mcg_warn_group(group, "releasing a group with non empty pending list\n");
+ 		if (nzgroup)
+@@ -773,7 +777,9 @@ static struct mcast_group *search_relocate_mgid0_group(struct mlx4_ib_demux_ctx
+ 				}
+ 
+ 				atomic_inc(&group->refcount);
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 				add_sysfs_port_mcg_attr(ctx->dev, ctx->port, &group->dentry.attr);
++#endif
+ 				mutex_unlock(&group->lock);
+ 				mutex_unlock(&ctx->mcg_table_lock);
+ 				return group;
+@@ -801,8 +807,10 @@ static struct mcast_group *search_relocate_mgid0_group(struct mlx4_ib_demux_ctx
+ 	return NULL;
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static ssize_t sysfs_show_group(struct device *dev,
+ 		struct device_attribute *attr, char *buf);
++#endif
+ 
+ static struct mcast_group *acquire_group(struct mlx4_ib_demux_ctx *ctx,
+ 					 union ib_gid *mgid, int create,
+@@ -838,11 +846,13 @@ static struct mcast_group *acquire_group(struct mlx4_ib_demux_ctx *ctx,
+ 	sprintf(group->name, "%016llx%016llx",
+ 			be64_to_cpu(group->rec.mgid.global.subnet_prefix),
+ 			be64_to_cpu(group->rec.mgid.global.interface_id));
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	sysfs_attr_init(&group->dentry.attr);
+ 	group->dentry.show = sysfs_show_group;
+ 	group->dentry.store = NULL;
+ 	group->dentry.attr.name = group->name;
+ 	group->dentry.attr.mode = 0400;
++#endif
+ 	group->state = MCAST_IDLE;
+ 
+ 	if (is_mgid0) {
+@@ -857,7 +867,9 @@ static struct mcast_group *acquire_group(struct mlx4_ib_demux_ctx *ctx,
+ 		return ERR_PTR(-EINVAL);
+ 	}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	add_sysfs_port_mcg_attr(ctx->dev, ctx->port, &group->dentry.attr);
++#endif
+ 
+ found:
+ 	atomic_inc(&group->refcount);
+@@ -984,6 +996,7 @@ int mlx4_ib_mcg_multiplex_handler(struct ib_device *ibdev, int port,
+ 	}
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static ssize_t sysfs_show_group(struct device *dev,
+ 		struct device_attribute *attr, char *buf)
+ {
+@@ -1035,6 +1048,7 @@ static ssize_t sysfs_show_group(struct device *dev,
+ 
+ 	return len;
+ }
++#endif
+ 
+ int mlx4_ib_mcg_port_init(struct mlx4_ib_demux_ctx *ctx)
+ {
+@@ -1062,7 +1076,9 @@ static void force_clean_group(struct mcast_group *group)
+ 		list_del(&req->group_list);
+ 		kfree(req);
+ 	}
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	del_sysfs_port_mcg_attr(group->demux->dev, group->demux->port, &group->dentry.attr);
++#endif
+ 	rb_erase(&group->node, &group->demux->mcg_table);
+ 	kfree(group);
+ }
+diff --git a/drivers/infiniband/hw/mlx4/mlx4_ib.h b/drivers/infiniband/hw/mlx4/mlx4_ib.h
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/mlx4_ib.h
++++ b/drivers/infiniband/hw/mlx4/mlx4_ib.h
+@@ -68,8 +68,10 @@ enum {
+ #define MLX4_IB_SQ_HEADROOM(shift)	((MLX4_IB_MAX_HEADROOM >> (shift)) + 1)
+ #define MLX4_IB_SQ_MAX_SPARE		(MLX4_IB_SQ_HEADROOM(MLX4_IB_SQ_MIN_WQE_SHIFT))
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ /*module param to indicate if SM assigns the alias_GUID*/
+ extern int mlx4_ib_sm_guid_assign;
++#endif
+ extern struct proc_dir_entry *mlx4_mrs_dir_entry;
+ 
+ #define MLX4_IB_UC_STEER_QPN_ALIGN 1
+@@ -363,6 +365,7 @@ struct mlx4_ib_ah {
+ 	union mlx4_ext_av       av;
+ };
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ /****************************************/
+ /* alias guid support */
+ /****************************************/
+@@ -419,6 +422,7 @@ struct mlx4_sriov_alias_guid {
+ 	spinlock_t ag_work_lock;
+ 	struct ib_sa_client *sa_client;
+ };
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+ 
+ struct mlx4_ib_demux_work {
+ 	struct work_struct	work;
+@@ -492,7 +496,9 @@ struct mlx4_ib_sriov {
+ 	spinlock_t going_down_lock;
+ 	int is_going_down;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct mlx4_sriov_alias_guid alias_guid;
++#endif
+ 
+ 	/* CM paravirtualization fields */
+ 	struct list_head cm_list;
+@@ -518,6 +524,7 @@ struct pkey_mgt {
+ 	struct kobject	       *device_parent[MLX4_MFUNC_MAX];
+ };
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ struct mlx4_ib_iov_sysfs_attr {
+ 	void *ctx;
+ 	struct kobject *kobj;
+@@ -546,6 +553,7 @@ struct mlx4_ib_iov_port {
+ 	struct kobject	*mcgs_parent;
+ 	struct mlx4_ib_iov_sysfs_attr mcg_dentry;
+ };
++#endif
+ 
+ struct mlx4_ib_counter {
+ 	int counter_index;
+@@ -571,10 +579,12 @@ struct mlx4_ib_dev {
+ 	struct mlx4_ib_counter	counters[MLX4_MAX_PORTS];
+ 	int		       *eq_table;
+ 	int			eq_added;
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct kobject	       *iov_parent;
+ 	struct kobject	       *ports_parent;
+ 	struct kobject	       *dev_ports_parent[MLX4_MFUNC_MAX];
+ 	struct mlx4_ib_iov_port	iov_ports[MLX4_MAX_PORTS];
++#endif
+ 	struct pkey_mgt		pkeys;
+ 	unsigned long *ib_uc_qpns_bitmap;
+ 	int steer_qpn_count;
+@@ -828,6 +838,7 @@ int mlx4_ib_multiplex_cm_handler(struct ib_device *ibdev, int port, int slave_id
+ void mlx4_ib_cm_paravirt_init(struct mlx4_ib_dev *dev);
+ void mlx4_ib_cm_paravirt_clean(struct mlx4_ib_dev *dev, int slave_id);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ /* alias guid support */
+ void mlx4_ib_init_alias_guid_work(struct mlx4_ib_dev *dev, int port);
+ int mlx4_ib_init_alias_guid_service(struct mlx4_ib_dev *dev);
+@@ -846,11 +857,14 @@ int add_sysfs_port_mcg_attr(struct mlx4_ib_dev *device, int port_num,
+ 			    struct attribute *attr);
+ void del_sysfs_port_mcg_attr(struct mlx4_ib_dev *device, int port_num,
+ 			     struct attribute *attr);
++#endif
+ ib_sa_comp_mask mlx4_ib_get_aguid_comp_mask_from_ix(int index);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ int mlx4_ib_device_register_sysfs(struct mlx4_ib_dev *device) ;
+ 
+ void mlx4_ib_device_unregister_sysfs(struct mlx4_ib_dev *device);
++#endif
+ 
+ __be64 mlx4_ib_gen_node_guid(void);
+ 
+diff --git a/drivers/infiniband/hw/mlx4/mr.c b/drivers/infiniband/hw/mlx4/mr.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/mr.c
++++ b/drivers/infiniband/hw/mlx4/mr.c
+@@ -70,6 +70,7 @@ static ssize_t shared_mr_proc_write(struct file *file,
+ static int shared_mr_mmap(struct file *filep, struct vm_area_struct *vma)
+ {
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
+ #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+ 	struct proc_dir_entry *pde = PDE(filep->f_path.dentry->d_inode);
+ 	struct mlx4_shared_mr_info *smr_info =
+@@ -85,6 +86,9 @@ static int shared_mr_mmap(struct file *filep, struct vm_area_struct *vma)
+ 
+ 	return ib_umem_map_to_vma(smr_info->umem,
+ 					vma);
++#else
++	return -ENOSYS;
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16) */
+ 
+ }
+ 
+@@ -95,6 +99,7 @@ static const struct file_operations shared_mr_proc_ops = {
+ 	.mmap	= shared_mr_mmap
+ };
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
+ static mode_t convert_shared_access(int acc)
+ {
+ 
+@@ -106,6 +111,7 @@ static mode_t convert_shared_access(int acc)
+ 	       (acc & IB_ACCESS_SHARED_MR_OTHER_WRITE   ? S_IWOTH  : 0);
+ 
+ }
++#endif
+ 
+ struct ib_mr *mlx4_ib_get_dma_mr(struct ib_pd *pd, int acc)
+ {
+@@ -435,6 +441,7 @@ end:
+ 
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
+ static int prepare_shared_mr(struct mlx4_ib_mr *mr, int access_flags, int mr_id)
+ {
+ 
+@@ -530,6 +537,7 @@ end:
+ 	return;
+ 
+ }
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16) */
+ 
+ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
+ 				  u64 virt_addr, int access_flags,
+@@ -572,6 +580,7 @@ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
+ 		goto err_mr;
+ 
+ 	mr->ibmr.rkey = mr->ibmr.lkey = mr->mmr.key;
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
+ 	/* Check whether MR should be shared */
+ 	if (is_shared_mr(access_flags)) {
+ 	/* start address and length must be aligned to page size in order
+@@ -600,13 +609,16 @@ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
+ 		ib_umem_activate_invalidation_notifier(mr->umem,
+ 					mlx4_invalidate_umem, mr);
+ 	}
++#endif
+ 
+ 	atomic_set(&mr->invalidated, 0);
+ 	return &mr->ibmr;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
+ err_smr:
+ 	if (mr->smr_info)
+ 		free_smr_info(mr);
++#endif
+ 
+ err_mr:
+ 	(void) mlx4_mr_free(to_mdev(pd->device)->dev, &mr->mmr);
+@@ -626,8 +638,10 @@ int mlx4_ib_dereg_mr(struct ib_mr *ibmr)
+ 	struct ib_umem *umem = mr->umem;
+ 	int ret;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16))
+ 	if (mr->smr_info)
+ 		free_smr_info(mr);
++#endif
+ 
+ 	if (atomic_inc_return(&mr->invalidated) > 1) {
+ 		wait_for_completion(&mr->invalidation_comp);
+diff --git a/drivers/infiniband/hw/mlx4/qp.c b/drivers/infiniband/hw/mlx4/qp.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/qp.c
++++ b/drivers/infiniband/hw/mlx4/qp.c
+@@ -95,6 +95,7 @@ enum {
+ };
+ 
+ static const __be32 mlx4_ib_opcode[] = {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	[IB_WR_SEND]				= cpu_to_be32(MLX4_OPCODE_SEND),
+ 	[IB_WR_LSO]				= cpu_to_be32(MLX4_OPCODE_LSO),
+ 	[IB_WR_SEND_WITH_IMM]			= cpu_to_be32(MLX4_OPCODE_SEND_IMM),
+@@ -110,6 +111,22 @@ static const __be32 mlx4_ib_opcode[] = {
+ 	[IB_WR_MASKED_ATOMIC_FETCH_AND_ADD]	= cpu_to_be32(MLX4_OPCODE_MASKED_ATOMIC_FA),
+ 	[IB_WR_BIND_MW]				= cpu_to_be32(
+ 							MLX4_OPCODE_BIND_MW),
++#else
++	[IB_WR_SEND]			= __constant_cpu_to_be32(MLX4_OPCODE_SEND),
++	[IB_WR_LSO]			= __constant_cpu_to_be32(MLX4_OPCODE_LSO),
++	[IB_WR_SEND_WITH_IMM]		= __constant_cpu_to_be32(MLX4_OPCODE_SEND_IMM),
++	[IB_WR_RDMA_WRITE]		= __constant_cpu_to_be32(MLX4_OPCODE_RDMA_WRITE),
++	[IB_WR_RDMA_WRITE_WITH_IMM]	= __constant_cpu_to_be32(MLX4_OPCODE_RDMA_WRITE_IMM),
++	[IB_WR_RDMA_READ]		= __constant_cpu_to_be32(MLX4_OPCODE_RDMA_READ),
++	[IB_WR_ATOMIC_CMP_AND_SWP]	= __constant_cpu_to_be32(MLX4_OPCODE_ATOMIC_CS),
++	[IB_WR_ATOMIC_FETCH_AND_ADD]	= __constant_cpu_to_be32(MLX4_OPCODE_ATOMIC_FA),
++	[IB_WR_SEND_WITH_INV]		= __constant_cpu_to_be32(MLX4_OPCODE_SEND_INVAL),
++	[IB_WR_LOCAL_INV]		= __constant_cpu_to_be32(MLX4_OPCODE_LOCAL_INVAL),
++	[IB_WR_FAST_REG_MR]		= __constant_cpu_to_be32(MLX4_OPCODE_FMR),
++	[IB_WR_MASKED_ATOMIC_CMP_AND_SWP]	= __constant_cpu_to_be32(MLX4_OPCODE_MASKED_ATOMIC_CS),
++	[IB_WR_MASKED_ATOMIC_FETCH_AND_ADD]	= __constant_cpu_to_be32(MLX4_OPCODE_MASKED_ATOMIC_FA),
++	[IB_WR_BIND_MW]				= __constant_cpu_to_be32(MLX4_OPCODE_BIND_MW),
++#endif
+ };
+ 
+ #ifndef wc_wmb
+@@ -3061,7 +3078,15 @@ static int lay_inline_data(struct mlx4_ib_qp *qp, struct ib_send_wr *wr,
+ static void mlx4_bf_copy(unsigned long *dst, unsigned long *src,
+ 				unsigned bytecnt)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	__iowrite64_copy(dst, src, bytecnt / 8);
++#else
++	while (bytecnt > 0) {
++                *dst++ = *src++;
++                *dst++ = *src++;
++                bytecnt -= 2 * sizeof (long);
++        }
++#endif
+ }
+ 
+ int mlx4_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,
+diff --git a/drivers/infiniband/hw/mlx4/sysfs.c b/drivers/infiniband/hw/mlx4/sysfs.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/sysfs.c
++++ b/drivers/infiniband/hw/mlx4/sysfs.c
+@@ -30,11 +30,13 @@
+  * SOFTWARE.
+  */
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ /*#include "core_priv.h"*/
+ #include "mlx4_ib.h"
+ #include <linux/slab.h>
+ #include <linux/string.h>
+ #include <linux/stat.h>
++#include <linux/ctype.h>
+ 
+ #include <rdma/ib_mad.h>
+ /*show_admin_alias_guid returns the administratively assigned value of that GUID.
+@@ -474,6 +476,17 @@ static ssize_t show_port_pkey(struct mlx4_port *p, struct port_attribute *attr,
+ 	return ret;
+ }
+ 
++static int backport_strncasecmp(const char *s1, const char *s2, size_t n)
++{
++	int c1, c2;
++
++	do {
++		c1 = tolower(*s1++);
++		c2 = tolower(*s2++);
++	} while ((--n > 0) && c1 == c2 && c1 != 0);
++	return c1 - c2;
++}
++
+ static ssize_t store_port_pkey(struct mlx4_port *p, struct port_attribute *attr,
+ 			       const char *buf, size_t count)
+ {
+@@ -799,3 +812,4 @@ void mlx4_ib_device_unregister_sysfs(struct mlx4_ib_dev *device)
+ 	kobject_put(device->iov_parent);
+ 	kobject_put(device->ib_dev.ports_parent->parent);
+ }
++#endif /* LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16) */
+diff --git a/drivers/infiniband/hw/mlx4/wc.c b/drivers/infiniband/hw/mlx4/wc.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/hw/mlx4/wc.c
++++ b/drivers/infiniband/hw/mlx4/wc.c
+@@ -37,7 +37,12 @@
+ 
+ pgprot_t pgprot_wc(pgprot_t _prot)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	return pgprot_writecombine(_prot);
++#else
++#define MLX4_WC_FLAGS	(_PAGE_PWT)
++	return __pgprot(pgprot_val(_prot) | MLX4_WC_FLAGS);
++#endif
+ }
+ 
+ int mlx4_wc_enabled(void)
+diff --git a/drivers/net/ethernet/mellanox/mlx4/alloc.c b/drivers/net/ethernet/mellanox/mlx4/alloc.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/alloc.c
++++ b/drivers/net/ethernet/mellanox/mlx4/alloc.c
+@@ -110,6 +110,9 @@ u32 mlx4_bitmap_alloc_range(struct mlx4_bitmap *bitmap, int cnt,
+ 			    int align, u32 skip_mask)
+ {
+ 	u32 obj;
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16))
++	u32 i;
++#endif
+ 
+ 	if (likely(cnt == 1 && align == 1 && !skip_mask))
+ 		return mlx4_bitmap_alloc(bitmap);
+@@ -126,7 +129,12 @@ u32 mlx4_bitmap_alloc_range(struct mlx4_bitmap *bitmap, int cnt,
+ 	}
+ 
+ 	if (obj < bitmap->max) {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		bitmap_set(bitmap->table, obj, cnt);
++#else
++		for (i = 0; i < cnt; i++)
++			set_bit(obj + i, bitmap->table);
++#endif
+ 		if (obj == bitmap->last) {
+ 			bitmap->last = (obj + cnt);
+ 			if (bitmap->last >= bitmap->max)
+@@ -152,6 +160,9 @@ u32 mlx4_bitmap_avail(struct mlx4_bitmap *bitmap)
+ void mlx4_bitmap_free_range(struct mlx4_bitmap *bitmap, u32 obj, int cnt,
+ 			    int use_rr)
+ {
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16))
++	u32 i;
++#endif
+ 	obj &= bitmap->max + bitmap->reserved_top - 1;
+ 
+ 	spin_lock(&bitmap->lock);
+@@ -160,7 +171,12 @@ void mlx4_bitmap_free_range(struct mlx4_bitmap *bitmap, u32 obj, int cnt,
+ 		bitmap->top = (bitmap->top + bitmap->max + bitmap->reserved_top)
+ 				& bitmap->mask;
+ 	}
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	bitmap_clear(bitmap->table, obj, cnt);
++#else
++	for (i = 0; i < cnt; i++)
++		clear_bit(obj + i, bitmap->table);
++#endif
+ 	bitmap->avail += cnt;
+ 	spin_unlock(&bitmap->lock);
+ }
+@@ -168,6 +184,9 @@ void mlx4_bitmap_free_range(struct mlx4_bitmap *bitmap, u32 obj, int cnt,
+ int mlx4_bitmap_init(struct mlx4_bitmap *bitmap, u32 num, u32 mask,
+ 		     u32 reserved_bot, u32 reserved_top)
+ {
++#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16))
++	u32 i;
++#endif
+ 	/* sanity check */
+ 	if (num <= (u64)reserved_top + reserved_bot)
+ 		return -EINVAL;
+@@ -191,7 +210,12 @@ int mlx4_bitmap_init(struct mlx4_bitmap *bitmap, u32 num, u32 mask,
+ 	if (!bitmap->table)
+ 		return -ENOMEM;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	bitmap_set(bitmap->table, 0, reserved_bot);
++#else
++	for (i = 0; i < reserved_bot; ++i)
++		set_bit(i, bitmap->table);
++#endif
+ 
+ 	return 0;
+ }
+diff --git a/drivers/net/ethernet/mellanox/mlx4/catas.c b/drivers/net/ethernet/mellanox/mlx4/catas.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/catas.c
++++ b/drivers/net/ethernet/mellanox/mlx4/catas.c
+@@ -69,6 +69,7 @@ static void poll_catas(unsigned long dev_ptr)
+ 	struct mlx4_priv *priv = mlx4_priv(dev);
+ 
+ 	if (readl(priv->catas_err.map)) {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		/* If the device is off-line, we cannot try to recover it */
+ 		if (pci_channel_offline(dev->pdev))
+ 			mod_timer(&priv->catas_err.timer,
+@@ -85,6 +86,19 @@ static void poll_catas(unsigned long dev_ptr)
+ 				queue_work(mlx4_wq, &catas_work);
+ 			}
+ 		}
++#else
++		dump_err_buf(dev);
++
++		mlx4_dispatch_event(dev, MLX4_DEV_EVENT_CATASTROPHIC_ERROR, 0);
++
++		if (internal_err_reset) {
++			spin_lock(&catas_lock);
++			list_add(&priv->catas_err.list, &catas_list);
++			spin_unlock(&catas_lock);
++
++			queue_work(mlx4_wq, &catas_work);
++		}
++#endif
+ 	} else
+ 		mod_timer(&priv->catas_err.timer,
+ 			  round_jiffies(jiffies + MLX4_CATAS_POLL_INTERVAL));
+@@ -105,9 +119,11 @@ static void catas_reset(struct work_struct *work)
+ 	list_for_each_entry_safe(priv, tmppriv, &tlist, catas_err.list) {
+ 		struct pci_dev *pdev = priv->dev.pdev;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		/* If the device is off-line, we cannot reset it */
+ 		if (pci_channel_offline(pdev))
+ 			continue;
++#endif
+ 
+ 		ret = mlx4_restart_one(priv->dev.pdev);
+ 		/* 'priv' now is not valid */
+diff --git a/drivers/net/ethernet/mellanox/mlx4/cmd.c b/drivers/net/ethernet/mellanox/mlx4/cmd.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/cmd.c
++++ b/drivers/net/ethernet/mellanox/mlx4/cmd.c
+@@ -441,8 +441,10 @@ static int cmd_pending(struct mlx4_dev *dev)
+ {
+ 	u32 status;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (pci_channel_offline(dev->pdev))
+ 		return -EIO;
++#endif
+ 
+ 	status = readl(mlx4_priv(dev)->cmd.hcr + HCR_STATUS_OFFSET);
+ 
+@@ -454,8 +456,10 @@ static int cmd_pending(struct mlx4_dev *dev)
+ static int get_status(struct mlx4_dev *dev, u32 *status, int *go_bit,
+ 		      int *t_bit)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (pci_channel_offline(dev->pdev))
+ 		return -EIO;
++#endif
+ 
+ 	*status = readl(mlx4_priv(dev)->cmd.hcr + HCR_STATUS_OFFSET);
+ 	*t_bit = !!(*status & swab32(1 << HCR_T_BIT));
+@@ -477,6 +481,7 @@ static int mlx4_cmd_post(struct mlx4_dev *dev, struct timespec *ts1,
+ 
+ 	mutex_lock(&cmd->hcr_mutex);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (pci_channel_offline(dev->pdev)) {
+ 		/*
+ 		 * Device is going through error recovery
+@@ -485,12 +490,14 @@ static int mlx4_cmd_post(struct mlx4_dev *dev, struct timespec *ts1,
+ 		ret = -EIO;
+ 		goto out;
+ 	}
++#endif
+ 
+ 	end = jiffies;
+ 	if (event)
+ 		end += msecs_to_jiffies(GO_BIT_TIMEOUT_MSECS);
+ 
+ 	while (cmd_pending(dev)) {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		if (pci_channel_offline(dev->pdev)) {
+ 			/*
+ 			 * Device is going through error recovery
+@@ -499,6 +506,7 @@ static int mlx4_cmd_post(struct mlx4_dev *dev, struct timespec *ts1,
+ 			ret = -EIO;
+ 			goto out;
+ 		}
++#endif
+ 
+ 		if (time_after_eq(jiffies, end)) {
+ 			mlx4_err(dev, "%s:cmd_pending failed\n", __func__);
+@@ -627,6 +635,7 @@ static int mlx4_cmd_poll(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
+ 
+ 	down(&priv->cmd.poll_sem);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (pci_channel_offline(dev->pdev)) {
+ 		/*
+ 		 * Device is going through error recovery
+@@ -635,6 +644,7 @@ static int mlx4_cmd_poll(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
+ 		err = -EIO;
+ 		goto out;
+ 	}
++#endif
+ 
+ 	err = mlx4_cmd_post(dev, NULL, in_param, out_param ? *out_param : 0,
+ 			    in_modifier, op_modifier, op, CMD_POLL_TOKEN, 0);
+@@ -643,6 +653,7 @@ static int mlx4_cmd_poll(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
+ 
+ 	end = msecs_to_jiffies(timeout) + jiffies;
+ 	while (cmd_pending(dev) && time_before(jiffies, end)) {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		if (pci_channel_offline(dev->pdev)) {
+ 			/*
+ 			 * Device is going through error recovery
+@@ -651,7 +662,7 @@ static int mlx4_cmd_poll(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
+ 			err = -EIO;
+ 			goto out;
+ 		}
+-
++#endif
+ 		cond_resched();
+ 	}
+ 
+@@ -776,8 +787,10 @@ int __mlx4_cmd(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
+ 	       int out_is_imm, u32 in_modifier, u8 op_modifier,
+ 	       u16 op, unsigned long timeout, int native)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (pci_channel_offline(dev->pdev))
+ 		return -EIO;
++#endif
+ 
+ 	if (!mlx4_is_mfunc(dev) || (native && mlx4_is_master(dev))) {
+ 		if (mlx4_priv(dev)->cmd.use_events)
+diff --git a/drivers/net/ethernet/mellanox/mlx4/fw.c b/drivers/net/ethernet/mellanox/mlx4/fw.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/fw.c
++++ b/drivers/net/ethernet/mellanox/mlx4/fw.c
+@@ -49,7 +49,11 @@ enum {
+ extern void __buggy_use_of_MLX4_GET(void);
+ extern void __buggy_use_of_MLX4_PUT(void);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static bool enable_qos;
++#else
++static int enable_qos;
++#endif
+ module_param(enable_qos, bool, 0444);
+ MODULE_PARM_DESC(enable_qos, "Enable Quality of Service support in the HCA (default: off)");
+ 
+diff --git a/drivers/net/ethernet/mellanox/mlx4/icm.c b/drivers/net/ethernet/mellanox/mlx4/icm.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/icm.c
++++ b/drivers/net/ethernet/mellanox/mlx4/icm.c
+@@ -392,7 +392,11 @@ int mlx4_init_icm_table(struct mlx4_dev *dev, struct mlx4_icm_table *table,
+ 	u64 size;
+ 
+ 	obj_per_chunk = MLX4_TABLE_CHUNK_SIZE / obj_size;
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	num_icm = div_u64((nobj + obj_per_chunk - 1), obj_per_chunk);
++#else
++	num_icm = (nobj + obj_per_chunk - 1) / obj_per_chunk;
++#endif
+ 
+ 	table->icm      = kcalloc(num_icm, sizeof *table->icm, GFP_KERNEL);
+ 	if (!table->icm)
+diff --git a/drivers/net/ethernet/mellanox/mlx4/main.c b/drivers/net/ethernet/mellanox/mlx4/main.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/main.c
++++ b/drivers/net/ethernet/mellanox/mlx4/main.c
+@@ -39,7 +39,9 @@
+ #include <linux/pci.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/slab.h>
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ #include <linux/io-mapping.h>
++#endif
+ #include <linux/delay.h>
+ #include <linux/netdevice.h>
+ #include <linux/kmod.h>
+@@ -300,6 +302,7 @@ static inline int is_in_range(int val, struct mlx4_range *r)
+ 	return (val >= r->min && val <= r->max);
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ static int update_defaults(struct param_data *pdata)
+ {
+ 	long int val[MLX4_MAX_BDF_VALS];
+@@ -357,7 +360,9 @@ static int update_defaults(struct param_data *pdata)
+ 
+ 	return VALID_DATA;
+ }
++#endif
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ int mlx4_fill_dbdf2val_tbl(struct mlx4_dbdf2val_lst *dbdf2val_lst)
+ {
+ 	int domain, bus, dev, fn;
+@@ -488,6 +493,7 @@ err:
+ 	return -EINVAL;
+ }
+ EXPORT_SYMBOL(mlx4_fill_dbdf2val_tbl);
++#endif
+ 
+ int mlx4_get_val(struct mlx4_dbdf2val *tbl, struct pci_dev *pdev, int idx,
+ 		 int *val)
+@@ -1131,10 +1137,12 @@ static void mlx4_request_modules(struct mlx4_dev *dev)
+ 			has_eth_port = true;
+ 	}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (has_ib_port)
+ 		request_module_nowait(IB_DRV_NAME);
+ 	if (has_eth_port)
+ 		request_module_nowait(EN_DRV_NAME);
++#endif
+ }
+ 
+ /*
+@@ -1712,6 +1720,7 @@ static void mlx4_slave_exit(struct mlx4_dev *dev)
+ 
+ static int map_bf_area(struct mlx4_dev *dev)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct mlx4_priv *priv = mlx4_priv(dev);
+ 	resource_size_t bf_start;
+ 	resource_size_t bf_len;
+@@ -1729,14 +1738,20 @@ static int map_bf_area(struct mlx4_dev *dev)
+ 		err = -ENOMEM;
+ 
+ 	return err;
++#else
++	return -1;
++#endif
+ }
+ 
+ static void unmap_bf_area(struct mlx4_dev *dev)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (mlx4_priv(dev)->bf_mapping)
+ 		io_mapping_free(mlx4_priv(dev)->bf_mapping);
++#endif
+ }
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ int mlx4_read_clock(struct mlx4_dev *dev)
+ {
+ 	u32 clockhi, clocklo, clockhi1;
+@@ -1761,7 +1776,6 @@ int mlx4_read_clock(struct mlx4_dev *dev)
+ }
+ EXPORT_SYMBOL_GPL(mlx4_read_clock);
+ 
+-
+ int map_internal_clock(struct mlx4_dev *dev)
+ {
+ 	struct mlx4_priv *priv = mlx4_priv(dev);
+@@ -1802,10 +1816,13 @@ void unmap_internal_clock(struct mlx4_dev *dev)
+ 	if (priv->clock_mapping)
+ 		iounmap(priv->clock_mapping);
+ }
++#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16) */
+ 
+ static void mlx4_close_hca(struct mlx4_dev *dev)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	unmap_internal_clock(dev);
++#endif
+ 	unmap_bf_area(dev);
+ 	if (mlx4_is_slave(dev)) {
+ 		mlx4_slave_exit(dev);
+@@ -2042,6 +2059,7 @@ static int mlx4_init_hca(struct mlx4_dev *dev)
+ 			goto err_free_icm;
+ 		}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		/*
+ 		 * Read HCA frequency by QUERY_HCA command
+ 		 */
+@@ -2082,6 +2100,7 @@ static int mlx4_init_hca(struct mlx4_dev *dev)
+ 			mlx4_err(dev, "Failed to obtain slave caps\n");
+ 			goto err_close;
+ 		}
++#endif
+ 	}
+ 
+ 	if (map_bf_area(dev))
+@@ -2108,8 +2127,10 @@ static int mlx4_init_hca(struct mlx4_dev *dev)
+ 	return 0;
+ 
+ unmap_bf:
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (!mlx4_is_slave(dev))
+ 		unmap_internal_clock(dev);
++#endif
+ 	unmap_bf_area(dev);
+ 
+ 	if (mlx4_is_slave(dev)) {
+@@ -3072,8 +3093,10 @@ static int mlx4_get_ownership(struct mlx4_dev *dev)
+ 	void __iomem *owner;
+ 	u32 ret;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (pci_channel_offline(dev->pdev))
+ 		return -EIO;
++#endif
+ 
+ 	owner = ioremap(pci_resource_start(dev->pdev, 0) + MLX4_OWNER_BASE,
+ 			MLX4_OWNER_SIZE);
+@@ -3091,8 +3114,10 @@ static void mlx4_free_ownership(struct mlx4_dev *dev)
+ {
+ 	void __iomem *owner;
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	if (pci_channel_offline(dev->pdev))
+ 		return;
++#endif
+ 
+ 	owner = ioremap(pci_resource_start(dev->pdev, 0) + MLX4_OWNER_BASE,
+ 			MLX4_OWNER_SIZE);
+@@ -3122,6 +3147,7 @@ static int __mlx4_init_one(struct pci_dev *pdev, int pci_dev_data)
+ 		return err;
+ 	}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	mlx4_get_val(num_vfs.dbdf2val.tbl, pci_physfn(pdev), 0, &nvfs);
+ 	mlx4_get_val(probe_vf.dbdf2val.tbl, pci_physfn(pdev), 0, &prb_vf);
+ 	if (nvfs > MLX4_MAX_NUM_VF) {
+@@ -3134,6 +3160,10 @@ static int __mlx4_init_one(struct pci_dev *pdev, int pci_dev_data)
+ 		dev_err(&pdev->dev, "num_vfs module parameter cannot be negative\n");
+ 		return -EINVAL;
+ 	}
++#else
++	nvfs = 0;
++	prb_vf = 0;
++#endif
+ 	/*
+ 	 * Check for BARs.
+ 	 */
+@@ -3180,8 +3210,10 @@ static int __mlx4_init_one(struct pci_dev *pdev, int pci_dev_data)
+ 		}
+ 	}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	/* Allow large DMA segments, up to the firmware limit of 1 GB */
+ 	dma_set_max_seg_size(&pdev->dev, 1024 * 1024 * 1024);
++#endif
+ 
+ 	priv = kzalloc(sizeof *priv, GFP_KERNEL);
+ 	if (!priv) {
+@@ -3205,7 +3237,11 @@ static int __mlx4_init_one(struct pci_dev *pdev, int pci_dev_data)
+ 	INIT_LIST_HEAD(&priv->bf_list);
+ 	mutex_init(&priv->bf_mutex);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	dev->rev_id = pdev->revision;
++#else
++	pci_read_config_byte(pdev, PCI_REVISION_ID, &dev->rev_id);
++#endif
+ 	dev->numa_node = dev_to_node(&pdev->dev);
+ 	/* Detect if this device is a virtual function */
+ 	if (pci_dev_data & MLX4_PCI_DEV_IS_VF) {
+@@ -3662,6 +3698,7 @@ static struct pci_driver mlx4_driver = {
+ 
+ static int __init mlx4_verify_params(void)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	int status;
+ 
+ 	status = update_defaults(&port_type_array);
+@@ -3687,6 +3724,7 @@ static int __init mlx4_verify_params(void)
+ 	} else if (status == INVALID_DATA) {
+ 		return -1;
+ 	}
++#endif
+ 
+ 	if (msi_x < 0) {
+ 		pr_warn("mlx4_core: bad msi_x: %d\n", msi_x);
+diff --git a/drivers/net/ethernet/mellanox/mlx4/mr.c b/drivers/net/ethernet/mellanox/mlx4/mr.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/mr.c
++++ b/drivers/net/ethernet/mellanox/mlx4/mr.c
+@@ -766,8 +766,12 @@ int mlx4_init_mr_table(struct mlx4_dev *dev)
+ 		return err;
+ 
+ 	err = mlx4_buddy_init(&mr_table->mtt_buddy,
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 			      ilog2(div_u64(dev->caps.num_mtts,
+ 			      (1 << log_mtts_per_seg))));
++#else
++			      ilog2(dev->caps.num_mtts / (1 << log_mtts_per_seg)));
++#endif
+ 	if (err)
+ 		goto err_buddy;
+ 
+diff --git a/drivers/net/ethernet/mellanox/mlx4/pd.c b/drivers/net/ethernet/mellanox/mlx4/pd.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/pd.c
++++ b/drivers/net/ethernet/mellanox/mlx4/pd.c
+@@ -34,8 +34,9 @@
+ #include <linux/init.h>
+ #include <linux/errno.h>
+ #include <linux/export.h>
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ #include <linux/io-mapping.h>
+-
++#endif
+ #include <asm/page.h>
+ 
+ #include "mlx4.h"
+@@ -171,6 +172,7 @@ EXPORT_SYMBOL_GPL(mlx4_uar_free);
+ #ifndef CONFIG_PPC
+ int mlx4_bf_alloc(struct mlx4_dev *dev, struct mlx4_bf *bf, int node)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct mlx4_priv *priv = mlx4_priv(dev);
+ 	struct mlx4_uar *uar;
+ 	int err = 0;
+@@ -239,11 +241,16 @@ free_kmalloc:
+ out:
+ 	mutex_unlock(&priv->bf_mutex);
+ 	return err;
++#else
++	memset(bf, 0, sizeof *bf);
++	return -ENOSYS;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(mlx4_bf_alloc);
+ 
+ void mlx4_bf_free(struct mlx4_dev *dev, struct mlx4_bf *bf)
+ {
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	struct mlx4_priv *priv = mlx4_priv(dev);
+ 	int idx;
+ 
+@@ -265,6 +272,9 @@ void mlx4_bf_free(struct mlx4_dev *dev, struct mlx4_bf *bf)
+ 		list_add(&bf->uar->bf_list, &priv->bf_list);
+ 
+ 	mutex_unlock(&priv->bf_mutex);
++#else
++	return;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(mlx4_bf_free);
+ 
+diff --git a/drivers/net/ethernet/mellanox/mlx4/reset.c b/drivers/net/ethernet/mellanox/mlx4/reset.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/reset.c
++++ b/drivers/net/ethernet/mellanox/mlx4/reset.c
+@@ -77,7 +77,11 @@ int mlx4_reset(struct mlx4_dev *dev)
+ 		goto out;
+ 	}
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 	pcie_cap = pci_pcie_cap(dev->pdev);
++#else
++	pcie_cap = pci_find_capability(dev->pdev, PCI_CAP_ID_EXP);
++#endif
+ 
+ 	for (i = 0; i < 64; ++i) {
+ 		if (i == 22 || i == 23)
+@@ -141,7 +145,11 @@ int mlx4_reset(struct mlx4_dev *dev)
+ 	/* Now restore the PCI headers */
+ 	if (pcie_cap) {
+ 		devctl = hca_header[(pcie_cap + PCI_EXP_DEVCTL) / 4];
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		if (pcie_capability_write_word(dev->pdev, PCI_EXP_DEVCTL,
++#else
++		if (pci_write_config_word(dev->pdev, pcie_cap + PCI_EXP_DEVCTL,
++#endif
+ 					       devctl)) {
+ 			err = -ENODEV;
+ 			mlx4_err(dev, "Couldn't restore HCA PCI Express "
+@@ -149,7 +157,11 @@ int mlx4_reset(struct mlx4_dev *dev)
+ 			goto out;
+ 		}
+ 		linkctl = hca_header[(pcie_cap + PCI_EXP_LNKCTL) / 4];
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ 		if (pcie_capability_write_word(dev->pdev, PCI_EXP_LNKCTL,
++#else
++		if (pci_write_config_word(dev->pdev, pcie_cap + PCI_EXP_LNKCTL,
++#endif
+ 					       linkctl)) {
+ 			err = -ENODEV;
+ 			mlx4_err(dev, "Couldn't restore HCA PCI Express "
+diff --git a/include/linux/mlx4/device.h b/include/linux/mlx4/device.h
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/include/linux/mlx4/device.h
++++ b/include/linux/mlx4/device.h
+@@ -42,7 +42,9 @@
+ 
+ #include <linux/atomic.h>
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ #include <linux/clocksource.h>
++#endif
+ 
+ #define MAX_MSIX_P_PORT		17
+ #define MAX_MSIX		64
+@@ -1287,8 +1289,10 @@ int mlx4_get_roce_gid_from_slave(struct mlx4_dev *dev, int port, int slave_id, u
+ 
+ int mlx4_FLOW_STEERING_IB_UC_QP_RANGE(struct mlx4_dev *dev, u32 min_range_qpn, u32 max_range_qpn);
+ 
++#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 16))
+ int mlx4_read_clock(struct mlx4_dev *dev);
+ int mlx4_get_internal_clock_params(struct mlx4_dev *dev,
+ 				   struct mlx4_clock_params *params);
++#endif
+ 
+ #endif /* MLX4_DEVICE_H */

@@ -1,0 +1,205 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT/mlx4_en: Added support for RHEL6.5
+
+issue: none
+
+Change-Id: Iceffc2de2c038baf5f7ca902fc50eaed6d80816c
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c  |    6 +++---
+ drivers/net/ethernet/mellanox/mlx4/en_ethtool.c |   11 +++++++++++
+ drivers/net/ethernet/mellanox/mlx4/en_netdev.c  |   20 ++++++++++++++++++++
+ drivers/net/ethernet/mellanox/mlx4/en_sysfs.c   |    6 +-----
+ drivers/net/ethernet/mellanox/mlx4/mlx4_en.h    |    5 +++--
+ 5 files changed, 38 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c b/drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_dcb_nl.c
+@@ -223,7 +223,7 @@ static u8 mlx4_en_dcbnl_setdcbx(struct net_device *dev, u8 mode)
+ }
+ 
+ #define MLX4_RATELIMIT_UNITS_IN_KB 100000 /* rate-limit HW unit in Kbps */
+-#ifndef CONFIG_COMPAT_MAXRATE
++#ifdef CONFIG_COMPAT_IS_MAXRATE
+ static int mlx4_en_dcbnl_ieee_getmaxrate(struct net_device *dev,
+ 				   struct ieee_maxrate *maxrate)
+ #else
+@@ -248,7 +248,7 @@ static u8 mlx4_en_dcbnl_get_state(struct net_device *dev)
+ 	return !!(priv->flags & MLX4_EN_FLAG_DCB_ENABLED);
+ }
+ 
+-#ifndef CONFIG_COMPAT_MAXRATE
++#ifdef CONFIG_COMPAT_IS_MAXRATE
+ static int mlx4_en_dcbnl_ieee_setmaxrate(struct net_device *dev,
+ 		struct ieee_maxrate *maxrate)
+ #else
+@@ -282,7 +282,7 @@ const struct dcbnl_rtnl_ops mlx4_en_dcbnl_ops = {
+ 	.getstate	= mlx4_en_dcbnl_get_state,
+ 	.ieee_getets	= mlx4_en_dcbnl_ieee_getets,
+ 	.ieee_setets	= mlx4_en_dcbnl_ieee_setets,
+-#ifndef CONFIG_COMPAT_MAXRATE
++#ifdef CONFIG_COMPAT_IS_MAXRATE
+ 	.ieee_getmaxrate = mlx4_en_dcbnl_ieee_getmaxrate,
+ 	.ieee_setmaxrate = mlx4_en_dcbnl_ieee_setmaxrate,
+ #endif
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c b/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_ethtool.c
+@@ -794,6 +794,16 @@ static void mlx4_en_get_pauseparam(struct net_device *dev,
+ int mlx4_en_pre_config(struct mlx4_en_priv *priv)
+ {
+ #ifdef CONFIG_RFS_ACCEL
++#ifdef CONFIG_COMPAT_IS_NETDEV_EXTENDED
++	if (!mlx4_en_rx_cpu_rmap(priv))
++		return 0;
++
++	rtnl_unlock();
++	free_irq_cpu_rmap(mlx4_en_rx_cpu_rmap(priv));
++	rtnl_lock();
++
++	mlx4_en_rx_cpu_rmap(priv) = NULL;
++#else
+ 	struct cpu_rmap *rmap;
+ 
+ 	if (!priv->dev->rx_cpu_rmap)
+@@ -813,6 +823,7 @@ int mlx4_en_pre_config(struct mlx4_en_priv *priv)
+ 		return -EBUSY; /* another configuration completed while lock
+ 				* was free
+ 				*/
++#endif
+ 
+ 	/* Make sure all currently running filter_work are being processed
+ 	 * Other work will return immediatly because of disable_rfs
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_netdev.c
+@@ -1925,11 +1925,16 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
+ 	int i;
+ 
+ #ifdef CONFIG_RFS_ACCEL
++#ifdef CONFIG_COMPAT_IS_NETDEV_EXTENDED
++	free_irq_cpu_rmap(mlx4_en_rx_cpu_rmap(priv));
++	mlx4_en_rx_cpu_rmap(priv) = NULL;
++#else
+ 	if (priv->dev->rx_cpu_rmap) {
+ 		free_irq_cpu_rmap(priv->dev->rx_cpu_rmap);
+ 		priv->dev->rx_cpu_rmap = NULL;
+ 	}
+ #endif
++#endif
+ 
+ 	for (i = 0; i < priv->tx_ring_num; i++) {
+ 		if (priv->tx_ring && priv->tx_ring[i])
+@@ -1979,10 +1984,16 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
+ 	}
+ 
+ #ifdef CONFIG_RFS_ACCEL
++#ifdef CONFIG_COMPAT_IS_NETDEV_EXTENDED
++	mlx4_en_rx_cpu_rmap(priv) = alloc_irq_cpu_rmap(priv->rx_ring_num);
++	if (!mlx4_en_rx_cpu_rmap(priv))
++		goto err;
++#else
+ 	priv->dev->rx_cpu_rmap = alloc_irq_cpu_rmap(priv->rx_ring_num);
+ 	if (!priv->dev->rx_cpu_rmap)
+ 		goto err;
+ #endif
++#endif
+ 
+ 	return 0;
+ 
+@@ -2598,8 +2609,10 @@ static const struct net_device_ops mlx4_netdev_ops = {
+ 	.ndo_setup_tc		= mlx4_en_setup_tc,
+ #endif
+ #ifdef CONFIG_RFS_ACCEL
++#ifndef CONFIG_COMPAT_IS_NETDEV_EXTENDED
+ 	.ndo_rx_flow_steer	= mlx4_en_filter_rfs,
+ #endif
++#endif
+ #ifdef CONFIG_NET_RX_BUSY_POLL
+ 	.ndo_busy_poll		= mlx4_en_low_latency_recv,
+ #endif
+@@ -2644,8 +2657,10 @@ static const struct net_device_ops mlx4_netdev_ops_master = {
+ 	.ndo_setup_tc		= mlx4_en_setup_tc,
+ #endif
+ #ifdef CONFIG_RFS_ACCEL
++#ifndef CONFIG_COMPAT_IS_NETDEV_EXTENDED
+ 	.ndo_rx_flow_steer	= mlx4_en_filter_rfs,
+ #endif
++#endif
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.ndo_fdb_add		= mlx4_en_fdb_add,
+ 	.ndo_fdb_del		= mlx4_en_fdb_del,
+@@ -2804,6 +2819,11 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ #endif
+ 	netif_set_real_num_rx_queues(dev, priv->rx_ring_num);
+ 
++#ifdef CONFIG_RFS_ACCEL
++#ifdef CONFIG_COMPAT_IS_NETDEV_EXTENDED
++	netdev_extended(dev)->rfs_data.ndo_rx_flow_steer = mlx4_en_filter_rfs;
++#endif
++#endif
+ 	SET_ETHTOOL_OPS(dev, &mlx4_en_ethtool_ops);
+ 
+ #ifdef CONFIG_COMPAT_ETHTOOL_OPS_EXT
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c b/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_sysfs.c
+@@ -38,7 +38,6 @@
+ 
+ #define to_en_priv(cd)	((struct mlx4_en_priv *)(netdev_priv(to_net_dev(cd))))
+ 
+-#ifndef CONFIG_COMPAT_DISABLE_DCB
+ #ifdef CONFIG_COMPAT_MAXRATE
+ static ssize_t mlx4_en_show_maxrate(struct device *d,
+ 					 struct device_attribute *attr,
+@@ -114,7 +113,6 @@ bad_elem_count:
+ static DEVICE_ATTR(maxrate, S_IRUGO | S_IWUSR,
+ 		   mlx4_en_show_maxrate, mlx4_en_store_maxrate);
+ #endif
+-#endif
+ 
+ #ifdef CONFIG_COMPAT_MQPRIO
+ 
+@@ -403,11 +401,9 @@ static DEVICE_ATTR(loopback, S_IRUGO | S_IWUSR,
+ #endif
+ 
+ static struct attribute *mlx4_en_qos_attrs[] = {
+-#ifndef CONFIG_COMPAT_DISABLE_DCB
+-#ifndef CONFIG_COMPAT_MAXRATE
++#ifdef CONFIG_COMPAT_MAXRATE
+ 	&dev_attr_maxrate.attr,
+ #endif
+-#endif
+ #ifdef CONFIG_COMPAT_MQPRIO
+ 	&dev_attr_skprio2up.attr,
+ #endif
+diff --git a/drivers/net/ethernet/mellanox/mlx4/mlx4_en.h b/drivers/net/ethernet/mellanox/mlx4/mlx4_en.h
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/mlx4_en.h
++++ b/drivers/net/ethernet/mellanox/mlx4/mlx4_en.h
+@@ -69,10 +69,8 @@
+ #ifdef CONFIG_MLX4_EN_DCB
+ 
+ #ifndef CONFIG_COMPAT_IS_MAXRATE
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+ #define CONFIG_COMPAT_MAXRATE
+ #endif
+-#endif
+ 
+ #ifndef CONFIG_COMPAT_MQPRIO
+ #ifndef CONFIG_NET_SCH_MULTIQ
+@@ -890,6 +888,9 @@ void mlx4_en_get_channels(struct net_device *dev,
+ int mlx4_en_setup_tc(struct net_device *dev, u8 up);
+ 
+ #ifdef CONFIG_RFS_ACCEL
++#ifdef CONFIG_COMPAT_IS_NETDEV_EXTENDED
++#define mlx4_en_rx_cpu_rmap(__priv) netdev_extended(__priv->dev)->rfs_data.rx_cpu_rmap
++#endif
+ void mlx4_en_cleanup_filters(struct mlx4_en_priv *priv,
+ 			     struct mlx4_en_rx_ring *rx_ring);
+ #endif

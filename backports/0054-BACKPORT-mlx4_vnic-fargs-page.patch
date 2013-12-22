@@ -1,0 +1,124 @@
+From: Saeed Mahameed <saeedm@mellanox.com>
+Subject: [PATCH] BACKPORT: mlx4_vnic fargs page
+
+---
+ .../net/ethernet/mellanox/mlx4_vnic/vnic_data_ib.c |   13 ++++++++++-
+ .../ethernet/mellanox/mlx4_vnic/vnic_data_netdev.c |    4 +++
+ .../net/ethernet/mellanox/mlx4_vnic/vnic_data_rx.c |   22 ++++++++++++++++++++
+ 3 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_ib.c b/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_ib.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_ib.c
++++ b/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_ib.c
+@@ -396,10 +396,13 @@ static void vnic_ib_handle_rx_wc(struct vnic_login *login,
+ 	ib_dma_sync_single_for_cpu(ib_device,
+ 				   ring->rx_info[wr_id].dma_addr[0] + IB_GRH_BYTES,
+ 				   MAX_HEADER_SIZE, DMA_FROM_DEVICE);
+-
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 	va = page_address(ring->rx_info[wr_id].frags[0].page.p) +
+ 		ring->rx_info[wr_id].frags[0].page_offset + IB_GRH_BYTES;
+-
++#else
++	va = page_address(ring->rx_info[wr_id].frags[0].page) +
++		ring->rx_info[wr_id].frags[0].page_offset + IB_GRH_BYTES;
++#endif
+ 	/* check EoIB header signature and version */
+ 	eoib_hdr = (struct eoibhdr *)va;
+ 	if (unlikely(VNIC_EOIB_HDR_GET_SIG(eoib_hdr) != VNIC_EOIB_HDR_SIG ||
+@@ -1360,9 +1363,15 @@ static int vnic_dma_map_tx(struct ib_device *ca, struct vnic_tx_buf *tx_req)
+ 
+ 	for (i = 0; i < shinfo->nr_frags; ++i) {
+ 		skb_frag_t *frag = &shinfo->frags[i];
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 		mapping[i + off] = ib_dma_map_page(ca, frag->page.p,
+ 						   frag->page_offset,
+ 						   frag->size, DMA_TO_DEVICE);
++#else
++		mapping[i + off] = ib_dma_map_page(ca, frag->page,
++						   frag->page_offset,
++						   frag->size, DMA_TO_DEVICE);
++#endif
+ 		if (unlikely(ib_dma_mapping_error(ca, mapping[i + off])))
+ 			goto partial_error;
+ 	}
+diff --git a/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_netdev.c b/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_netdev.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_netdev.c
++++ b/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_netdev.c
+@@ -885,7 +885,11 @@ static int vnic_get_frag_header(struct skb_frag_struct *frags, void **mac_hdr,
+ 				u64 *hdr_flags, void *priv)
+ {
+ 	struct iphdr *iph;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 	*mac_hdr = page_address(frags->page.p) + frags->page_offset;
++#else
++	*mac_hdr = page_address(frags->page) + frags->page_offset;
++#endif
+ 	*ip_hdr = iph = (struct iphdr *)(*mac_hdr + ETH_HLEN);
+ 	*tcpudp_hdr = (struct tcphdr *)(iph + (iph->ihl << 2));
+ 	*hdr_flags = LRO_IPV4 | LRO_TCP;
+diff --git a/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_rx.c b/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_rx.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_rx.c
++++ b/drivers/net/ethernet/mellanox/mlx4_vnic/vnic_data_rx.c
+@@ -40,7 +40,11 @@ static inline void free_single_frag(struct vnic_rx_ring *ring, int e,int i)
+ 			ring->frag_info[i].frag_size,
+ 			PCI_DMA_FROMDEVICE);
+ 		ring->rx_info[e].dma_addr[i] = 0;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 		put_page(ring->rx_info[e].frags[i].page.p);
++#else
++		put_page(ring->rx_info[e].frags[i].page);
++#endif
+ }
+ 
+ #ifndef _BP_NETDEV_NO_TMQ
+@@ -283,20 +287,34 @@ static int vnic_alloc_frag(struct vnic_rx_ring *ring,
+ 			   ring->need_refill = 1; */
+ 			return -ENOMEM;
+ 		}
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 		skbf.page.p = page_alloc->page;
++#else
++		skbf.page =  page_alloc->page;
++#endif
+ 		skbf.page_offset = page_alloc->offset;
+ 	} else {
+ 		decision = 1;
+ 		page = page_alloc->page;
+ 		get_page(page);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 		skbf.page.p = page;
++#else
++		skbf.page = page;
++#endif
+ 		skbf.page_offset = page_alloc->offset;
+ 	}
+ 
+ 	skbf.size = frag_info->frag_size;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 	dma = ib_dma_map_single(ib_device, page_address(skbf.page.p) +
+ 			     skbf.page_offset, frag_info->frag_size,
+ 			     PCI_DMA_FROMDEVICE);
++#else
++	dma = ib_dma_map_single(ib_device, page_address(skbf.page) +
++			     skbf.page_offset, frag_info->frag_size,
++			     PCI_DMA_FROMDEVICE);
++#endif
+ 	if (unlikely(ib_dma_mapping_error(ib_device, dma))) {
+ 		vnic_dbg_data(ring->port->name,
+ 			      "ib_dma_map_single len %d failed\n",
+@@ -506,7 +524,11 @@ fail:
+ 	 * the descriptor) of this packet; remaining fragments are reused... */
+ 	while (nr > 0) {
+ 		nr--;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 		put_page(skb_frags_rx[nr].page.p);
++#else
++		put_page(skb_frags_rx[nr].page);
++#endif
+ 	}
+ 
+ 	return 0;

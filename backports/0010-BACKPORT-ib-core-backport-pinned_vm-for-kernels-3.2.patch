@@ -1,0 +1,144 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT: ib/core backport pinned_vm for kernels < 3.2
+
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ drivers/infiniband/core/umem.c |   44 ++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 44 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/infiniband/core/umem.c b/drivers/infiniband/core/umem.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/infiniband/core/umem.c
++++ b/drivers/infiniband/core/umem.c
+@@ -63,7 +63,11 @@ static void umem_vma_open(struct vm_area_struct *area)
+ 	with mm->mmap_sem held for writing.
+ 	*/
+ 	if (current->mm)
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 		current->mm->pinned_vm += ntotal_pages;
++#else
++		current->mm->locked_vm += ntotal_pages;
++#endif
+ 	return;
+ }
+ 
+@@ -83,7 +87,11 @@ static void umem_vma_close(struct vm_area_struct *area)
+ 	with mm->mmap_sem held for writing.
+ 	*/
+ 	if (current->mm)
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 		current->mm->pinned_vm -= ntotal_pages;
++#else
++		current->mm->locked_vm -= ntotal_pages;
++#endif
+ 	return;
+ 
+ }
+@@ -118,7 +126,11 @@ int ib_umem_map_to_vma(struct ib_umem *umem,
+ 	with mm->mmap_sem held for writing.
+ 	No need to lock.
+ 	*/
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	locked = ntotal_pages + current->mm->pinned_vm;
++#else
++	locked = ntotal_pages + current->mm->locked_vm;
++#endif
+ 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
+ 
+ 	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK))
+@@ -147,7 +159,11 @@ int ib_umem_map_to_vma(struct ib_umem *umem,
+ end:
+ 	/* We expect to have enough pages   */
+ 	if (vma_entry_number >= ntotal_pages) {
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 		current->mm->pinned_vm = locked;
++#else
++		current->mm->locked_vm = locked;
++#endif
+ 		vma->vm_ops =  &umem_vm_ops;
+ 		return 0;
+ 	}
+@@ -188,7 +204,11 @@ static void ib_cmem_release(struct kref *ref)
+ 	counter not relevant any more.*/
+ 	if (current->mm) {
+ 		ntotal_pages = PAGE_ALIGN(cmem->length) >> PAGE_SHIFT;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 		current->mm->pinned_vm -= ntotal_pages;
++#else
++		current->mm->locked_vm -= ntotal_pages;
++#endif
+ 	}
+ 	kfree(cmem);
+ 
+@@ -346,7 +366,11 @@ struct ib_cmem *ib_cmem_alloc_contiguous_pages(struct ib_ucontext *context,
+ 	with mm->mmap_sem held for writing.
+ 	No need to lock
+ 	*/
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	locked     = ntotal_pages + current->mm->pinned_vm;
++#else
++	locked     = ntotal_pages + current->mm->locked_vm;
++#endif
+ 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
+ 
+ 	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK))
+@@ -388,7 +412,11 @@ struct ib_cmem *ib_cmem_alloc_contiguous_pages(struct ib_ucontext *context,
+ 
+ 	cmem->length = total_size;
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	current->mm->pinned_vm = locked;
++#else
++	current->mm->locked_vm = locked;
++#endif
+ 	return cmem;
+ 
+ err_alloc:
+@@ -626,7 +654,11 @@ struct ib_umem *ib_umem_get_ex(struct ib_ucontext *context, unsigned long addr,
+ 
+ 	down_write(&current->mm->mmap_sem);
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	locked     = npages + current->mm->pinned_vm;
++#else
++	locked     = npages + current->mm->locked_vm;
++#endif
+ 	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
+ 
+ 	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK)) {
+@@ -691,7 +723,11 @@ out:
+ 			__ib_umem_release(context->device, umem, 0);
+ 		kfree(umem);
+ 	} else
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 		current->mm->pinned_vm = locked;
++#else
++		current->mm->locked_vm = locked;
++#endif
+ 
+ 	up_write(&current->mm->mmap_sem);
+ 	if (vma_list)
+@@ -714,7 +750,11 @@ static void ib_umem_account(struct work_struct *work)
+ 	struct ib_umem *umem = container_of(work, struct ib_umem, work);
+ 
+ 	down_write(&umem->mm->mmap_sem);
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	umem->mm->pinned_vm -= umem->diff;
++#else
++	umem->mm->locked_vm -= umem->diff;
++#endif
+ 	up_write(&umem->mm->mmap_sem);
+ 	mmput(umem->mm);
+ 	kfree(umem);
+@@ -764,7 +804,11 @@ void ib_umem_release(struct ib_umem *umem)
+ 	} else
+ 		down_write(&mm->mmap_sem);
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+ 	current->mm->pinned_vm -= diff;
++#else
++	current->mm->locked_vm -= diff;
++#endif
+ 	up_write(&mm->mmap_sem);
+ 	mmput(mm);
+ 	kfree(umem);

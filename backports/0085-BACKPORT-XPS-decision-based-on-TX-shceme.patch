@@ -1,0 +1,46 @@
+From: Ido Shamay <idos@mellanox.com>
+Subject: [PATCH] BACKPORT: XPS decision based on TX shceme
+
+issue: None
+
+Since we configure XPS the 0 priority only, we need to know the TX ring
+scheme before taking the decision.
+
+Change-Id: I33c305d13a411d9d8bacd0fd698715084a448145
+Signed-off-by: Ido Shamay <idos@mellanox.com>
+---
+ drivers/net/ethernet/mellanox/mlx4/en_tx.c |   14 ++++++++++++--
+ 1 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/mellanox/mlx4/en_tx.c b/drivers/net/ethernet/mellanox/mlx4/en_tx.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/ethernet/mellanox/mlx4/en_tx.c
++++ b/drivers/net/ethernet/mellanox/mlx4/en_tx.c
+@@ -149,7 +149,12 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
+ 	ring->hwtstamp_tx_type = priv->hwtstamp_config.tx_type;
+ 
+ 	ring->queue_index = queue_idx;
+-	if (queue_idx < priv->num_tx_rings_p_up && cpu_online(queue_idx))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)) || defined (CONFIG_COMPAT_NEW_TX_RING_SCHEME)
++	if (queue_idx < priv->num_tx_rings_p_up &&
++#else
++	if (queue_idx < MLX4_EN_NUM_TX_RINGS &&
++#endif
++	    cpu_online(queue_idx))
+ 		cpumask_set_cpu(queue_idx, &ring->affinity_mask);
+ 
+ 	*pring = ring;
+@@ -225,7 +230,12 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
+ 	err = mlx4_qp_to_ready(mdev->dev, &ring->wqres.mtt, &ring->context,
+ 			       &ring->qp, &ring->qp_state);
+ 
+-	if (!user_prio && cpu_online(ring->queue_index))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)) || defined (CONFIG_COMPAT_NEW_TX_RING_SCHEME)
++	if (ring->queue_index < priv->num_tx_rings_p_up &&
++#else
++	if (ring->queue_index < MLX4_EN_NUM_TX_RINGS &&
++#endif
++	    cpu_online(ring->queue_index))
+ 		netif_set_xps_queue(priv->dev, &ring->affinity_mask,
+ 				    ring->queue_index);
+ 	return err;

@@ -1,0 +1,25 @@
+From: Vladimir Sokolovsky <vlad@mellanox.com>
+Subject: [PATCH] BACKPORT/eipoib: Fix compilation on 2.6.39
+
+issue: 208543
+
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.com>
+---
+ drivers/net/eipoib/eth_ipoib_main.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/net/eipoib/eth_ipoib_main.c b/drivers/net/eipoib/eth_ipoib_main.c
+index xxxxxxx..xxxxxxx xxxxxx
+--- a/drivers/net/eipoib/eth_ipoib_main.c
++++ b/drivers/net/eipoib/eth_ipoib_main.c
+@@ -436,8 +436,9 @@ static netdev_features_t parent_fix_features(struct net_device *dev,
+ 
+ 	mask = features;
+ 	features &= ~NETIF_F_ONE_FOR_ALL;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0))
+ 	features |= NETIF_F_ALL_FOR_ALL;
+-
++#endif
+ 	parent_for_each_slave_rcu(parent, slave)
+ 		features = netdev_increment_features(features,
+ 						     slave->dev->features,
