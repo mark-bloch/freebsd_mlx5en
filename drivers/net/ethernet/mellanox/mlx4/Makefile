@@ -1,14 +1,29 @@
-obj-$(CONFIG_MLX4_CORE)		+= mlx4_core.o
+# $FreeBSD$
+.PATH:  ${.CURDIR}/../../../../../drivers/net/ethernet/mellanox/mlx4/ 
 
-mlx4_core-y :=	alloc.o catas.o cmd.o cq.o eq.o fw.o icm.o intf.o main.o mcg.o \
-		mr.o pd.o port.o profile.o qp.o reset.o sense.o srq.o \
-		resource_tracker.o sys_tune.o
+.include <bsd.own.mk>
 
-obj-$(CONFIG_MLX4_EN)               += mlx4_en.o
+.PATH:  ${.CURDIR}/../../../../../include/linux
+KMOD    = mlx4
+SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
+SRCS+= alloc.c catas.c cmd.c cq.c eq.c fw.c icm.c intf.c main.c mcg.c mr.c linux_compat.c linux_radix.c	linux_idr.c
+SRCS+=	pd.c port.c profile.c qp.c reset.c sense.c srq.c resource_tracker.c sys_tune.c
 
-mlx4_en-y := 	en_main.o en_tx.o en_rx.o en_ethtool.o en_port.o en_cq.o \
-		en_resources.o en_netdev.o en_selftest.o en_clock.o
+CFLAGS+= -I${.CURDIR}/../../../../../drivers/net/ethernet/mellanox/mlx4/ 
+CFLAGS+= -I${.CURDIR}/../../../../../include/
 
-mlx4_en-$(CONFIG_DEBUG_FS) += en_debugfs.o
+.if !defined(KERNBUILDDIR)
+.if ${MK_INET_SUPPORT} != "no"
+opt_inet.h:
+	@echo "#define INET 1" > ${.TARGET}
+.endif
 
-mlx4_en-$(CONFIG_MLX4_EN_DCB) += en_dcb_nl.o
+.if ${MK_INET6_SUPPORT} != "no"
+opt_inet6.h:
+	@echo "#define INET6 1" > ${.TARGET}
+.endif
+.endif
+
+.include <bsd.kmod.mk>
+
+CFLAGS+= -Wno-cast-qual -Wno-pointer-arith -fms-extensions
