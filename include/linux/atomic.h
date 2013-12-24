@@ -1,6 +1,8 @@
 #ifndef _COMPAT_LINUX_ATOMIC_H
 #define _COMPAT_LINUX_ATOMIC_H 1
 
+#ifdef __linux__
+
 #include <linux/version.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36))
@@ -42,5 +44,7 @@ static inline int atomic_inc_not_zero_hint(atomic_t *v, int hint)
 #endif
 
 #endif /* (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)) */
+
+#endif /* __linux__ */
 
 #endif	/* _COMPAT_LINUX_ATOMIC_H */

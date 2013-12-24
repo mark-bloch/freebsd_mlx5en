@@ -1,0 +1,4 @@
+#ifndef _FBSD_CLOCKSOURCE_H
+#define _FBSD_CLOCKSOURCE_H
+
+#endif /* _FBSD_CLOCKSOURCE_H */
