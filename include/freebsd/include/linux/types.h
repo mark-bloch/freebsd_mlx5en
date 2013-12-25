@@ -3,12 +3,22 @@
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <linux/compiler.h>
 
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
+#include <asm/types.h>
+
+
+typedef uint16_t __le16;
+typedef uint16_t __be16;
+typedef uint32_t __le32;
 typedef uint32_t __be32;
+typedef uint64_t __le64;
 typedef uint64_t __be64;
+
+
+#define	DECLARE_BITMAP(n, bits)						\
+	unsigned long n[howmany(bits, sizeof(long) * 8)]
 
 #endif	/* _FBSD_TYPES_H_ */
