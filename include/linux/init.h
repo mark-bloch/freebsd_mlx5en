@@ -1,6 +1,8 @@
 #ifndef __EXTEND_LINUX_INIT_H_TO_3_8__
 #define __EXTEND_LINUX_INIT_H_TO_3_8__
 
+#ifdef __linux__
+
 #include <linux/version.h>
 #include_next <linux/init.h>
 
@@ -14,6 +16,9 @@
 #define __devexitconst
 
 #define __devexit_p
+
+#endif /* __linux__ */
+
 
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)) */
 #endif /* __EXTEND_LINUX_INIT_H_TO_3_8__ */
