@@ -1,6 +1,8 @@
 #ifndef	_FBSD_RADIX_TREE_H_
 #define	_FBSD_RADIX_TREE_H_
 
+#include <linux/types.h>
+
 #define	RADIX_TREE_MAP_SHIFT	6
 #define	RADIX_TREE_MAP_SIZE	(1 << RADIX_TREE_MAP_SHIFT)
 #define	RADIX_TREE_MAP_MASK	(RADIX_TREE_MAP_SIZE - 1)
