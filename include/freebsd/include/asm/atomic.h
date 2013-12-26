@@ -32,7 +32,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <machine/atomic.h>
-//#include <asm/atomic-long.h>
+//#include <asm/atomic-long.h> /* XXX delete or prove needed */
 
 typedef struct {
 	volatile u_int counter;
