@@ -1,3 +1,4 @@
+#ifdef __linux__
 #include <linux/version.h>
 
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16))
@@ -218,3 +219,9 @@ extern unsigned long find_next_zero_bit(const unsigned long *addr,
 #endif /* __KERNEL__ */
 #endif /* _LINUX_BITOPS_H */
 #endif /* LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 16)) */
+
+#endif /* __linux__ */
+
+#ifdef __FreeBSD__
+#include_next <linux/bitops.h> /* this refers to the FreeBSD compat layer */
+#endif /* __FreeBSD__ */

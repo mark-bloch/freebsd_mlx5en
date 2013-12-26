@@ -38,6 +38,7 @@
 #include <linux/radix-tree.h>
 #include <linux/cpu_rmap.h>
 #include <linux/types.h>
+#include <linux/bitops.h>
 #include <linux/atomic.h>
 
 #include <linux/clocksource.h>
