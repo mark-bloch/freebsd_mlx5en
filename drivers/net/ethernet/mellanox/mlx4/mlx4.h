@@ -43,7 +43,7 @@
 #include <linux/timer.h>
 #include <linux/semaphore.h>
 #include <linux/workqueue.h>
-
+#include <linux/device.h>
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/driver.h>
 #include <linux/mlx4/doorbell.h>
