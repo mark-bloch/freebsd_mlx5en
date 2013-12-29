@@ -81,6 +81,8 @@ param_sysinit(struct kernel_param *param)
 	SYSINIT(name##_param_sysinit, SI_SUB_DRIVERS, SI_ORDER_FIRST,	\
 	    param_sysinit, &__param_##name);
 
+#define module_param_string(name, string, len, perm)                    
+         
 #define	module_param_named(name, var, type, mode)			\
 	module_param_call(name, param_set_##type, param_get_##type, &var, mode)
 
