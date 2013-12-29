@@ -18,7 +18,7 @@ typedef uint64_t __le64;
 typedef uint64_t __be64;
 
 typedef unsigned gfp_t;
-
+typedef vm_paddr_t resource_size_t;
 
 #define	DECLARE_BITMAP(n, bits)						\
 	unsigned long n[howmany(bits, sizeof(long) * 8)]
