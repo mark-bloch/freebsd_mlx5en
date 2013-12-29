@@ -37,6 +37,7 @@
 #include <linux/list.h>
 #include <linux/pci.h>
 #include <linux/mutex.h>
+#include <linux/scatterlist.h>
 
 #define MLX4_ICM_CHUNK_LEN						\
 	((256 - sizeof (struct list_head) - 2 * sizeof (int)) /		\
