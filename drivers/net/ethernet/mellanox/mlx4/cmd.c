@@ -2622,6 +2622,7 @@ int mlx4_get_vf_link_state(struct mlx4_dev *dev, int port, int vf)
 }
 EXPORT_SYMBOL_GPL(mlx4_get_vf_link_state);
 
+/* XXX Meny - Virtualization related. commented out till we map FreeBSD virtualization support
 int mlx4_get_vf_statistics(struct mlx4_dev *dev, int port, int vf_idx,
 			   struct net_device_stats *link_stats)
 {
@@ -2699,4 +2700,4 @@ if_stat_out:
 	return err;
 }
 EXPORT_SYMBOL_GPL(mlx4_get_vf_statistics);
-
+*/

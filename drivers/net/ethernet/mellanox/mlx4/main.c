@@ -2663,6 +2663,8 @@ if_stat_out:
 }
 EXPORT_SYMBOL_GPL(mlx4_get_vport_ethtool_stats);
 
+ /* XXX Meny - Virtualization related. commented out till we map FreeBSD virtualization support
+ * 
 int mlx4_get_vport_statistics(struct mlx4_dev *dev, int port,
 			      struct net_device_stats *stats, int reset)
 {
@@ -2730,6 +2732,7 @@ if_stat_out:
 	return err;
 }
 EXPORT_SYMBOL_GPL(mlx4_get_vport_statistics);
+*/
 
 static int mlx4_setup_hca(struct mlx4_dev *dev)
 {

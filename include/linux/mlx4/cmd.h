@@ -232,8 +232,10 @@ static inline int mlx4_cmd_imm(struct mlx4_dev *dev, u64 in_param, u64 *out_para
 struct mlx4_cmd_mailbox *mlx4_alloc_cmd_mailbox(struct mlx4_dev *dev);
 void mlx4_free_cmd_mailbox(struct mlx4_dev *dev, struct mlx4_cmd_mailbox *mailbox);
 
+/* XXX Meny - Virtualization related. commented out till we map FreeBSD virtualization support
 int mlx4_get_vf_statistics(struct mlx4_dev *dev, int port, int vf,
 			   struct net_device_stats *link_stats);
+*/
 
 u32 mlx4_comm_get_version(void);
 int mlx4_set_vf_mac(struct mlx4_dev *dev, int port, int vf, u8 *mac);
