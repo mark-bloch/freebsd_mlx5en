@@ -42,7 +42,8 @@
 #include <linux/io-mapping.h>
 #include <linux/delay.h>
 #include <linux/netdevice.h>
-#include <linux/kmod.h>
+#include <linux/kmod.h> 
+#include <linux/string.h>
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/doorbell.h>
