@@ -106,6 +106,7 @@
 
 #define	simple_strtoul	strtoul
 #define	simple_strtol	strtol
+#define kstrtol(a,b,c) ({*(c) = strtol(a,0,b);})
 
 #define min(x, y)	(x < y ? x : y)
 #define max(x, y)	(x > y ? x : y)
