@@ -2524,6 +2524,7 @@ int mlx4_set_vf_spoofchk(struct mlx4_dev *dev, int port, int vf, bool setting)
 }
 EXPORT_SYMBOL_GPL(mlx4_set_vf_spoofchk);
 
+/* XXX Meny - Virtualization related. commented out till we map FreeBSD virtualization support
 int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_info *ivf)
 {
 	struct mlx4_priv *priv = mlx4_priv(dev);
@@ -2556,6 +2557,7 @@ int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_in
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mlx4_get_vf_config);
+*/
 
 int mlx4_set_vf_link_state(struct mlx4_dev *dev, int port, int vf, int link_state)
 {

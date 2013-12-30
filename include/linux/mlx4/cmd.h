@@ -235,13 +235,14 @@ void mlx4_free_cmd_mailbox(struct mlx4_dev *dev, struct mlx4_cmd_mailbox *mailbo
 /* XXX Meny - Virtualization related. commented out till we map FreeBSD virtualization support
 int mlx4_get_vf_statistics(struct mlx4_dev *dev, int port, int vf,
 			   struct net_device_stats *link_stats);
+
+int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_info *ivf);
 */
 
 u32 mlx4_comm_get_version(void);
 int mlx4_set_vf_mac(struct mlx4_dev *dev, int port, int vf, u8 *mac);
 int mlx4_set_vf_vlan(struct mlx4_dev *dev, int port, int vf, u16 vlan, u8 qos);
 int mlx4_set_vf_spoofchk(struct mlx4_dev *dev, int port, int vf, bool setting);
-int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_info *ivf);
 int mlx4_set_vf_link_state(struct mlx4_dev *dev, int port, int vf, int link_state);
 int mlx4_get_vf_link_state(struct mlx4_dev *dev, int port, int vf);
 /*
