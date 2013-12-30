@@ -11,11 +11,16 @@
 
 MALLOC_DECLARE(M_KMALLOC);
 
-#define	kmalloc(size, flags)	malloc((size), M_KMALLOC, (flags))
-#define	kzalloc(size, flags)	kmalloc((size), (flags) | M_ZERO)
-#define	kfree(ptr)		free(__DECONST(void *, (ptr)), M_KMALLOC)
-#define	krealloc(ptr, size, flags) realloc((ptr), (size), M_KMALLOC, (flags))
-#define	kcalloc(n, size, flags)	kmalloc((n) * (size), flags | M_ZERO)
+#define	kmalloc(size, flags)		malloc((size), M_KMALLOC, (flags))
+#define	kzalloc(size, flags)		kmalloc((size), (flags) | M_ZERO)
+#define	kfree(ptr)			free(__DECONST(void *, (ptr)), M_KMALLOC)
+#define	krealloc(ptr, size, flags)	realloc((ptr), (size), M_KMALLOC, (flags))
+#define	kcalloc(n, size, flags)	        kmalloc((n) * (size), flags | M_ZERO)
+#define	vzalloc(size)			kzalloc(size, GFP_KERNEL | __GFP_NOWARN)
+#define	is_vmalloc_addr(arg)		0
+#define	vfree(arg)			kfree(arg)
+
+
 
 struct kmem_cache {
 	uma_zone_t	cache_zone;
