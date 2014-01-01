@@ -34,11 +34,11 @@
 #include <linux/workqueue.h>
 #include <linux/module.h>
 
+#include <asm/byteorder.h>
+
 #include "mlx4.h"
 
-enum {
-	MLX4_CATAS_POLL_INTERVAL	= 5 * HZ,
-};
+#define 	MLX4_CATAS_POLL_INTERVAL	(5 * HZ)
 
 static DEFINE_SPINLOCK(catas_lock);
 
