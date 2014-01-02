@@ -49,6 +49,9 @@
 #include <linux/scatterlist.h>
 #include <linux/workqueue.h>
 #include <linux/if_ether.h>
+#include <linux/mutex.h>
+
+#include <linux/mlx4/driver.h>
 
 #include <linux/atomic.h>
 #include <asm/uaccess.h>
