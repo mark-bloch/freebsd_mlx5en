@@ -656,4 +656,10 @@ struct pci_error_handlers {
         void (*resume)(struct pci_dev *dev);
 };
 
+/* freeBSD does not support SRIOV - yet */
+static inline struct pci_dev *pci_physfn(struct pci_dev *dev)
+{
+        return dev;
+}
+
 #endif	/* _FBSD_PCI_H_ */
