@@ -608,7 +608,7 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 
 	if (dev_cap->min_page_sz > PAGE_SIZE) {
 		mlx4_err(dev, "HCA minimum page size of %d bigger than "
-			 "kernel PAGE_SIZE of %ld, aborting.\n",
+			 "kernel PAGE_SIZE of %d, aborting.\n",
 			 dev_cap->min_page_sz, PAGE_SIZE);
 		return -ENODEV;
 	}
@@ -976,7 +976,7 @@ static int mlx4_slave_cap(struct mlx4_dev *dev)
 	mlx4_warn(dev, "HCA minimum page size:%d\n", page_size);
 	if (page_size > PAGE_SIZE) {
 		mlx4_err(dev, "HCA minimum page size of %d bigger than "
-			 "kernel PAGE_SIZE of %ld, aborting.\n",
+			 "kernel PAGE_SIZE of %d, aborting.\n",
 			 page_size, PAGE_SIZE);
 		return -ENODEV;
 	}
@@ -986,7 +986,7 @@ static int mlx4_slave_cap(struct mlx4_dev *dev)
 
 	/* TODO: relax this assumption */
 	if (dev->caps.uar_page_size != PAGE_SIZE) {
-		mlx4_err(dev, "UAR size:%d != kernel PAGE_SIZE of %ld\n",
+		mlx4_err(dev, "UAR size:%d != kernel PAGE_SIZE of %d\n",
 			 dev->caps.uar_page_size, PAGE_SIZE);
 		return -ENODEV;
 	}
