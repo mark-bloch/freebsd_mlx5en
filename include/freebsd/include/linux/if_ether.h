@@ -34,9 +34,14 @@
 
 #define	ETH_P_8021Q	ETHERTYPE_VLAN
 
+#define ETH_HLEN        14              /* Total octets in header.                              */
+#define ETH_FCS_LEN     4               /* Octets in the FCS                                    */
+#define VLAN_HLEN       4               /* The additional bytes (on top of the Ethernet header)
+                                         * that VLAN requires.                                  */
+
 /*
  * defined Ethernet Protocol ID's.
  */
-#define ETH_P_IP        0x0800          /* Internet Protocol packet     */
+#define ETH_P_IP        0x0800          /* Internet Protocol packet                             */
 
 #endif	/* _FBSD_IF_ETHER_H_ */

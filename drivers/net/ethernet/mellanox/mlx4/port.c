@@ -32,8 +32,9 @@
 
 #include <linux/errno.h>
 #include <linux/if_ether.h>
-#include <linux/if_vlan.h>
+//#include <linux/if_vlan.h> /* XXX delete or prove needed */
 #include <linux/export.h>
+#include <linux/err.h>
 
 #include <linux/mlx4/cmd.h>
 #include <linux/moduleparam.h>
