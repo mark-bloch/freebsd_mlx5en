@@ -522,7 +522,9 @@ EXPORT_SYMBOL(mlx4_get_val);
 
 static void process_mod_param_profile(struct mlx4_profile *profile)
 {
-	struct sysinfo si;
+        vm_size_t hwphyssz;
+        hwphyssz = 0;
+        TUNABLE_ULONG_FETCH("hw.realmem", (u_long *) &hwphyssz);
 
 	profile->num_qp        = 1 << mod_param_profile.num_qp;
 	profile->num_srq       = 1 << mod_param_profile.num_srq;
@@ -546,14 +548,13 @@ static void process_mod_param_profile(struct mlx4_profile *profile)
 	if (mod_param_profile.num_mtt_segs)
 		profile->num_mtt_segs = 1 << mod_param_profile.num_mtt_segs;
 	else {
-		si_meminfo(&si);
 		profile->num_mtt_segs =
 			roundup_pow_of_two(max_t(unsigned,
 						1 << (MLX4_LOG_NUM_MTT - log_mtts_per_seg),
 						min(1UL << 
 						(MLX4_MAX_LOG_NUM_MTT -
 						log_mtts_per_seg),
-						(si.totalram << 1)
+						(hwphyssz << 1)
 						>> log_mtts_per_seg)));
 		/* set the actual value, so it will be reflected to the user
 		   using the sysfs */
