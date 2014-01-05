@@ -42,6 +42,8 @@
 
 #include <linux/mlx4/cmd.h>
 
+#include <linux/math64.h>
+
 #include "mlx4.h"
 #include "icm.h"
 
