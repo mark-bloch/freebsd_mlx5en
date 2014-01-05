@@ -18,7 +18,7 @@
 //#include <linux/fs.h> /* XXX delete or prove needed */
 //#include <linux/notifier.h> /* XXX delete or prove needed */
 #include <linux/log2.h> 
-//#include <asm/byteorder.h> /* XXX delete or prove needed */
+#include <asm/byteorder.h>
 
 #define KERN_CONT       ""
 #define	KERN_EMERG	"<0>"
