@@ -33,6 +33,11 @@
  * SOFTWARE.
  */
 
+#include <linux/kmod.h> 
+/* 
+ * kmod.h must be included before module.h since it includes(indirectly) sys/module.h
+ * sys/module.h defines MODULE_VERSION and the only way to redefine it is #undef and redef in linux/module.h 
+*/
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/errno.h>
@@ -43,6 +48,7 @@
 #include <linux/delay.h>
 #include <linux/netdevice.h>
 #include <linux/string.h>
+
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/doorbell.h>
