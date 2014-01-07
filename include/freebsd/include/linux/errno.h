@@ -3,6 +3,8 @@
 
 
 #define ERESTARTSYS     ERESTART
+#define ENOTSUPP        EOPNOTSUPP
+
 
 #include <sys/errno.h>
 
