@@ -47,7 +47,6 @@ static inline int atomic_inc_not_zero_hint(atomic_t *v, int hint)
 
 #endif /* __linux__ */
 
-/* Ugly, but we don't have LINUX_VERSION_CODE defined in FreeBSD */
 #ifdef __FreeBSD__ 
 #include <asm/atomic.h>
 #endif /* __FreeBSD__ */

@@ -12,7 +12,6 @@
 
 #endif /* __linux__ */
 
-/* Ugly, but we don't have LINUX_VERSION_CODE defined in FreeBSD */
 #ifdef __FreeBSD__ 
 #include <linux/module.h>
 #endif /* __FreeBSD__ */
