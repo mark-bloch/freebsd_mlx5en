@@ -1,13 +1,14 @@
 # $FreeBSD$
 .PATH:  ${.CURDIR}/../../../../drivers/infiniband/hw/mlx4
 .PATH:  ${.CURDIR}/../../../../include/linux
+.PATH:  ${.CURDIR}/../../../../include/freebsd/include/linux
 
 .include <bsd.own.mk>
 
 KMOD    = mlx4ib
 SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
-#SRCS+= linux_compat.c linux_radix.c linux_idr.c 
 SRCS+=	alias_GUID.c mcg.c sysfs.c ah.c cq.c doorbell.c mad.c main.c mr.c qp.c srq.c wc.c cm.c
+SRCS+= linux_compat.c linux_radix.c linux_idr.c 
 SRCS+=	opt_inet.h opt_inet6.h
 
 CFLAGS+= -I${.CURDIR}/../../../../drivers/infiniband/hw/mlx4
