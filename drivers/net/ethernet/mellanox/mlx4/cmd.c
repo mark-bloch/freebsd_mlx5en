@@ -44,6 +44,7 @@
 #include <rdma/ib_smi.h>
 
 #include <asm/io.h>
+#include <linux/ktime.h>
 
 #include "mlx4.h"
 #include "fw.h"

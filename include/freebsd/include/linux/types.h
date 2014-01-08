@@ -17,6 +17,9 @@ typedef uint32_t __be32;
 typedef uint64_t __le64;
 typedef uint64_t __be64;
 
+typedef int32_t  s32;
+typedef int64_t  s64;
+
 typedef unsigned gfp_t;
 typedef vm_paddr_t resource_size_t;
 
