@@ -6,8 +6,7 @@
 .include <bsd.own.mk>
 
 KMOD    = mlx4
-SRCS    = linux_compat.c
-#SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
+SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
 SRCS+= alloc.c catas.c cmd.c cq.c eq.c fw.c icm.c intf.c main.c mcg.c mr.c linux_compat.c linux_radix.c	linux_idr.c
 SRCS+=	pd.c port.c profile.c qp.c reset.c sense.c srq.c resource_tracker.c sys_tune.c
 
