@@ -986,7 +986,7 @@ static int mlx4_MAD_IFC_wrapper(struct mlx4_dev *dev, int slave,
 				    vhcr->op, MLX4_CMD_TIME_CLASS_C, MLX4_CMD_NATIVE);
 }
 
-int MLX4_CMD_DIAG_RPRT_wrapper(struct mlx4_dev *dev, int slave,
+static int MLX4_CMD_DIAG_RPRT_wrapper(struct mlx4_dev *dev, int slave,
 		     struct mlx4_vhcr *vhcr,
 		     struct mlx4_cmd_mailbox *inbox,
 		     struct mlx4_cmd_mailbox *outbox,
@@ -995,7 +995,7 @@ int MLX4_CMD_DIAG_RPRT_wrapper(struct mlx4_dev *dev, int slave,
 	return -EPERM;
 }
 
-int MLX4_CMD_UPDATE_QP_wrapper(struct mlx4_dev *dev, int slave,
+static int MLX4_CMD_UPDATE_QP_wrapper(struct mlx4_dev *dev, int slave,
 		     struct mlx4_vhcr *vhcr,
 		     struct mlx4_cmd_mailbox *inbox,
 		     struct mlx4_cmd_mailbox *outbox,
@@ -2541,9 +2541,9 @@ int mlx4_get_vf_config(struct mlx4_dev *dev, int port, int vf, struct ifla_vf_in
 
 	s_info = &priv->mfunc.master.vf_admin[slave].vport[port];
 	ivf->vf = vf;
-
+*/
 	/* need to convert it to a func */
-	ivf->mac[0] = ((s_info->mac >> (5*8)) & 0xff);
+/*	ivf->mac[0] = ((s_info->mac >> (5*8)) & 0xff);
 	ivf->mac[1] = ((s_info->mac >> (4*8)) & 0xff);
 	ivf->mac[2] = ((s_info->mac >> (3*8)) & 0xff);
 	ivf->mac[3] = ((s_info->mac >> (2*8)) & 0xff);
