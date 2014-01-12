@@ -1742,7 +1742,7 @@ out:
 	return ret;
 }
 
-int mlx4_master_immediate_activate_vlan_qos(struct mlx4_priv *priv,
+static int mlx4_master_immediate_activate_vlan_qos(struct mlx4_priv *priv,
 					    int slave, int port)
 {
 	struct mlx4_vport_oper_state *vp_oper;
@@ -2415,7 +2415,7 @@ u32 mlx4_comm_get_version(void)
 	 return ((u32) CMD_CHAN_IF_REV << 8) | (u32) CMD_CHAN_VER;
 }
 
-int mlx4_get_slave_indx(struct mlx4_dev *dev, int vf)
+static int mlx4_get_slave_indx(struct mlx4_dev *dev, int vf)
 {
 	if ((vf < 0) || (vf >= dev->num_vfs)) {
 		mlx4_err(dev, "Bad vf number:%d (number of activated vf: %d)\n", vf, dev->num_vfs);
