@@ -30,6 +30,12 @@
 #ifndef	_FBSD_MM_H_
 #define	_FBSD_MM_H_
 
+#include <linux/spinlock.h>
+#include <linux/gfp.h>
+#include <linux/kernel.h>
+
+#define	PAGE_ALIGN(x)	ALIGN(x, PAGE_SIZE)
+
 struct vm_area_struct {
         vm_offset_t     vm_start;
         vm_offset_t     vm_end;
