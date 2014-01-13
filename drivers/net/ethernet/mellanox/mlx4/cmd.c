@@ -550,7 +550,7 @@ out:
 			  "in_param=0x%llx, in_mod=0x%x, op_mod=0x%x, "
 			  "get_status err=%d, status_reg=0x%x, go_bit=%d, "
 			  "t_bit=%d, toggle=0x%x\n", cmd_to_str(op), op, ret,
-			  in_param, in_modifier, op_modifier, err, status,
+			  (unsigned long long) in_param, in_modifier, op_modifier, err, status,
 			  go_bit, t_bit, cmd->toggle);
 	}
 	mutex_unlock(&cmd->hcr_mutex);
@@ -736,7 +736,7 @@ static int mlx4_cmd_wait(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
 		mlx4_warn(dev, "command %s (0x%x) timed out: in_param=0x%llx, "
 			  "in_mod=0x%x, op_mod=0x%x, get_status err=%d, "
 			  "status_reg=0x%x, go_bit=%d, t_bit=%d, toggle=0x%x\n"
-			  , cmd_to_str(op), op, in_param, in_modifier,
+			  , cmd_to_str(op), op, (unsigned long long) in_param, in_modifier,
 			  op_modifier, stat_err, status, go_bit, t_bit,
 			  mlx4_priv(dev)->cmd.toggle);
 		err = -EBUSY;
@@ -748,14 +748,14 @@ static int mlx4_cmd_wait(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
 		t2 = timespec_to_ktime(ts2);
 		delta = ktime_sub(t2, t1);
 		ds = ktime_to_ns(delta);
-		pr_info("mlx4: fw exec time for %s is %lld nsec\n", cmd_to_str(op), ds);
+		pr_info("mlx4: fw exec time for %s is %lld nsec\n", cmd_to_str(op), (long long) ds);
 	}
 
 	err = context->result;
 	if (err) {
 		mlx4_err(dev, "command %s (0x%x) failed: in_param=0x%llx, "
 			 "in_mod=0x%x, op_mod=0x%x, fw status = 0x%x\n",
-			 cmd_to_str(op), op, in_param, in_modifier,
+			 cmd_to_str(op), op, (unsigned long long) in_param, in_modifier,
 			 op_modifier, context->fw_status);
 		goto out;
 	}
@@ -813,7 +813,7 @@ static int mlx4_ACCESS_MEM(struct mlx4_dev *dev, u64 master_addr,
 	    (slave & ~0x7f) | (size & 0xff)) {
 		mlx4_err(dev, "Bad access mem params - slave_addr:0x%llx "
 			      "master_addr:0x%llx slave_id:%d size:%d\n",
-			      slave_addr, master_addr, slave, size);
+			      (unsigned long long) slave_addr, (unsigned long long) master_addr, slave, size);
 		return -EINVAL;
 	}
 
@@ -1697,7 +1697,7 @@ static int mlx4_master_process_vhcr(struct mlx4_dev *dev, int slave,
 				  "in_param 0x%llx in_mod=0x%x, op_mod=0x%x "
 				  "failed with error:%d, status %d\n",
 				  cmd_to_str(vhcr->op), vhcr->op, slave,
-				  vhcr->in_param, vhcr->in_modifier,
+				  (unsigned long long) vhcr->in_param, vhcr->in_modifier,
 				  vhcr->op_modifier, vhcr->errno, err);
 		vhcr_cmd->status = mlx4_errno_to_status(err);
 		goto out_status;
@@ -1848,7 +1848,7 @@ static int mlx4_master_activate_admin_state(struct mlx4_priv *priv, int slave)
 				return err;
 			}
 			mlx4_dbg((&(priv->dev)), "alloc mac %llx idx  %d slave %d port %d\n",
-				 vp_oper->state.mac, vp_oper->mac_idx, slave, port);
+				 (unsigned long long) vp_oper->state.mac, vp_oper->mac_idx, slave, port);
 		}
 	}
 	return 0;
@@ -2440,7 +2440,7 @@ int mlx4_set_vf_mac(struct mlx4_dev *dev, int port, int vf, u8 *mac)
 	s_info = &priv->mfunc.master.vf_admin[slave].vport[port];
 	s_info->mac = mlx4_mac_to_u64(mac);
 	mlx4_info(dev, "default mac on vf %d port %d to %llX will take afect only after vf restart\n",
-		  vf, port, s_info->mac);
+		  vf, port, (unsigned long long) s_info->mac);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mlx4_set_vf_mac);
