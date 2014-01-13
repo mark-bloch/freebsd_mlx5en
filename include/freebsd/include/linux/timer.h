@@ -88,4 +88,6 @@ round_jiffies(unsigned long j)
 	return roundup(j, hz);
 }
 
+#define round_jiffies_relative(j) round_jiffies(j)
+
 #endif /* _FBSD_TIMER_H_ */
