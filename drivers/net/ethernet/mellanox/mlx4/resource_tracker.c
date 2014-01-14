@@ -1241,7 +1241,7 @@ static int qp_res_start_move_to(struct mlx4_dev *dev, int slave, int qpn,
 		switch (state) {
 		case RES_QP_BUSY:
 			mlx4_dbg(dev, "%s: failed RES_QP, 0x%llx\n",
-				 __func__, r->com.res_id);
+				 __func__, (unsigned long long)r->com.res_id);
 			err = -EBUSY;
 			break;
 
@@ -1249,7 +1249,7 @@ static int qp_res_start_move_to(struct mlx4_dev *dev, int slave, int qpn,
 			if (r->com.state == RES_QP_MAPPED && !alloc)
 				break;
 
-			mlx4_dbg(dev, "failed RES_QP, 0x%llx\n", r->com.res_id);
+			mlx4_dbg(dev, "failed RES_QP, 0x%llx\n", (unsigned long long)r->com.res_id);
 			err = -EINVAL;
 			break;
 
@@ -1259,7 +1259,7 @@ static int qp_res_start_move_to(struct mlx4_dev *dev, int slave, int qpn,
 				break;
 			else {
 				mlx4_dbg(dev, "failed RES_QP, 0x%llx\n",
-					  r->com.res_id);
+					  (unsigned long long)r->com.res_id);
 				err = -EINVAL;
 			}
 
@@ -3737,7 +3737,7 @@ int mlx4_QP_ATTACH_wrapper(struct mlx4_dev *dev, int slave,
 		err = qp_detach(dev, &qp, gid, prot, type, reg_id);
 		if (err)
 			pr_err("Fail to detach rule from qp 0x%x reg_id = 0x%llx\n",
-			       qpn, reg_id);
+			       qpn, (unsigned long long)reg_id);
 	}
 	put_res(dev, slave, qpn, RES_QP);
 	return err;
@@ -4015,7 +4015,7 @@ static int _move_all_busy(struct mlx4_dev *dev, int slave,
 						mlx4_dbg(dev,
 							 "%s id 0x%llx is busy\n",
 							  ResourceType(type),
-							  r->res_id);
+							  (unsigned long long)r->res_id);
 					++busy;
 				} else {
 					r->from_state = r->state;
