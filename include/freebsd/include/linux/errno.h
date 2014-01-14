@@ -30,11 +30,12 @@
 #ifndef	_FBSD_ERRNO_H_
 #define	_FBSD_ERRNO_H_
 
+#include <sys/errno.h>
 
 #define ERESTARTSYS     ERESTART
 #define ENOTSUPP        EOPNOTSUPP
 
-
-#include <sys/errno.h>
+// Taken from Linux kernel: include/uapi/asm-generic/errno.h
+#define ENONET          64 /* Machine is not on the network */
 
 #endif	/* _FBSD_ERRNO_H_ */
