@@ -38,6 +38,13 @@
 
 #include <asm/types.h>
 
+#ifndef __bitwise__
+#ifdef __CHECKER__
+#define __bitwise__ __attribute__((bitwise))
+#else
+#define __bitwise__
+#endif
+#endif
 
 typedef uint16_t __le16;
 typedef uint16_t __be16;
