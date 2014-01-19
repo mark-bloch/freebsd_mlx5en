@@ -2550,7 +2550,6 @@ int __mlx4_clear_if_stat(struct mlx4_dev *dev,
 {
 	struct mlx4_cmd_mailbox *if_stat_mailbox = NULL;
 	int err = 0;
-	union  mlx4_counter *counter;
 	u32 if_stat_in_mod = (counter_index & 0xff) | (1 << 31);
 
 	if (counter_index == MLX4_SINK_COUNTER_INDEX)
