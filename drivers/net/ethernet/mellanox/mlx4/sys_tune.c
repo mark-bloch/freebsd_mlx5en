@@ -32,13 +32,10 @@
  */
 
 #include <linux/sched.h>
-#include <linux/version.h>
-#include <linux/cpu.h>
-#include <linux/cpumask.h>
-#include <linux/percpu.h>
 #include <linux/mutex.h>
 #include <asm/atomic.h>
-#include <linux/node.h>
+
+#include "mlx4.h"
 
 #if defined(CONFIG_X86) && defined(CONFIG_APM_MODULE)
 
