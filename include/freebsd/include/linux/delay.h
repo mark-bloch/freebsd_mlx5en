@@ -31,4 +31,16 @@
 #define	_FBSD_DELAY_H_
 
 
+#include <linux/jiffies.h>
+
+static inline void
+linux_msleep(int ms)
+{
+	pause("lnxsleep", msecs_to_jiffies(ms));
+}
+
+#undef msleep
+#define	msleep	linux_msleep
+
+
 #endif	/* _FBSD_DELAY_H_ */
