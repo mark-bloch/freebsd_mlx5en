@@ -92,11 +92,11 @@ do {									\
 
 #define	flush_scheduled_work()	flush_taskqueue(taskqueue_thread)
 
-#define	queue_work(q, work)						\
-do {									\
-	(work)->taskqueue = (q)->taskqueue;				\
-	taskqueue_enqueue((q)->taskqueue, &(work)->work_task);		\
-} while (0)
+inline int queue_work (struct workqueue_struct *q, struct work_struct *work)
+{
+	(work)->taskqueue = (q)->taskqueue;                             
+        return !taskqueue_enqueue((q)->taskqueue, &(work)->work_task); // Return opposite val to align with Linux logic 
+}
 
 static inline void
 _delayed_work_fn(void *arg)
