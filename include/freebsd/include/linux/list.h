@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _LINUX_LIST_H_
-#define _LINUX_LIST_H_
+#ifndef _FBSD_LIST_H_
+#define _FBSD_LIST_H_
 
 /*
  * Since LIST_HEAD conflicts with the linux definition we must include any
@@ -334,4 +334,4 @@ hlist_move_list(struct hlist_head *old, struct hlist_head *new)
 	    (n = p->next) | (tp = hlist_entry(p, typeof(*tp), field)) :	\
 	    NULL; p = n)
 
-#endif /* _LINUX_LIST_H_ */
+#endif /* _FBSD_LIST_H_ */
