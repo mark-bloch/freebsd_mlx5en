@@ -640,6 +640,7 @@ struct mlx4_mr_table {
 struct mlx4_cq_table {
 	struct mlx4_bitmap	bitmap;
 	spinlock_t		lock;
+	rwlock_t		cq_table_lock;
 	struct radix_tree_root	tree;
 	struct mlx4_icm_table	table;
 	struct mlx4_icm_table	cmpt_table;
