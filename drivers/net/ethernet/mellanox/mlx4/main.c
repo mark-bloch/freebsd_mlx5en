@@ -48,7 +48,7 @@
 #include <linux/delay.h>
 #include <linux/netdevice.h>
 #include <linux/string.h>
-
+#include <linux/fs.h>
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/doorbell.h>
