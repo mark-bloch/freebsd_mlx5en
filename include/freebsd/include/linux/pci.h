@@ -127,14 +127,14 @@ int pcie_capability_write_word(struct pci_dev *dev, int pos, u16 val);
 struct pci_driver {
 	struct list_head		links;
 	char				*name;
-	struct pci_device_id		*id_table;
+	const struct pci_device_id		*id_table;
 	int  (*probe)(struct pci_dev *dev, const struct pci_device_id *id);
 	void (*remove)(struct pci_dev *dev);
         int  (*suspend) (struct pci_dev *dev, pm_message_t state);      /* Device suspended */
         int  (*resume) (struct pci_dev *dev);                   /* Device woken up */
 	driver_t			driver;
 	devclass_t			bsdclass;
-        struct pci_error_handlers       *err_handler;
+        const struct pci_error_handlers       *err_handler;
 };
 
 extern struct list_head pci_drivers;
@@ -413,9 +413,9 @@ pci_write_config_dword(struct pci_dev *pdev, int where, u32 val)
 }
 
 static struct pci_driver *
-linux_pci_find(device_t dev, struct pci_device_id **idp)
+linux_pci_find(device_t dev, const struct pci_device_id **idp)
 {
-	struct pci_device_id *id;
+	const struct pci_device_id *id;
 	struct pci_driver *pdrv;
 	uint16_t vendor;
 	uint16_t device;
@@ -440,7 +440,7 @@ linux_pci_find(device_t dev, struct pci_device_id **idp)
 static inline int
 linux_pci_probe(device_t dev)
 {
-	struct pci_device_id *id;
+	const struct pci_device_id *id;
 	struct pci_driver *pdrv;
 
 	if ((pdrv = linux_pci_find(dev, &id)) == NULL)
@@ -457,7 +457,7 @@ linux_pci_attach(device_t dev)
 	struct resource_list_entry *rle;
 	struct pci_dev *pdev;
 	struct pci_driver *pdrv;
-	struct pci_device_id *id;
+	const struct pci_device_id *id;
 	int error;
 
 	pdrv = linux_pci_find(dev, &id);
