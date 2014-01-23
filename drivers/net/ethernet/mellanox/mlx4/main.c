@@ -3199,7 +3199,7 @@ static int __mlx4_init_one(struct pci_dev *pdev, int pci_dev_data)
 	if (!(pci_dev_data & MLX4_PCI_DEV_IS_VF) &&
 	    !(pci_resource_flags(pdev, 0) & IORESOURCE_MEM)) {
 		dev_err(&pdev->dev, "Missing DCS, aborting."
-			"(driver_data: 0x%x, pci_resource_flags(pdev, 0):0x%lx)\n",
+			"(driver_data: 0x%x, pci_resource_flags(pdev, 0):0x%x)\n",
 			pci_dev_data, pci_resource_flags(pdev, 0));
 		err = -ENODEV;
 		goto err_disable_pdev;
