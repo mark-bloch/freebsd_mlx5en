@@ -3855,5 +3855,20 @@ static void __exit mlx4_cleanup(void)
 	destroy_workqueue(mlx4_wq);
 }
 
-module_init(mlx4_init);
+module_init_order(mlx4_init, SI_ORDER_MIDDLE);
 module_exit(mlx4_cleanup);
+
+#undef MODULE_VERSION
+#include <sys/module.h>
+static int
+mlx4_evhand(module_t mod, int event, void *arg)
+{
+        return (0);
+}
+
+static moduledata_t mlx4_mod = {
+        .name = "mlx4",
+        .evhand = mlx4_evhand,
+};
+MODULE_VERSION(mlx4, 1);
+DECLARE_MODULE(mlx4, mlx4_mod, SI_SUB_SMP, SI_ORDER_ANY);
