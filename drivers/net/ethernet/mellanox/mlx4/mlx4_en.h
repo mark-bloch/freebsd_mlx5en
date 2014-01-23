@@ -775,9 +775,11 @@ int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv);
 int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset);
 int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port);
 int mlx4_en_get_vport_stats(struct mlx4_en_dev *mdev, u8 port);
+/* XXX Meny - This decleration has moved to mlx4_stats.h to be visible for both mlx4_core and mlx4_en
 int mlx4_get_vport_ethtool_stats(struct mlx4_dev *dev, int port,
-			 struct mlx4_en_vport_stats *vport_stats,
-			 int reset);
+                         struct mlx4_en_vport_stats *vport_stats,
+                         int reset);
+*/
 void mlx4_en_create_debug_files(struct mlx4_en_priv *priv);
 void mlx4_en_delete_debug_files(struct mlx4_en_priv *priv);
 int mlx4_en_register_debugfs(void);

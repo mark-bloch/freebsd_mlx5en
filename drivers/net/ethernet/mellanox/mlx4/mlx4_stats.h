@@ -143,6 +143,10 @@ struct mlx4_en_stat_out_flow_control_mbox {
 	__be64 reserved[2];
 };
 
+int mlx4_get_vport_ethtool_stats(struct mlx4_dev *dev, int port,
+                         struct mlx4_en_vport_stats *vport_stats,
+                         int reset);
+
 #define NUM_ALL_STATS	(NUM_PKT_STATS + NUM_FLOW_STATS + NUM_VPORT_STATS + \
 			 NUM_VF_STATS + NUM_PORT_STATS + NUM_PERF_STATS)
 #endif
