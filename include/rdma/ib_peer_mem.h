@@ -21,7 +21,13 @@ struct ib_peer_memory_client {
 	struct list_head	core_peer_list;
 	struct list_head    core_ticket_list;
 	unsigned long last_ticket;
+#ifdef __FreeBSD__
+	int holdcount;
+	int needwakeup;
+	struct cv peer_cv;
+#else
 	struct srcu_struct peer_srcu;
+#endif
 	struct mutex lock;
 	struct kobject *kobj;
 	struct attribute_group peer_mem_attr_group;

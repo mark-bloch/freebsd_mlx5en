@@ -313,9 +313,15 @@ void *ib_register_peer_memory_client(struct peer_memory_client *peer_client,
 
 	INIT_LIST_HEAD(&ib_peer_client->core_ticket_list);
 	mutex_init(&ib_peer_client->lock);
+#ifdef __FreeBSD__
+	ib_peer_client->holdcount = 0;
+	ib_peer_client->needwakeup = 0;
+	cv_init(&ib_peer_client->peer_cv, "ibprcl");
+#else
 	ret = init_srcu_struct(&ib_peer_client->peer_srcu);
 	if (ret)
 		goto free;
+#endif
 	if (create_peer_sysfs(ib_peer_client))
 		goto free;
 	*invalidate_callback = ib_invalidate_peer_memory;
@@ -340,11 +346,19 @@ void ib_unregister_peer_memory_client(void *reg_handle)
 	mutex_lock(&peer_memory_mutex);
 	/* remove from list to prevent future core clients usage as it goes down  */
 	list_del(&ib_peer_client->core_peer_list);
+#ifdef __FreeBSD__
+	while (ib_peer_client->holdcount != 0) {
+		ib_peer_client->needwakeup = 1;
+		cv_wait(&ib_peer_client->peer_cv, &peer_memory_mutex);
+	}
+	cv_destroy(&ib_peer_client->peer_cv);
+#else
 	mutex_unlock(&peer_memory_mutex);
 	/* peer memory can't go down while there are active clients */
 	synchronize_srcu(&ib_peer_client->peer_srcu);
 	cleanup_srcu_struct(&ib_peer_client->peer_srcu);
 	mutex_lock(&peer_memory_mutex);
+#endif
 	num_registered_peers--;
 	destroy_peer_sysfs(ib_peer_client);
 	mutex_unlock(&peer_memory_mutex);
@@ -391,8 +405,13 @@ struct ib_peer_memory_client *ib_get_peer_client(struct ib_ucontext *context, un
 	ib_peer_client = NULL;
 
 found:
-	if (ib_peer_client)
+	if (ib_peer_client) {
+#ifdef __FreeBSD__
+		ib_peer_client->holdcount++;
+#else
 		*srcu_key = srcu_read_lock(&ib_peer_client->peer_srcu);
+#endif
+	}
 
 	mutex_unlock(&peer_memory_mutex);
 	return ib_peer_client;
@@ -408,7 +427,14 @@ void ib_put_peer_client(struct ib_peer_memory_client *ib_peer_client,
 	if (ib_peer_client->peer_mem->release)
 		ib_peer_client->peer_mem->release(peer_client_context);
 
+#ifdef __FreeBSD__
+	ib_peer_client->holdcount--;
+	if (ib_peer_client->holdcount == 0 && ib_peer_client->needwakeup) {
+		cv_signal(&ib_peer_client->peer_cv);
+	}
+#else
 	srcu_read_unlock(&ib_peer_client->peer_srcu, srcu_key);
+#endif
 	return;
 }
 EXPORT_SYMBOL(ib_put_peer_client);
