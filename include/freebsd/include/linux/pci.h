@@ -122,8 +122,6 @@ struct pci_device_id {
 
 struct pci_dev;
 
-int pcie_capability_write_word(struct pci_dev *dev, int pos, u16 val);
-
 struct pci_driver {
 	struct list_head		links;
 	char				*name;
@@ -817,7 +815,7 @@ static bool pcie_capability_reg_implemented(struct pci_dev *dev, int pos)
 }
 
  
-int pcie_capability_write_word(struct pci_dev *dev, int pos, u16 val)
+static inline int pcie_capability_write_word(struct pci_dev *dev, int pos, u16 val)
 {
         if (pos & 1)
                 return -EINVAL;
