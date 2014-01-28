@@ -35,8 +35,8 @@
 
 #include <linux/kmod.h> 
 /* 
- * kmod.h must be included before module.h since it includes(indirectly) sys/module.h
- * sys/module.h defines MODULE_VERSION and the only way to redefine it is #undef and redef in linux/module.h 
+ * kmod.h must be included before module.h since it includes (indirectly) sys/module.h
+ * To use the FBSD macro sys/module.h should define MODULE_VERSION before linux/module does.
 */
 #include <linux/module.h>
 #include <linux/init.h>
@@ -61,7 +61,7 @@
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("Mellanox ConnectX HCA low-level driver");
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_VERSION(DRV_VERSION);
+//MODULE_VERSION(DRV_VERSION); /* This Linux macro collides with the FBSD one we use later */
 
 struct workqueue_struct *mlx4_wq;
 
@@ -3858,7 +3858,6 @@ static void __exit mlx4_cleanup(void)
 module_init_order(mlx4_init, SI_ORDER_MIDDLE);
 module_exit(mlx4_cleanup);
 
-#undef MODULE_VERSION
 #include <sys/module.h>
 static int
 mlx4_evhand(module_t mod, int event, void *arg)

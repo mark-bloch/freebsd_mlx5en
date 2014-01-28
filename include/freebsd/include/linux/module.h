@@ -39,8 +39,10 @@
 #define MODULE_AUTHOR(name)
 #define MODULE_DESCRIPTION(name)
 #define MODULE_LICENSE(name)
-#undef MODULE_VERSION
+
+#ifndef MODULE_VERSION
 #define MODULE_VERSION(name)
+#endif
 
 #define	THIS_MODULE	((struct module *)0)
 
