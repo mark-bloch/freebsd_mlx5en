@@ -39,6 +39,7 @@
 #include <linux/mutex.h>
 #include <linux/idr.h>
 #include <linux/rbtree.h>
+#include <linux/notifier.h>
 
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_umem.h>
