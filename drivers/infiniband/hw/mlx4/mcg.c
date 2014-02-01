@@ -658,8 +658,9 @@ static void mlx4_ib_mcg_work_handler(struct work_struct *work)
 		method = group->response_sa_mad.mad_hdr.method;
 		if (group->last_req_tid != group->response_sa_mad.mad_hdr.tid) {
 			mcg_warn_group(group, "Got MAD response to existing MGID but wrong TID, dropping. Resp TID=%llx, group TID=%llx\n",
-				be64_to_cpu(group->response_sa_mad.mad_hdr.tid),
-				be64_to_cpu(group->last_req_tid));
+				(long long)be64_to_cpu(
+				    group->response_sa_mad.mad_hdr.tid),
+				(long long)be64_to_cpu(group->last_req_tid));
 			group->state = group->prev_state;
 			goto process_requests;
 		}
@@ -754,8 +755,8 @@ static struct mcast_group *search_relocate_mgid0_group(struct mlx4_ib_demux_ctx 
 			if (memcmp(new_mgid, &mgid0, sizeof mgid0)) {
 				group->rec.mgid = *new_mgid;
 				sprintf(group->name, "%016llx%016llx",
-						be64_to_cpu(group->rec.mgid.global.subnet_prefix),
-						be64_to_cpu(group->rec.mgid.global.interface_id));
+						(long long)be64_to_cpu(group->rec.mgid.global.subnet_prefix),
+						(long long)be64_to_cpu(group->rec.mgid.global.interface_id));
 				list_del_init(&group->mgid0_list);
 				cur_group = mcast_insert(ctx, group);
 				if (cur_group) {
@@ -836,8 +837,10 @@ static struct mcast_group *acquire_group(struct mlx4_ib_demux_ctx *ctx,
 	INIT_DELAYED_WORK(&group->timeout_work, mlx4_ib_mcg_timeout_handler);
 	mutex_init(&group->lock);
 	sprintf(group->name, "%016llx%016llx",
-			be64_to_cpu(group->rec.mgid.global.subnet_prefix),
-			be64_to_cpu(group->rec.mgid.global.interface_id));
+			(long long)be64_to_cpu(
+			    group->rec.mgid.global.subnet_prefix),
+			(long long)be64_to_cpu(
+			    group->rec.mgid.global.interface_id));
 	sysfs_attr_init(&group->dentry.attr);
 	group->dentry.show = sysfs_show_group;
 	group->dentry.store = NULL;
@@ -1000,13 +1003,14 @@ static ssize_t sysfs_show_group(struct device *dev,
 	else
 		sprintf(state_str, "%s(TID=0x%llx)",
 				get_state_string(group->state),
-				be64_to_cpu(group->last_req_tid));
+				(long long)be64_to_cpu(group->last_req_tid));
 	if (list_empty(&group->pending_list)) {
 		sprintf(pending_str, "No");
 	} else {
 		req = list_first_entry(&group->pending_list, struct mcast_req, group_list);
 		sprintf(pending_str, "Yes(TID=0x%llx)",
-				be64_to_cpu(req->sa_mad.mad_hdr.tid));
+				(long long)be64_to_cpu(
+				    req->sa_mad.mad_hdr.tid));
 	}
 	len += sprintf(buf + len, "%1d [%02d,%02d,%02d] %4d %4s %5s     ",
 			group->rec.scope_join_state & 0xf,
