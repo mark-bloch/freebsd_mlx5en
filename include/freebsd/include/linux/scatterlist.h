@@ -44,6 +44,12 @@ struct scatterlist {
 	uint32_t	flags;
 };
 
+struct sg_table {
+	struct scatterlist *sgl;        /* the list */
+	unsigned int nents;             /* number of mapped entries */
+	unsigned int orig_nents;        /* original size of list */
+};
+
 #define	sg_dma_address(sg)	(sg)->address
 #define	sg_dma_len(sg)		(sg)->length
 #define	sg_page(sg)		(sg)->sl_un.page
