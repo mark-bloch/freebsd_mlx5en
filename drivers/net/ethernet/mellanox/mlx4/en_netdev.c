@@ -1913,27 +1913,23 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
 
 	/* Create rx Rings */
 	for (i = 0; i < priv->rx_ring_num; i++) {
-		node = cpu_to_node(i % num_online_cpus());
 		if (mlx4_en_create_cq(priv, &priv->rx_cq[i],
-				      prof->rx_ring_size, i, RX, node))
+				      prof->rx_ring_size, i, RX))
 			goto err;
 
 		if (mlx4_en_create_rx_ring(priv, &priv->rx_ring[i],
-					   prof->rx_ring_size,
-					   node))
+					   prof->rx_ring_size))
 			goto err;
 	}
 
 	/* Create tx Rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		node = cpu_to_node(i % num_online_cpus());
 		if (mlx4_en_create_cq(priv, &priv->tx_cq[i],
-				      prof->tx_ring_size, i, TX, node))
+				      prof->tx_ring_size, i, TX))
 			goto err;
 
 		if (mlx4_en_create_tx_ring(priv, &priv->tx_ring[i],
-					   prof->tx_ring_size, TXBB_SIZE,
-					   node, i))
+					   prof->tx_ring_size, TXBB_SIZE, i))
 			goto err;
 	}
 
@@ -1942,7 +1938,8 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
 	if (!priv->dev->rx_cpu_rmap)
 		goto err;
 #endif
-
+        /* Re-create stat sysctls in case the number of rings changed. */
+        mlx4_en_sysctl_stat(priv);
 	return 0;
 
 err:
