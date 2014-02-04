@@ -2470,29 +2470,34 @@ static const struct net_device_ops mlx4_netdev_ops_master = {
 int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			struct mlx4_en_port_profile *prof)
 {
+	static volatile int mlx4_en_unit;
 	struct net_device *dev;
 	struct mlx4_en_priv *priv;
-	int i;
+	uint8_t dev_addr[ETHER_ADDR_LEN];
 	int err;
-	u64 mac_u64;
+	int i;
 
-	dev = alloc_etherdev_mqs(sizeof(struct mlx4_en_priv),
-				 MAX_TX_RINGS, MAX_RX_RINGS);
-	if (dev == NULL)
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	dev = priv->dev = if_alloc(IFT_ETHER);
+	if (dev == NULL) {
+		en_err(priv, "Net device allocation failed\n");
+		kfree(priv);
 		return -ENOMEM;
-
-	netif_set_real_num_tx_queues(dev, prof->tx_ring_num);
-	netif_set_real_num_rx_queues(dev, prof->rx_ring_num);
-
-	SET_NETDEV_DEV(dev, &mdev->dev->pdev->dev);
-	dev->dev_id =  port - 1;
+	}
+	dev->if_softc = priv;
+	if_initname(dev, "mlxen", atomic_fetchadd_int(&mlx4_en_unit, 1));
+	dev->if_mtu = ETHERMTU;
+	dev->if_baudrate = 1000000000;
+	dev->if_init = mlx4_en_init;
+	dev->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
+	dev->if_ioctl = mlx4_en_ioctl;
+	dev->if_transmit = mlx4_en_transmit;
+	dev->if_qflush = mlx4_en_qflush;
+	dev->if_snd.ifq_maxlen = prof->tx_ring_size;
 
 	/*
 	 * Initialize driver private data
 	 */
-
-	priv = netdev_priv(dev);
-	memset(priv, 0, sizeof(struct mlx4_en_priv));
 	priv->counter_index = 0xff;
 	spin_lock_init(&priv->stats_lock);
 	INIT_WORK(&priv->rx_mode_task, mlx4_en_do_set_rx_mode);
@@ -2500,6 +2505,10 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	INIT_WORK(&priv->linkstate_task, mlx4_en_linkstate);
 	INIT_DELAYED_WORK(&priv->stats_task, mlx4_en_do_get_stats);
 	INIT_DELAYED_WORK(&priv->service_task, mlx4_en_service_task);
+	INIT_WORK(&priv->start_port_task, mlx4_en_lock_and_start_port);
+	INIT_WORK(&priv->stop_port_task, mlx4_en_lock_and_stop_port);
+	INIT_WORK(&priv->mcast_task, mlx4_en_do_set_multicast);
+	callout_init(&priv->watchdog_timer, 1);
 #ifdef CONFIG_RFS_ACCEL
 	INIT_LIST_HEAD(&priv->filters);
 	spin_lock_init(&priv->filters_lock);
@@ -2513,11 +2522,11 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	priv->port = port;
 	priv->port_up = false;
 	priv->flags = prof->flags;
-	priv->ctrl_flags = cpu_to_be32(MLX4_WQE_CTRL_CQ_UPDATE |
-			MLX4_WQE_CTRL_SOLICITED);
+        priv->ctrl_flags = cpu_to_be32(MLX4_WQE_CTRL_CQ_UPDATE |
+                        MLX4_WQE_CTRL_SOLICITED);
+
 	priv->num_tx_rings_p_up = mdev->profile.num_tx_rings_p_up;
 	priv->tx_ring_num = prof->tx_ring_num;
-
 	priv->tx_ring = kcalloc(MAX_TX_RINGS,
 				sizeof(struct mlx4_en_tx_ring *), GFP_KERNEL);
 	if (!priv->tx_ring) {
@@ -2530,9 +2539,11 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 		err = -ENOMEM;
 		goto out;
 	}
+        
 	priv->rx_ring_num = prof->rx_ring_num;
 	priv->cqe_factor = (mdev->dev->caps.cqe_size == 64) ? 1 : 0;
 	priv->mac_index = -1;
+	priv->ip_reasm = priv->mdev->profile.ip_reasm;
 	priv->last_ifq_jiffies = 0;
 	priv->if_counters_rx_errors = 0;
 	priv->if_counters_rx_no_buffer = 0;
@@ -2552,31 +2563,23 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	for (i = 0; i < MLX4_EN_MAC_HASH_SIZE; ++i)
 		INIT_HLIST_HEAD(&priv->mac_hash[i]);
 
+
 	/* Query for default mac and max mtu */
 	priv->max_mtu = mdev->dev->caps.eth_mtu_cap[priv->port];
+        priv->current_mac = mdev->dev->caps.def_mac[priv->port];
+        if (ILLEGAL_MAC(priv->mac)) {
+                en_err(priv, "Port: %d, invalid mac burned: 0x%llx, quiting\n",
+                                priv->port, priv->mac);
+                err = -EINVAL;
+                goto out;
+        }
 
-	/* Set default MAC */
-	dev->addr_len = ETH_ALEN;
-	mlx4_en_u64_to_mac(dev->dev_addr, mdev->dev->caps.def_mac[priv->port]);
-	if (!is_valid_ether_addr(dev->dev_addr)) {
-		if (mlx4_is_slave(priv->mdev->dev)) {
-			eth_hw_addr_random(dev);
-			en_warn(priv, "Assigned random MAC address %pM\n", dev->dev_addr);
-			mac_u64 = mlx4_mac_to_u64(dev->dev_addr);
-			mdev->dev->caps.def_mac[priv->port] = mac_u64;
-		} else {
-			en_err(priv, "Port: %d, invalid mac burned: %pM, quiting\n",
-			       priv->port, dev->dev_addr);
-			err = -EINVAL;
-			goto out;
-		}
-	}
 
-	memcpy(dev->perm_addr, dev->dev_addr, ETH_ALEN);
-	memcpy(priv->current_mac, dev->dev_addr, sizeof(priv->current_mac));
 
 	priv->stride = roundup_pow_of_two(sizeof(struct mlx4_en_rx_desc) +
 					  DS_SIZE);
+	mlx4_en_sysctl_conf(priv);
+
 	err = mlx4_en_alloc_resources(priv);
 	if (err)
 		goto out;
@@ -2596,91 +2599,59 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	priv->allocated = 1;
 
 	/*
-	 * Initialize netdev entry points
-	 */
-	if (mlx4_is_master(priv->mdev->dev))
-		dev->netdev_ops = &mlx4_netdev_ops_master;
-	else
-		dev->netdev_ops = &mlx4_netdev_ops;
-	dev->watchdog_timeo = MLX4_EN_WATCHDOG_TIMEOUT;
-	netif_set_real_num_tx_queues(dev, priv->tx_ring_num);
-	netif_set_real_num_rx_queues(dev, priv->rx_ring_num);
-
-	SET_ETHTOOL_OPS(dev, &mlx4_en_ethtool_ops);
-
-	/*
 	 * Set driver features
 	 */
-	dev->hw_features = NETIF_F_SG | NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_GRO;
+	dev->if_capabilities |= IFCAP_RXCSUM | IFCAP_TXCSUM;
+	dev->if_capabilities |= IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING;
+	dev->if_capabilities |= IFCAP_VLAN_HWCSUM | IFCAP_VLAN_HWFILTER;
+	dev->if_capabilities |= IFCAP_LINKSTATE | IFCAP_JUMBO_MTU;
+
 	if (mdev->LSO_support)
-		dev->hw_features |= NETIF_F_TSO | NETIF_F_TSO6;
+		dev->if_capabilities |= IFCAP_TSO4 | IFCAP_VLAN_HWTSO;
 
-	dev->vlan_features = dev->hw_features;
+	dev->if_capenable = dev->if_capabilities;
 
-	dev->hw_features |= NETIF_F_RXCSUM | NETIF_F_RXHASH;
-	dev->features = dev->hw_features | NETIF_F_HIGHDMA |
-			NETIF_F_HW_VLAN_TX | NETIF_F_HW_VLAN_RX |
-			NETIF_F_HW_VLAN_FILTER;
-	dev->hw_features |= NETIF_F_LOOPBACK;
-
-	if (mdev->dev->caps.steering_mode ==
-	    MLX4_STEERING_MODE_DEVICE_MANAGED)
-		dev->hw_features |= NETIF_F_NTUPLE;
+        /* Register for VLAN events */
+	priv->vlan_attach = EVENTHANDLER_REGISTER(vlan_config,
+            mlx4_en_vlan_rx_add_vid, priv, EVENTHANDLER_PRI_FIRST);
+	priv->vlan_detach = EVENTHANDLER_REGISTER(vlan_unconfig,
+            mlx4_en_vlan_rx_kill_vid, priv, EVENTHANDLER_PRI_FIRST);
 
 	if (mdev->dev->caps.steering_mode != MLX4_STEERING_MODE_A0)
 		dev->priv_flags |= IFF_UNICAST_FLT;
 
-	mdev->pndev[port] = dev;
+	mdev->pndev[priv->port] = dev;
 
-	netif_carrier_off(dev);
-	mlx4_en_set_default_moderation(priv);
+	priv->last_link_state = MLX4_DEV_EVENT_PORT_DOWN;
+	if_link_state_change(dev, LINK_STATE_DOWN);
+        mlx4_en_set_default_moderation(priv);
 
-	err = register_netdev(dev);
-	if (err) {
-		en_err(priv, "Netdev registration failed for port %d\n", port);
-		goto out;
-	}
-	priv->registered = 1;
+	/* Set default MAC */
+	for (i = 0; i < ETHER_ADDR_LEN; i++)
+		dev_addr[ETHER_ADDR_LEN - 1 - i] = (u8) (priv->mac >> (8 * i));
+
+
+	ether_ifattach(dev, dev_addr);
+	ifmedia_init(&priv->media, IFM_IMASK | IFM_ETH_FMASK,
+	    mlx4_en_media_change, mlx4_en_media_status);
+	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_1000_T, 0, NULL);
+	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_10G_SR, 0, NULL);
+	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_10G_CX4, 0, NULL);
+	ifmedia_add(&priv->media, IFM_ETHER | IFM_AUTO, 0, NULL);
+	ifmedia_set(&priv->media, IFM_ETHER | IFM_AUTO);
 
 	en_warn(priv, "Using %d TX rings\n", prof->tx_ring_num);
 	en_warn(priv, "Using %d RX rings\n", prof->rx_ring_num);
 
-	if (mlx4_is_master(priv->mdev->dev)) {
-		err = device_create_file(&dev->dev, &dev_attr_vf_link_state);
-		if (err) {
-			en_err(priv, "Sysfs link_state registration failed for port %d\n", port);
-			goto out;
-		}
-	}
+	priv->registered = 1;
 
-	if (mlx4_is_master(priv->mdev->dev)) {
-		for (i = 0; i < priv->mdev->dev->num_vfs; i++) {
-			priv->vf_ports[i] = kzalloc(sizeof(struct en_port), GFP_KERNEL);
-			if (!priv->vf_ports[i]) {
-				err = -ENOMEM;
-				goto out;
-			}
-			priv->vf_ports[i]->dev = priv->mdev->dev;
-			priv->vf_ports[i]->port_num = port & 0xff;
-			priv->vf_ports[i]->vport_num = i & 0xff;
-			err = kobject_init_and_add(&priv->vf_ports[i]->kobj,
-						   &en_port_type,
-						   &dev->dev.kobj,
-						   "vf%d_statistics", i);
-			if (err) {
-				kfree(priv->vf_ports[i]);
-				priv->vf_ports[i] = NULL;
-				goto out;
-			}
-		}
-	}
+        en_warn(priv, "Using %d TX rings\n", prof->tx_ring_num);
+        en_warn(priv, "Using %d RX rings\n", prof->rx_ring_num);
 
-	mlx4_en_update_loopback_state(priv->dev, priv->dev->features);
 
-	/* Configure port */
-	priv->rx_skb_size = dev->mtu + ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN;
+	priv->rx_mb_size = dev->if_mtu + ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN;
 	err = mlx4_SET_PORT_general(mdev->dev, priv->port,
-				    priv->rx_skb_size,
+				    priv->rx_mb_size,
 				    prof->tx_pause, prof->tx_ppp,
 				    prof->rx_pause, prof->rx_ppp);
 	if (err) {
@@ -2696,10 +2667,14 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 		en_err(priv, "Failed Initializing port\n");
 		goto out;
 	}
+
 	queue_delayed_work(mdev->workqueue, &priv->stats_task, STATS_DELAY);
-	if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_TS)
-		queue_delayed_work(mdev->workqueue, &priv->service_task,
-				   SERVICE_TASK_DELAY);
+
+        if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_TS)
+                queue_delayed_work(mdev->workqueue, &priv->service_task, SERVICE_TASK_DELAY);
+
+        
+
 	return 0;
 
 out:

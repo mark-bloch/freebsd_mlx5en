@@ -274,9 +274,11 @@ static void *mlx4_en_add(struct mlx4_dev *dev)
 	mlx4_foreach_port(i, dev, MLX4_PORT_TYPE_ETH)
 		mdev->port_cnt++;
 
+#if 0 - later SK
 	/* Initialize time stamp mechanism */
 	if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_TS)
 		mlx4_en_init_timestamp(mdev);
+#endif
 
 	mlx4_foreach_port(i, dev, MLX4_PORT_TYPE_ETH) {
 		if (!dev->caps.comp_pool) {
@@ -383,3 +385,16 @@ static void __exit mlx4_en_cleanup(void)
 module_init(mlx4_en_init);
 module_exit(mlx4_en_cleanup);
 
+#undef MODULE_VERSION
+#include <sys/module.h>
+static int
+mlxen_evhand(module_t mod, int event, void *arg)
+{
+        return (0);
+}
+static moduledata_t mlxen_mod = {
+        .name = "mlxen",
+	.evhand = mlxen_evhand,
+};
+DECLARE_MODULE(mlxen, mlxen_mod, SI_SUB_SMP, SI_ORDER_ANY);
+MODULE_DEPEND(mlxen, mlx4, 1, 1, 1);
