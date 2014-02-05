@@ -64,15 +64,18 @@ int mlx4_en_create_cq(struct mlx4_en_priv *priv,
 	cq->size = entries;
 	cq->buf_size = cq->size * mdev->dev->caps.cqe_size;
 
+	cq->tq = taskqueue_create_fast("mlx4_en_que", M_NOWAIT,
+                        taskqueue_thread_enqueue, &cq->tq);
+        TASK_INIT(&cq->cq_task, 0, mlx4_en_rx_que, cq);
+        taskqueue_start_threads(&cq->tq, 1, PI_NET, "%s rx cq",
+                        if_name(priv->dev));
+
 	cq->ring = ring;
 	cq->is_tx = mode;
 	spin_lock_init(&cq->lock);
 
-	/* Allocate HW buffers on provided NUMA node */
-	set_dev_node(&mdev->dev->pdev->dev, node);
 	err = mlx4_alloc_hwq_res(mdev->dev, &cq->wqres,
 				cq->buf_size, 2 * PAGE_SIZE);
-	set_dev_node(&mdev->dev->pdev->dev, mdev->dev->numa_node);
 	if (err)
 		goto err_cq;
 

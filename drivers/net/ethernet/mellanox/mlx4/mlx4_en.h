@@ -338,6 +338,8 @@ struct mlx4_en_cq {
 	u16 moder_time;
 	u16 moder_cnt;
 	struct mlx4_cqe *buf;
+	struct task cq_task;
+	struct taskqueue *tq;
 #define MLX4_EN_OPCODE_ERROR	0x1e
 	u32 tot_rx;
 	u32 tot_tx;
