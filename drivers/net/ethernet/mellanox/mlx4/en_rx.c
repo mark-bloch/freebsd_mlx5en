@@ -211,18 +211,12 @@ int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 	struct mlx4_en_rx_ring *ring;
 	int err = -ENOMEM;
 	int tmp;
-	int this_cpu = numa_node_id();
 
-	ring = kzalloc_node(sizeof(struct mlx4_en_rx_ring), GFP_KERNEL, node);
-	if (!ring) {
-		ring = kzalloc(sizeof(struct mlx4_en_rx_ring), GFP_KERNEL);
-		if (!ring) {
-			en_err(priv, "Failed to allocate RX ring structure\n");
-			return -ENOMEM;
-		}
-		ring->numa_node = this_cpu;
-	} else
-		ring->numa_node = node;
+        ring = kzalloc(sizeof(struct mlx4_en_rx_ring), GFP_KERNEL);
+        if (!ring) {
+                en_err(priv, "Failed to allocate RX ring structure\n");
+                return -ENOMEM;
+        }
  
 	ring->prod = 0;
 	ring->cons = 0;
@@ -233,23 +227,17 @@ int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 	ring->buf_size = ring->size * ring->stride + TXBB_SIZE;
 
 	tmp = size * roundup_pow_of_two(sizeof(struct mlx4_en_rx_buf));
-	ring->rx_info = vzalloc_node(tmp, node);
-	if (!ring->rx_info) {
-		ring->rx_info = vzalloc(tmp);
-		if (!ring->rx_info) {
-			err = -ENOMEM;
-			goto err_ring;
-		}
-	}
+        ring->rx_info = vzalloc(tmp);
+        if (!ring->rx_info) {
+                err = -ENOMEM;
+                goto err_ring;
+        }
 
 	en_dbg(DRV, priv, "Allocated rx_info ring at addr:%p size:%d\n",
 		 ring->rx_info, tmp);
 
-	/* Allocate HW buffers on provided NUMA node */
-	set_dev_node(&mdev->dev->pdev->dev, node);
 	err = mlx4_alloc_hwq_res(mdev->dev, &ring->wqres,
 				 ring->buf_size, 2 * PAGE_SIZE);
-	set_dev_node(&mdev->dev->pdev->dev, mdev->dev->numa_node);
 	if (err)
 		goto err_info;
 
