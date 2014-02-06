@@ -30,4 +30,7 @@
 #ifndef	_FBSD_IF_ARP_H_
 #define	_FBSD_IF_ARP_H_
 
+#include <sys/socket.h>
+#include <net/if_arp.h>
+
 #endif	/* _FBSD_IF_ARP_H_ */

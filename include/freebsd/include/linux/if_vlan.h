@@ -30,4 +30,7 @@
 #ifndef	_FBSD_IF_VLAN_H_
 #define	_FBSD_IF_VLAN_H_
 
+#include <net/ethernet.h>
+#include <net/if_vlan_var.h>
+
 #endif	/* _FBSD_IF_VLAN_H_ */

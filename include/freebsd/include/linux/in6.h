@@ -30,4 +30,8 @@
 #ifndef	_FBSD_IN6_H_
 #define	_FBSD_IN6_H_
 
+#ifndef KLD_MODULE
+#include "opt_inet6.h"
+#endif
+
 #endif	/* _FBSD_IN6_H_ */

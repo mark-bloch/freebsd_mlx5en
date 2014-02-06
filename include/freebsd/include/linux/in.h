@@ -30,4 +30,11 @@
 #ifndef	_FBSD_IN_H_
 #define	_FBSD_IN_H_
 
+#include "opt_inet.h"
+#include <netinet/in.h>
+#include <asm/byteorder.h>
+
+#define	ipv4_is_zeronet		IN_ZERONET
+#define	ipv4_is_loopback	IN_LOOPBACK
+
 #endif	/* _FBSD_IN_H_ */
