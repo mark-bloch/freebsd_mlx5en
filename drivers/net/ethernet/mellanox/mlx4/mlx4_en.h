@@ -261,7 +261,8 @@ struct mlx4_en_tx_ring {
 	struct mlx4_en_tx_info *tx_info;
 	u8 *bounce_buf;
 	u8 queue_index;
-	cpumask_t affinity_mask;
+	cpuset_t affinity_mask;
+	struct buf_ring *br;
 	u32 last_nr_txbb;
 	struct mlx4_qp qp;
 	struct mlx4_qp_context context;

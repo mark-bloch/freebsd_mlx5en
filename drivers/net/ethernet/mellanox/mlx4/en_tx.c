@@ -78,6 +78,14 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->full_size = ring->size - HEADROOM - MAX_DESC_TXBBS;
 	ring->inline_thold = min(inline_thold, MAX_INLINE);
 
+	/* Allocate the buf ring */
+	ring->br = buf_ring_alloc(MLX4_EN_DEF_TX_QUEUE_SIZE, M_DEVBUF,
+		M_WAITOK, &ring->tx_lock.m);
+	if (ring->br == NULL) {
+		en_err(priv, "Failed allocating tx_info ring\n");
+		return -ENOMEM;
+	}
+
 	tmp = size * sizeof(struct mlx4_en_tx_info);
 	ring->tx_info = vmalloc_node(tmp, node);
 	if (!ring->tx_info) {
@@ -102,10 +110,8 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->buf_size = ALIGN(size * ring->stride, MLX4_EN_PAGE_SIZE);
 
 	/* Allocate HW buffers on provided NUMA node */
-	set_dev_node(&mdev->dev->pdev->dev, node);
 	err = mlx4_alloc_hwq_res(mdev->dev, &ring->wqres, ring->buf_size,
 				 2 * PAGE_SIZE);
-	set_dev_node(&mdev->dev->pdev->dev, mdev->dev->numa_node);
 	if (err) {
 		en_err(priv, "Failed allocating hwq resources\n");
 		goto err_bounce;
@@ -150,7 +156,7 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 
 	ring->queue_index = queue_idx;
 	if (queue_idx < priv->num_tx_rings_p_up && cpu_online(queue_idx))
-		cpumask_set_cpu(queue_idx, &ring->affinity_mask);
+		CPU_SET(queue_idx, &ring->affinity_mask);
 
 	*pring = ring;
 	return 0;
