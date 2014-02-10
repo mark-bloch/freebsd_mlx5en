@@ -34,6 +34,7 @@
  */
 
 #include "mlx4_core_tests.h"
+#include <mlx4.h>
 
 MALLOC_DEFINE(M_MR_VAL, "MR buffer", "buffer for MR tests");
 
@@ -43,6 +44,14 @@ enum mlx4_mr_state {
 	MLX4_MR_EN_HW,
 	MLX4_MR_EN_SW
 };
+
+/* Taken from </drivers/net/ethernet/mellanox/mlx4/mr.c> */
+static u32 key_to_hw_index(u32 key)
+{
+        return (key << 24) | (key >> 8);
+}
+
+#define MLX4_MPT_STATUS_HW              0x00
 
 /* MTT allocation test */
 static int mtt_test (struct mlx4_dev *dev, char *log, int npages) {
@@ -186,6 +195,7 @@ int fmr_test(struct mlx4_dev *dev, char* log) {
         u64 *page_list;
         u64 iova 		= 0;
         u32 access 		= 1024;
+        u32 reset_key           = 256; /*reset key = key_to_hw_index(fmr->mr.key) & (dev->caps.num_mpts - 1) [(dev->caps.num_mpts - 1) = 0x7FFFF] */
         u32 pdn;
         u32 *lkey;
         u32 *rkey;
@@ -240,7 +250,15 @@ int fmr_test(struct mlx4_dev *dev, char* log) {
         VL_CHECK_RC(err, expected_rc, goto free_page_list , log, "map_phys_fmr failed");
         uprintf( "map_phys_fmr was successful\n");
 
-	VL_CHECK_INT_VALUE(fmr->mr.enabled, MLX4_MR_EN_HW, goto free_page_list, log, "FMR should be HW enabled (fmr->mr.enabled != MLX4_MR_EN_HW)");
+	VL_CHECK_INT_VALUE(*(u8 *) fmr->mpt, MLX4_MPT_STATUS_HW,
+                goto free_page_list, log, "mpt status should be HW");
+        VL_CHECK_LONG_LONG_INT_VALUE(fmr->mpt->length,
+                cpu_to_be64(buf->npages * (1ull << fmr->page_shift)),
+                        goto free_page_list, log, "wrong mpt length");
+        VL_CHECK_LONG_LONG_INT_VALUE(fmr->mpt->start, cpu_to_be64(iova),
+                goto free_page_list, log, "wrong mpt start");
+        VL_CHECK_EQUALS(key_to_hw_index(fmr->mr.key), 0,
+                goto free_page_list, log, "lkey = 0 after map_phys_fmr");
 
 	err = mlx4_SYNC_TPT(dev);
         VL_CHECK_RC(err, expected_rc, goto free_page_list , log, "SYNC_TPT failed");
@@ -251,7 +269,14 @@ int fmr_test(struct mlx4_dev *dev, char* log) {
         mlx4_fmr_unmap(dev, fmr, lkey, rkey);
         uprintf( "fmr_unmap was successful\n");
 
-	VL_CHECK_INT_VALUE(fmr->mr.enabled, MLX4_MR_EN_SW, goto free_page_list, log, "After un-mapping, FMR should be SW enabled (fmr->mr.enabled != MLX4_MR_EN_SW)");
+	VL_CHECK_INT_VALUE(*(u8 *)fmr->mpt, MLX4_MPT_STATUS_HW,
+                goto free_page_list, log, "After unmap mpt status should be HW");
+        VL_CHECK_LONG_LONG_INT_VALUE(fmr->mpt->length, (unsigned long) 0,
+                goto free_page_list, log, "mpt length should be 0");
+        VL_CHECK_LONG_LONG_INT_VALUE(fmr->mpt->start, (unsigned long) 0,
+                goto free_page_list, log, "mpt start should be 0");
+        VL_CHECK_INT_VALUE(key_to_hw_index(fmr->mr.key), reset_key,
+                        goto free_page_list, log, "fmr->mr.key should be 256");
 
         err = mlx4_SYNC_TPT(dev);
         VL_CHECK_RC(err, expected_rc, goto free_page_list , log, "SYNC_TPT failed");

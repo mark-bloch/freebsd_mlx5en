@@ -33,7 +33,7 @@
  *
  */
 
-#include <../../../drivers/net/ethernet/mellanox/mlx4/mlx4.h>
+#include <mlx4.h>
 #include "mlx4_core_tests.h"
 
 MALLOC_DEFINE(M_SRQ_VAL, "SRQ buffer", "buffer for SRQ tests");

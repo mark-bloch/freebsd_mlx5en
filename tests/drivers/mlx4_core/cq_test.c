@@ -33,7 +33,7 @@
  *
  */
 
-#include <../drivers/net/ethernet/mellanox/mlx4/mlx4.h>
+#include <mlx4.h>
 #include <linux/mlx4/cq.h>
 #include "mlx4_core_tests.h"
 

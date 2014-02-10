@@ -33,7 +33,7 @@
  *
  */
 
-#include <../drivers/net/ethernet/mellanox/mlx4/mlx4.h>
+#include <mlx4.h>
 #include "mlx4_core_tests.h"
 #include <linux/mlx4/qp.h>
 
@@ -274,6 +274,7 @@ int SET_stats_bitmap_test(struct mlx4_dev *dev, char *log) {
          * NUM_PKT_STATS | NUM_VPORT_STATS | NUM_PORT_STATS             *
          */
         int ret_val             		= FAIL;
+        u64 stats_bitmap                        = 1024;
 
         mlx4_set_stats_bitmap(dev, &stats_bitmap);
         uprintf("mlx4_set_stats_bitmap was successful\n");
@@ -303,7 +304,7 @@ int SET_stats_bitmap_test(struct mlx4_dev *dev, char *log) {
 */
         ret_val = SUCCESS;
 
-out:
+//out:
         return ret_val;
 }
 

@@ -35,7 +35,7 @@
 
 #include <linux/jiffies.h>
 #include "mlx4_core_tests.h"
-#include <../../../drivers/net/ethernet/mellanox/mlx4/mlx4.h>
+#include <mlx4.h>
 
 /* Taken from /drivers/net/ethernet/mellanox/mlx4/mlx4_en.h */
 #define MLX4_EN_WOL_DO_MODIFY (1ULL << 63)
