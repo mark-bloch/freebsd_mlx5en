@@ -135,6 +135,7 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 	int do_if_stat = 1;
 	unsigned long period = (unsigned long) (jiffies - priv->last_ifq_jiffies);
 	struct mlx4_en_vport_stats tmp_vport_stats;
+        struct net_device *dev;
 
 	if (jiffies_to_msecs(period) < EN_IFQ_MIN_INTERVAL ||
 				priv->counter_index == 0xff)
@@ -568,17 +569,16 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 
 	if (!mlx4_is_mfunc(mdev->dev)) {
 		/* netdevice stats format */
-		priv->stats.rx_packets = priv->pkstats.rx_packets;
-		priv->stats.tx_packets = priv->pkstats.tx_packets;
-		priv->stats.rx_bytes = priv->pkstats.rx_bytes;
-		priv->stats.tx_bytes = priv->pkstats.tx_bytes;
-		priv->stats.rx_errors = priv->pkstats.rx_errors;
-		priv->stats.rx_dropped = priv->pkstats.rx_dropped;
-		priv->stats.tx_dropped = priv->pkstats.tx_dropped;
-		priv->stats.multicast = priv->pkstats.rx_multicast_packets;
-		priv->stats.rx_length_errors = priv->pkstats.rx_length_errors;
-		priv->stats.rx_over_errors = priv->pkstats.rx_over_errors;
-		priv->stats.rx_crc_errors = priv->pkstats.rx_crc_errors;
+                dev                     = mdev->pndev[port];
+		dev->if_ipackets        = priv->pkstats.rx_packets;
+		dev->if_opackets        = priv->pkstats.tx_packets;
+		dev->if_ibytes          = priv->pkstats.rx_bytes;
+		dev->if_obytes          = priv->pkstats.tx_bytes;
+		dev->if_ierrors         = priv->pkstats.rx_errors;
+		dev->if_iqdrops         = priv->pkstats.rx_dropped;
+		dev->if_imcasts         = priv->pkstats.rx_multicast_packets;
+                dev->if_omcasts         = priv->pkstats.tx_multicast_packets;
+                dev->if_collisions      = 0;
 	}
 
 	spin_unlock_bh(&priv->stats_lock);

@@ -2485,7 +2485,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	if_initname(dev, "mlxen", atomic_fetchadd_int(&mlx4_en_unit, 1));
 	dev->if_mtu = ETHERMTU;
 	dev->if_baudrate = 1000000000;
-	dev->if_init = mlx4_en_init;
+	dev->if_init = mlx4_en_open;
 	dev->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	dev->if_ioctl = mlx4_en_ioctl;
 	dev->if_transmit = mlx4_en_transmit;

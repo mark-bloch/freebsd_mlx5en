@@ -46,7 +46,10 @@ msecs_to_jiffies(int msec)
 	return (tvtohz(&tv));
 }
 
-#define	jiffies	ticks
+
+#define jiffies                 ticks
+#define jiffies_to_msecs(x)     (((int64_t)(x)) * 1000 / hz)
+
 
 #define	time_after(a, b)	((long)(b) - (long)(a) < 0)
 #define	time_before(a, b)	time_after(b,a)
