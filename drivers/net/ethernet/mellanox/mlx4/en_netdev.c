@@ -1485,14 +1485,14 @@ int mlx4_en_start_port(struct net_device *dev)
 	       sizeof(struct ethtool_flow_id) * MAX_NUM_OF_FS_RULES);
 
 	/* Calculate Rx buf size */
-	dev->mtu = min(dev->mtu, priv->max_mtu);
-	priv->rx_skb_size = dev->mtu + ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN;
-	priv->rx_alloc_size = max_t(int, 2 * roundup_pow_of_two(priv->rx_skb_size),
+	dev->if_mtu = min(dev->if_mtu, priv->max_mtu);
+	priv->rx_mb_size = dev->if_mtu + ETH_HLEN + VLAN_HLEN + ETH_FCS_LEN;
+	priv->rx_alloc_size = max_t(int, 2 * roundup_pow_of_two(priv->rx_mb_size),
 				    PAGE_SIZE);
 	priv->rx_alloc_order = get_order(priv->rx_alloc_size);
-	priv->rx_buf_size = roundup_pow_of_two(priv->rx_skb_size);
+	priv->rx_buf_size = roundup_pow_of_two(priv->rx_mb_size);
 	priv->log_rx_info = ROUNDUP_LOG2(sizeof(struct mlx4_en_rx_buf));
-	en_dbg(DRV, priv, "Rx buf size:%d\n", priv->rx_skb_size);
+	en_dbg(DRV, priv, "Rx buf size:%d\n", priv->rx_mb_size);
 
 	/* Configure rx cq's and rings */
 	err = mlx4_en_activate_rx_rings(priv);
@@ -1590,7 +1590,7 @@ int mlx4_en_start_port(struct net_device *dev)
 
 	/* Configure port */
 	err = mlx4_SET_PORT_general(mdev->dev, priv->port,
-				    priv->rx_skb_size,
+				    priv->rx_mb_size,
 				    priv->prof->tx_pause,
 				    priv->prof->tx_ppp,
 				    priv->prof->rx_pause,
@@ -1632,7 +1632,10 @@ int mlx4_en_start_port(struct net_device *dev)
 	mlx4_set_stats_bitmap(mdev->dev, priv->stats_bitmap);
 
 	priv->port_up = true;
-	netif_tx_start_all_queues(dev);
+
+        /* Enable the queues. */
+        dev->if_drv_flags &= ~IFF_DRV_OACTIVE;
+        dev->if_drv_flags |= IFF_DRV_RUNNING;
 #ifdef CONFIG_DEBUG_FS
 	mlx4_en_create_debug_files(priv);
 #endif
