@@ -99,7 +99,7 @@ static void mlx4_en_init_rx_desc(struct mlx4_en_priv *priv,
 	struct mlx4_en_rx_desc *rx_desc = ring->buf + ring->stride * index;
 
 	rx_desc->data[0].byte_count =
-		cpu_to_be32(ring->rx_skb_size);
+		cpu_to_be32(ring->rx_mb_size);
 	rx_desc->data[0].lkey = cpu_to_be32(priv->mdev->mr.key);
 }
 
@@ -282,7 +282,7 @@ int mlx4_en_activate_rx_rings(struct mlx4_en_priv *priv)
 		ring->rx_alloc_order = priv->rx_alloc_order;
 		ring->rx_alloc_size = priv->rx_alloc_size;
 		ring->rx_buf_size = priv->rx_buf_size;
-		ring->rx_skb_size = priv->rx_skb_size;
+                ring->rx_mb_size = priv->rx_mb_size;
 
 		ring->stride = stride;
 		if (ring->stride <= TXBB_SIZE)
