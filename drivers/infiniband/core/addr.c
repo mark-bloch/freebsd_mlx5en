@@ -38,6 +38,7 @@
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/module.h>
+#include <linux/notifier.h>
 #include <net/arp.h>
 #include <net/neighbour.h>
 #include <net/route.h>
