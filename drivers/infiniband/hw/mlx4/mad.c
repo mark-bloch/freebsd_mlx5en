@@ -93,7 +93,7 @@ static void __propagate_pkey_ev(struct mlx4_ib_dev *dev, int port_num,
 __be64 mlx4_ib_gen_node_guid(void)
 {
 #define NODE_GUID_HI	((u64) (((u64)IB_OPENIB_OUI) << 40))
-	return cpu_to_be64(NODE_GUID_HI | random32());
+	return cpu_to_be64(NODE_GUID_HI | random());
 }
 
 __be64 mlx4_ib_get_new_demux_tid(struct mlx4_ib_demux_ctx *ctx)
@@ -717,11 +717,11 @@ static int ib_process_mad(struct ib_device *ibdev, int mad_flags, u8 port_num,
 			be16_to_cpu(in_mad->mad_hdr.attr_id));
 		if (in_wc->wc_flags & IB_WC_GRH) {
 			pr_debug("sgid_hi:0x%016llx sgid_lo:0x%016llx\n",
-				 be64_to_cpu(in_grh->sgid.global.subnet_prefix),
-				 be64_to_cpu(in_grh->sgid.global.interface_id));
+				 (unsigned long long)be64_to_cpu(in_grh->sgid.global.subnet_prefix),
+				 (unsigned long long)be64_to_cpu(in_grh->sgid.global.interface_id));
 			pr_debug("dgid_hi:0x%016llx dgid_lo:0x%016llx\n",
-				 be64_to_cpu(in_grh->dgid.global.subnet_prefix),
-				 be64_to_cpu(in_grh->dgid.global.interface_id));
+				 (unsigned long long)be64_to_cpu(in_grh->dgid.global.subnet_prefix),
+				 (unsigned long long)be64_to_cpu(in_grh->dgid.global.interface_id));
 		}
 	}
 
@@ -1715,12 +1715,12 @@ static void mlx4_ib_tunnel_comp_worker(struct work_struct *work)
 							     (MLX4_NUM_TUNNEL_BUFS - 1));
 				if (ret)
 					pr_err("Failed reposting tunnel "
-					       "buf:%lld\n", wc.wr_id);
+					       "buf:%lld\n", (unsigned long long)wc.wr_id);
 				break;
 			case IB_WC_SEND:
 				pr_debug("received tunnel send completion:"
 					 "wrid=0x%llx, status=0x%x\n",
-					 wc.wr_id, wc.status);
+					 (unsigned long long)wc.wr_id, wc.status);
 				ib_destroy_ah(tun_qp->tx_ring[wc.wr_id &
 					      (MLX4_NUM_TUNNEL_BUFS - 1)].ah);
 				tun_qp->tx_ring[wc.wr_id & (MLX4_NUM_TUNNEL_BUFS - 1)].ah
@@ -1736,7 +1736,7 @@ static void mlx4_ib_tunnel_comp_worker(struct work_struct *work)
 		} else  {
 			pr_debug("mlx4_ib: completion error in tunnel: %d."
 				 " status = %d, wrid = 0x%llx\n",
-				 ctx->slave, wc.status, wc.wr_id);
+				 ctx->slave, wc.status, (unsigned long long)wc.wr_id);
 			if (!MLX4_TUN_IS_RECV(wc.wr_id)) {
 				ib_destroy_ah(tun_qp->tx_ring[wc.wr_id &
 					      (MLX4_NUM_TUNNEL_BUFS - 1)].ah);
@@ -1783,7 +1783,7 @@ static int create_pv_sqp(struct mlx4_ib_demux_pv_ctx *ctx,
 	qp_init_attr.init_attr.cap.max_recv_sge = 1;
 	if (create_tun) {
 		qp_init_attr.init_attr.qp_type = IB_QPT_UD;
-		qp_init_attr.init_attr.create_flags = MLX4_IB_SRIOV_TUNNEL_QP;
+		qp_init_attr.init_attr.create_flags = (enum ib_qp_create_flags)MLX4_IB_SRIOV_TUNNEL_QP;
 		qp_init_attr.port = ctx->port;
 		qp_init_attr.slave = ctx->slave;
 		qp_init_attr.proxy_qp_type = qp_type;
@@ -1791,7 +1791,7 @@ static int create_pv_sqp(struct mlx4_ib_demux_pv_ctx *ctx,
 			   IB_QP_QKEY | IB_QP_PORT;
 	} else {
 		qp_init_attr.init_attr.qp_type = qp_type;
-		qp_init_attr.init_attr.create_flags = MLX4_IB_SRIOV_SQP;
+		qp_init_attr.init_attr.create_flags = (enum ib_qp_create_flags)MLX4_IB_SRIOV_SQP;
 		qp_attr_mask_INIT = IB_QP_STATE | IB_QP_PKEY_INDEX | IB_QP_QKEY;
 	}
 	qp_init_attr.init_attr.port_num = ctx->port;
@@ -1893,7 +1893,7 @@ static void mlx4_ib_sqp_comp_worker(struct work_struct *work)
 				if (mlx4_ib_post_pv_qp_buf(ctx, sqp, wc.wr_id &
 							   (MLX4_NUM_TUNNEL_BUFS - 1)))
 					pr_err("Failed reposting SQP "
-					       "buf:%lld\n", wc.wr_id);
+					       "buf:%lld\n", (unsigned long long)wc.wr_id);
 				break;
 			default:
 				BUG_ON(1);
@@ -1902,7 +1902,7 @@ static void mlx4_ib_sqp_comp_worker(struct work_struct *work)
 		} else  {
 			pr_debug("mlx4_ib: completion error in tunnel: %d."
 				 " status = %d, wrid = 0x%llx\n",
-				 ctx->slave, wc.status, wc.wr_id);
+				 ctx->slave, wc.status, (unsigned long long)wc.wr_id);
 			if (!MLX4_TUN_IS_RECV(wc.wr_id)) {
 				ib_destroy_ah(sqp->tx_ring[wc.wr_id &
 					      (MLX4_NUM_TUNNEL_BUFS - 1)].ah);
