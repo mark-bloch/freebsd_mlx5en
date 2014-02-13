@@ -331,7 +331,8 @@ struct mlx4_en_cq {
 	int                     ring;
 	spinlock_t              lock;
 	struct net_device      *dev;
-	struct napi_struct	napi;
+        /* Per-core Tx cq processing support */
+        struct timer_list timer;
 	int size;
 	int buf_size;
 	unsigned vector;
