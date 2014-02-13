@@ -180,13 +180,13 @@ void mlx4_en_destroy_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq **pcq)
 
 void mlx4_en_deactivate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq)
 {
-	napi_disable(&cq->napi);
-#ifdef CONFIG_NET_RX_BUSY_POLL
-	napi_hash_del(&cq->napi);
-#endif
-	netif_napi_del(&cq->napi);
+        struct mlx4_en_dev *mdev = priv->mdev;
 
-	mlx4_cq_free(priv->mdev->dev, &cq->mcq);
+        taskqueue_drain(cq->tq, &cq->cq_task);
+        if (cq->is_tx)
+                del_timer(&cq->timer);
+
+        mlx4_cq_free(mdev->dev, &cq->mcq);
 }
 
 /* Set rx cq moderation parameters */
