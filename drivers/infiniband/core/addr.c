@@ -92,16 +92,22 @@ void rdma_addr_unregister_client(struct rdma_addr_client *client)
 }
 EXPORT_SYMBOL(rdma_addr_unregister_client);
 
-int rdma_copy_addr(struct rdma_dev_addr *dev_addr, struct net_device *dev,
-		     const unsigned char *dst_dev_addr)
+int rdma_copy_addr(struct rdma_dev_addr *dev_addr, struct ifnet *dev,
+                     const unsigned char *dst_dev_addr)
 {
-	dev_addr->dev_type = dev->type;
-	memcpy(dev_addr->src_dev_addr, dev->dev_addr, MAX_ADDR_LEN);
-	memcpy(dev_addr->broadcast, dev->broadcast, MAX_ADDR_LEN);
-	if (dst_dev_addr)
-		memcpy(dev_addr->dst_dev_addr, dst_dev_addr, MAX_ADDR_LEN);
-	dev_addr->bound_dev_if = dev->ifindex;
-	return 0;
+        if (dev->if_type == IFT_INFINIBAND)
+                dev_addr->dev_type = ARPHRD_INFINIBAND;
+        else if (dev->if_type == IFT_ETHER)
+                dev_addr->dev_type = ARPHRD_ETHER;
+        else
+                dev_addr->dev_type = 0;
+        memcpy(dev_addr->src_dev_addr, IF_LLADDR(dev), dev->if_addrlen);
+        memcpy(dev_addr->broadcast, __DECONST(char *, dev->if_broadcastaddr),
+            dev->if_addrlen);
+        if (dst_dev_addr)
+                memcpy(dev_addr->dst_dev_addr, dst_dev_addr, dev->if_addrlen);
+        dev_addr->bound_dev_if = dev->if_index;
+        return 0;
 }
 EXPORT_SYMBOL(rdma_copy_addr);
 
