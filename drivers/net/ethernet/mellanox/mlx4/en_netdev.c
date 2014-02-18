@@ -1682,12 +1682,6 @@ void mlx4_en_stop_port(struct net_device *dev)
 	/* close port*/
 	mlx4_CLOSE_PORT(mdev->dev, priv->port);
 
-	/* Synchronize with tx routine */
-	netif_tx_lock_bh(dev);
-	netif_carrier_off(dev);
-	netif_tx_stop_all_queues(dev);
-	netif_tx_unlock_bh(dev);
-
 	/* Set port as not active */
 	priv->port_up = false;
 	if (priv->counter_index != 0xff) {
@@ -1875,7 +1869,6 @@ static int mlx4_en_close(struct net_device *dev)
 	mutex_lock(&mdev->state_lock);
 
 	mlx4_en_stop_port(dev);
-	netif_carrier_off(dev);
 
 	mutex_unlock(&mdev->state_lock);
 	return 0;
