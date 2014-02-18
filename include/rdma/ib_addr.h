@@ -31,7 +31,7 @@
  * SOFTWARE.
  */
 
-#if !defined(IB_ADDR_H)
+#ifndef IB_ADDR_H
 #define IB_ADDR_H
 
 #include <linux/in.h>
@@ -43,6 +43,8 @@
 #include <linux/if_vlan.h>
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_pack.h>
+#include <net/if_inet6.h>
+#include <net/ipv6.h>
 
 struct rdma_addr_client {
 	atomic_t refcount;
@@ -178,20 +180,12 @@ static inline int rdma_gid2ip(struct sockaddr *out, union ib_gid *gid)
 	return 0;
 }
 
+/* This func is called only in loopback ip address (127.0.0.1)
+ * case in which sgid is not relevant
+ */
 static inline void iboe_addr_get_sgid(struct rdma_dev_addr *dev_addr,
 				      union ib_gid *gid)
 {
-	struct net_device *dev;
-	struct in_device *ip4;
-
-	dev = dev_get_by_index(&init_net, dev_addr->bound_dev_if);
-	if (dev) {
-		ip4 = (struct in_device *)dev->ip_ptr;
-		if (ip4 && ip4->ifa_list && ip4->ifa_list->ifa_address)
-			ipv6_addr_set_v4mapped(ip4->ifa_list->ifa_address,
-					       (struct in6_addr *)gid);
-		dev_put(dev);
-	}
 }
 
 static inline void rdma_addr_get_sgid(struct rdma_dev_addr *dev_addr, union ib_gid *gid)
