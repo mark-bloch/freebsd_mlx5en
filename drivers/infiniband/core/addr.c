@@ -140,21 +140,28 @@ int rdma_translate_ip(struct sockaddr *addr, struct rdma_dev_addr *dev_addr,
 		dev_put(dev);
 		break;
 
-#if IS_ENABLED(CONFIG_IPV6)
+#if defined(INET6)
 	case AF_INET6:
-		rcu_read_lock();
-		for_each_netdev_rcu(&init_net, dev) {
-			if (ipv6_chk_addr(&init_net,
-					  &((struct sockaddr_in6 *) addr)->sin6_addr,
-					  dev, 1)) {
-				ret = rdma_copy_addr(dev_addr, dev, NULL);
-				if (vlan_id)
-					*vlan_id = rdma_vlan_dev_vlan_id(dev);
+		{
+		struct sockaddr_in6 *sin6;
+		struct ifaddr *ifa;
+		in_port_t port;
+
+		sin6 = (struct sockaddr_in6 *)addr;
+		port = sin6->sin6_port;
+		sin6->sin6_port = 0;
+		ifa = ifa_ifwithaddr(addr);
+		sin6->sin6_port = port;
+		if (ifa == NULL) {
+			ret = -ENODEV;
 				break;
-			}
 		}
-		rcu_read_unlock();
+		ret = rdma_copy_addr(dev_addr, ifa->ifa_ifp, NULL);
+		if (vlan_id)
+                        *vlan_id = rdma_vlan_dev_vlan_id(ifa->ifa_ifp);
+		ifa_free(ifa);
 		break;
+		}
 #endif
 	}
 	return ret;
