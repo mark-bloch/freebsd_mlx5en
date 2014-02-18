@@ -348,8 +348,7 @@ int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring)
 		 ring->cons, ring->prod);
 
 	if ((u32) (ring->prod - ring->cons) > ring->size) {
-		if (netif_msg_tx_err(priv))
-			en_warn(priv, "Tx consumer passed producer!\n");
+                en_warn(priv, "Tx consumer passed producer!\n");
 		return 0;
 	}
 
