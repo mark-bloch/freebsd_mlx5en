@@ -1767,16 +1767,6 @@ void mlx4_en_stop_port(struct net_device *dev)
 	/* Free RX Rings */
 	for (i = 0; i < priv->rx_ring_num; i++) {
 		struct mlx4_en_cq *cq = priv->rx_cq[i];
-
-		local_bh_disable();
-		while (!mlx4_en_cq_lock_napi(cq)) {
-			pr_info("CQ %d locked\n", i);
-			mdelay(1);
-		}
-		local_bh_enable();
-
-		while (test_bit(NAPI_STATE_SCHED, &cq->napi.state))
-			msleep(1);
 		mlx4_en_deactivate_rx_ring(priv, priv->rx_ring[i]);
 		mlx4_en_deactivate_cq(priv, cq);
 	}
