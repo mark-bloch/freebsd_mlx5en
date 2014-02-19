@@ -41,7 +41,6 @@
 #include <linux/kobject.h>
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
-#include <linux/net_tstamp.h>
 #ifdef CONFIG_MLX4_EN_DCB
 #include <linux/dcbnl.h>
 #endif
@@ -401,8 +400,6 @@ struct mlx4_en_dev {
 	u32			priv_pdn;
 	spinlock_t		uar_lock;
 	u8			mac_removed[MLX4_MAX_PORTS + 1];
-	struct cyclecounter	cycles;
-	struct timecounter	clock;
 	unsigned long		last_overflow_check;
 	unsigned long		overflow_period;
 };
@@ -445,11 +442,6 @@ struct mlx4_en_mc_list {
 
 #endif
 
-struct ethtool_flow_id {
-	struct list_head list;
-	struct ethtool_rx_flow_spec flow_spec;
-	u64 id;
-};
 
 enum {
 	MLX4_EN_FLAG_PROMISC		= (1 << 0),
@@ -481,11 +473,8 @@ struct mlx4_en_priv {
 	struct mlx4_en_port_profile *prof;
 	struct net_device *dev;
 	unsigned long active_vlans[BITS_TO_LONGS(VLAN_N_VID)];
-	struct net_device_stats stats;
-	struct net_device_stats ret_stats;
 	struct mlx4_en_port_state port_state;
 	spinlock_t stats_lock;
-	struct ethtool_flow_id ethtool_rules[MAX_NUM_OF_FS_RULES];
 	/* To allow rules removal while port is going down */
 	struct list_head ethtool_list;
 
@@ -559,7 +548,6 @@ struct mlx4_en_priv {
 	bool wol;
 	struct device *ddev;
 	struct dentry *dev_root;
-	struct hwtstamp_config hwtstamp_config;
 	u32 counter_index;
 #define MLX4_EN_MAC_HASH_IDX 5
 	struct hlist_head mac_hash[MLX4_EN_MAC_HASH_SIZE];
@@ -591,7 +579,6 @@ struct mlx4_mac_entry {
 	struct hlist_node hlist;
 	unsigned char mac[ETH_ALEN + 2];
 	u64 reg_id;
-	struct rcu_head rcu;
 };
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
@@ -707,9 +694,6 @@ static inline bool mlx4_en_cq_ll_polling(struct mlx4_en_cq *cq)
 
 #define MLX4_EN_WOL_DO_MODIFY (1ULL << 63)
 
-void mlx4_en_update_loopback_state(struct net_device *dev,
-				netdev_features_t features);
-
 void mlx4_en_destroy_netdev(struct net_device *dev);
 int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			struct mlx4_en_port_profile *prof);
@@ -732,7 +716,6 @@ int mlx4_en_arm_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
 
 void mlx4_en_tx_irq(struct mlx4_cq *mcq);
 u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb);
-netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev);
 
 int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 			   struct mlx4_en_tx_ring **pring,
@@ -757,8 +740,7 @@ void mlx4_en_deactivate_rx_ring(struct mlx4_en_priv *priv,
 int mlx4_en_process_rx_cq(struct net_device *dev,
 			  struct mlx4_en_cq *cq,
 			  int budget);
-int mlx4_en_poll_rx_cq(struct napi_struct *napi, int budget);
-int mlx4_en_poll_tx_cq(struct napi_struct *napi, int budget);
+void mlx4_en_poll_tx_cq(unsigned long data);
 void mlx4_en_fill_qp_context(struct mlx4_en_priv *priv, int size, int stride,
 		int is_tx, int rss, int qpn, int cqn, int user_prio,
 		struct mlx4_qp_context *context);
@@ -812,17 +794,9 @@ void mlx4_en_ptp_overflow_check(struct mlx4_en_dev *mdev);
 #define SKBTX_IN_PROGRESS (1 << 2)
 
 u64 mlx4_en_get_cqe_ts(struct mlx4_cqe *cqe);
-void mlx4_en_fill_hwtstamps(struct mlx4_en_dev *mdev,
-			    struct skb_shared_hwtstamps *hwts,
-			    u64 timestamp);
-void mlx4_en_init_timestamp(struct mlx4_en_dev *mdev);
-int mlx4_en_timestamp_config(struct net_device *dev, int tx_type, int rx_filter);
 
 /* Functions for caching and restoring statistics */
 int mlx4_en_get_sset_count(struct net_device *dev, int sset);
-void mlx4_en_get_ethtool_stats(struct net_device *dev,
-			       struct ethtool_stats *stats,
-			       u64 *data);
 void mlx4_en_restore_ethtool_stats(struct mlx4_en_priv *priv,
 				    u64 *data);
 
@@ -842,9 +816,17 @@ extern const struct ethtool_ops mlx4_en_ethtool_ops;
  * printk / logging functions
  */
 
-__printf(3, 4)
-int en_print(const char *level, const struct mlx4_en_priv *priv,
-	     const char *format, ...);
+#define en_print(level, priv, format, arg...)                   \
+        {                                                       \
+        if ((priv)->registered)                                 \
+                printk(level "%s: %s: " format, DRV_NAME,       \
+                        (priv->dev)->if_xname, ## arg); \
+        else                                                    \
+                printk(level "%s: %s: Port %d: " format,        \
+                        DRV_NAME, dev_name(&priv->mdev->pdev->dev), \
+                        (priv)->port, ## arg);                  \
+        }
+
 
 #define en_dbg(mlevel, priv, format, arg...)			\
 do {								\

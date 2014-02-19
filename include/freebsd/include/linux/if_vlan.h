@@ -33,4 +33,6 @@
 #include <net/ethernet.h>
 #include <net/if_vlan_var.h>
 
+#define VLAN_N_VID              4096
+
 #endif	/* _FBSD_IF_VLAN_H_ */

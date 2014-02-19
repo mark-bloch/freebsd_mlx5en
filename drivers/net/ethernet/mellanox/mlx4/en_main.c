@@ -31,7 +31,6 @@
  *
  */
 
-#include <linux/cpumask.h>
 #include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/netdevice.h>
@@ -75,50 +74,6 @@ MLX4_EN_PARM_INT(pfcrx, 0, "Priority based Flow Control policy on RX[7:0]."
 #define MAX_PFC_TX	0xff
 #define MAX_PFC_RX	0xff
 
-int en_print(const char *level, const struct mlx4_en_priv *priv,
-	     const char *format, ...)
-{
-	va_list args;
-	struct va_format vaf;
-	int i;
-
-	va_start(args, format);
-
-	vaf.fmt = format;
-	vaf.va = &args;
-	if (priv->registered)
-		i = printk("%s%s: %s: %pV",
-			   level, DRV_NAME, priv->dev->name, &vaf);
-	else
-		i = printk("%s%s: %s: Port %d: %pV",
-			   level, DRV_NAME, dev_name(&priv->mdev->pdev->dev),
-			   priv->port, &vaf);
-	va_end(args);
-
-	return i;
-}
-
-void mlx4_en_update_loopback_state(struct net_device *dev,
-				   netdev_features_t features)
-{
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-
-	priv->flags &= ~(MLX4_EN_FLAG_RX_FILTER_NEEDED|
-			MLX4_EN_FLAG_ENABLE_HW_LOOPBACK);
-
-	/* Drop the packet if SRIOV is not enabled
-	 * and not performing the selftest or flb disabled
-	 */
-	if (mlx4_is_mfunc(priv->mdev->dev) &&
-	    !(features & NETIF_F_LOOPBACK) && !priv->validate_loopback)
-		priv->flags |= MLX4_EN_FLAG_RX_FILTER_NEEDED;
-
-	/* Set dmac in Tx WQE if we are in SRIOV mode or if loopback selftest
-	 * is requested
-	 */
-	if (mlx4_is_mfunc(priv->mdev->dev) || priv->validate_loopback)
-		priv->flags |= MLX4_EN_FLAG_ENABLE_HW_LOOPBACK;
-}
 
 static int mlx4_en_get_profile(struct mlx4_en_dev *mdev)
 {
@@ -126,7 +81,7 @@ static int mlx4_en_get_profile(struct mlx4_en_dev *mdev)
 	int i;
 
 	params->udp_rss = udp_rss;
-	params->num_tx_rings_p_up = min_t(int, num_online_cpus(),
+	params->num_tx_rings_p_up = min_t(int, mp_ncpus,
 			MLX4_EN_MAX_TX_RING_P_UP);
 	if (params->udp_rss && !(mdev->dev->caps.flags
 					& MLX4_DEV_CAP_FLAG_UDP_RSS)) {
@@ -274,11 +229,6 @@ static void *mlx4_en_add(struct mlx4_dev *dev)
 	mlx4_foreach_port(i, dev, MLX4_PORT_TYPE_ETH)
 		mdev->port_cnt++;
 
-#if 0 - later SK
-	/* Initialize time stamp mechanism */
-	if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_TS)
-		mlx4_en_init_timestamp(mdev);
-#endif
 
 	mlx4_foreach_port(i, dev, MLX4_PORT_TYPE_ETH) {
 		if (!dev->caps.comp_pool) {
@@ -344,29 +294,12 @@ static struct mlx4_interface mlx4_en_interface = {
 	.protocol	= MLX4_PROT_ETH,
 };
 
-void mlx4_en_verify_params(void)
-{
-	if (pfctx > MAX_PFC_TX) {
-		pr_warn("mlx4_en: WARNING: illegal module parameter pfctx 0x%x - "
-		       "should be in range 0-0x%x, will be changed to default (0)\n",
-		       pfctx, MAX_PFC_TX);
-		pfctx = 0;
-	}
-
-	if (pfcrx > MAX_PFC_RX) {
-		pr_warn("mlx4_en: WARNING: illegal module parameter pfcrx 0x%x - "
-		       "should be in range 0-0x%x, will be changed to default (0)\n",
-		       pfcrx, MAX_PFC_RX);
-		pfcrx = 0;
-	}
-}
 
 static int __init mlx4_en_init(void)
 {
-	int err = 0;
 
-	mlx4_en_verify_params();
 #ifdef CONFIG_DEBUG_FS
+	int err = 0;
 	err = mlx4_en_register_debugfs();
 	if (err)
 		pr_err(KERN_ERR "Failed to register debugfs\n");
