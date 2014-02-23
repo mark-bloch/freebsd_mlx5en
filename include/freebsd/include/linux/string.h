@@ -30,9 +30,24 @@
 #ifndef	_FBSD_STRING_H_
 #define	_FBSD_STRING_H_
 
+#include <linux/types.h>
+#include <linux/gfp.h>
+#include <linux/slab.h>
+
 #include <sys/libkern.h>
 
 #define strnicmp strncasecmp
 
+
+static inline void *
+kmemdup(const void *src, size_t len, gfp_t gfp)
+{
+        void *dst;
+
+        dst = kmalloc(len, gfp);
+        if (dst)
+                memcpy(dst, src, len);
+        return (dst);
+}
 
 #endif	/* _FBSD_STRING_H_ */
