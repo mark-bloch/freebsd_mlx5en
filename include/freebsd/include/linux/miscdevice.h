@@ -27,15 +27,47 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_RANDOM_H_
-#define	_FBSD_RANDOM_H_
+#ifndef	_FBSD_MISCDEVICE_H_
+#define	_FBSD_MISCDEVICE_H_
 
-#include <sys/random.h>
+#define	MISC_DYNAMIC_MINOR	-1
 
-static inline void
-get_random_bytes(void *buf, int nbytes)
+#include <linux/device.h>
+#include <linux/cdev.h>
+
+struct miscdevice  {
+	const char	*name;
+	struct device	*this_device;
+	const struct file_operations *fops;
+	struct cdev	*cdev;
+	int		minor;
+};
+
+extern struct class	miscclass;
+
+static inline int
+misc_register(struct miscdevice *misc)
 {
-	read_random(buf, nbytes);
+	misc->this_device = device_create(&miscclass, &linux_rootdev, 0, misc, 
+	    misc->name);
+	misc->cdev = cdev_alloc();
+	if (misc->cdev == NULL)
+		return -ENOMEM;
+	misc->cdev->owner = THIS_MODULE;
+	misc->cdev->ops = misc->fops;
+	kobject_set_name(&misc->cdev->kobj, misc->name);
+        if (cdev_add(misc->cdev, misc->this_device->devt, 1))
+		return -EINVAL;
+	return (0);
 }
 
-#endif	/* _FBSD_RANDOM_H_ */
+static inline int
+misc_deregister(struct miscdevice *misc)
+{
+	device_destroy(&miscclass, misc->this_device->devt);
+	cdev_del(misc->cdev);
+
+	return (0);
+}
+
+#endif	/* _FBSD_MISCDEVICE_H_ */
