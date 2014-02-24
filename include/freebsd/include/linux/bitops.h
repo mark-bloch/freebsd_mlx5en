@@ -482,4 +482,9 @@ bitmap_release_region(unsigned long *bitmap, int pos, int order)
 }
 
 
+#define for_each_set_bit(bit, addr, size) \
+	for ((bit) = find_first_bit((addr), (size));		\
+	     (bit) < (size);					\
+	     (bit) = find_next_bit((addr), (size), (bit) + 1))
+
 #endif	/* FBSD_BITOPS_H_ */

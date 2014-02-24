@@ -32,6 +32,8 @@
 
 #include <sys/errno.h>
 
+#define ECOMM           ESTALE
+#define ENODATA         ECONNREFUSED
 #define ERESTARTSYS     ERESTART
 #define ENOTSUPP        EOPNOTSUPP
 
