@@ -2830,6 +2830,9 @@ struct ib_dct *ib_create_dct(struct ib_pd *pd, struct ib_dct_init_attr *attr,
 int ib_destroy_dct(struct ib_dct *dct);
 int ib_query_dct(struct ib_dct *dct, struct ib_dct_attr *attr);
 
+int ib_query_values(struct ib_device *device,
+                   int q_values, struct ib_device_values *values);
+
 static inline void ib_active_speed_enum_to_rate(u8 active_speed,
 						int *rate,
 						char **speed)
