@@ -39,13 +39,14 @@
 #include <linux/bitops.h>
 #include <linux/random.h>
 #include <linux/moduleparam.h>
+#include <linux/rbtree.h>
 
 #include <rdma/ib_cache.h>
 #include "sa.h"
 
 static int mcast_leave_retries = 3;
 
-static const struct kernel_param_ops retry_ops = {
+/*static const struct kernel_param_ops retry_ops = {
 	.set = param_set_int,
 	.get = param_get_int,
 };
@@ -53,7 +54,7 @@ static const struct kernel_param_ops retry_ops = {
 module_param_cb(mcast_leave_retries, &retry_ops, &mcast_leave_retries, 0644);
 MODULE_PARM_DESC(mcast_leave_retries, "Number of retries for multicast leave "
 				      "requests before giving up (default: 3)");
-
+*/
 static void mcast_add_one(struct ib_device *device);
 static void mcast_remove_one(struct ib_device *device);
 
