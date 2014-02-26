@@ -39,6 +39,8 @@
 #define	BITS_TO_LONGS(n)	howmany((n), BITS_PER_LONG)
 #define BIT_WORD(nr)		((nr) / BITS_PER_LONG)
 
+#define BITS_PER_BYTE           8
+
 static inline int
 __ffs(int mask)
 {

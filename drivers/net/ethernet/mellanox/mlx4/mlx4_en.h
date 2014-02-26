@@ -506,6 +506,7 @@ struct mlx4_en_priv {
 	int allocated;
 	int stride;
 	unsigned char current_mac[ETH_ALEN + 2];
+        u64 mac;
 	int mac_index;
 	unsigned max_mtu;
 	int base_qpn;
@@ -517,7 +518,7 @@ struct mlx4_en_priv {
 	u8 num_tx_rings_p_up;
 	u32 tx_ring_num;
 	u32 rx_ring_num;
-	u32 rx_skb_size;
+	u32 rx_mb_size;
 	u16 rx_alloc_order;
 	u32 rx_alloc_size;
 	u32 rx_buf_size;
@@ -549,6 +550,13 @@ struct mlx4_en_priv {
 	struct device *ddev;
 	struct dentry *dev_root;
 	u32 counter_index;
+	eventhandler_tag vlan_attach;
+	eventhandler_tag vlan_detach;
+	struct callout watchdog_timer;
+        struct ifmedia media;
+	struct sysctl_oid *sysctl;
+	struct sysctl_ctx_list conf_ctx;
+	struct sysctl_ctx_list stat_ctx;
 #define MLX4_EN_MAC_HASH_IDX 5
 	struct hlist_head mac_hash[MLX4_EN_MAC_HASH_SIZE];
 
@@ -811,6 +819,25 @@ extern const struct ethtool_ops mlx4_en_ethtool_ops;
 #define MLX4_EN_LINK_SPEED_1G	1000
 #define MLX4_EN_LINK_SPEED_10G	10000
 #define MLX4_EN_LINK_SPEED_40G	40000
+
+enum {
+        NETIF_MSG_DRV           = 0x0001,
+        NETIF_MSG_PROBE         = 0x0002,
+        NETIF_MSG_LINK          = 0x0004,
+        NETIF_MSG_TIMER         = 0x0008,
+        NETIF_MSG_IFDOWN        = 0x0010,
+        NETIF_MSG_IFUP          = 0x0020,
+        NETIF_MSG_RX_ERR        = 0x0040,
+        NETIF_MSG_TX_ERR        = 0x0080,
+        NETIF_MSG_TX_QUEUED     = 0x0100,
+        NETIF_MSG_INTR          = 0x0200,
+        NETIF_MSG_TX_DONE       = 0x0400,
+        NETIF_MSG_RX_STATUS     = 0x0800,
+        NETIF_MSG_PKTDATA       = 0x1000,
+        NETIF_MSG_HW            = 0x2000,
+        NETIF_MSG_WOL           = 0x4000,
+};
+
 
 /*
  * printk / logging functions

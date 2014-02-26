@@ -36,7 +36,7 @@
 
 #define	ETH_P_8021Q	ETHERTYPE_VLAN
 
-#define ETH_HLEN        14              /* Total octets in header.                              */
+#define ETH_HLEN        ETHER_HDR_LEN   /* Total octets in header.                              */
 #define ETH_FCS_LEN     4               /* Octets in the FCS                                    */
 #define VLAN_HLEN       4               /* The additional bytes (on top of the Ethernet header)
                                          * that VLAN requires.                                  */

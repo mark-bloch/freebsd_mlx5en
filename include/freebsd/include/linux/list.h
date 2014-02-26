@@ -389,9 +389,16 @@ static inline int list_is_last(const struct list_head *list,
 #define	hlist_for_each_entry_from(tp, p, field)				\
 	for (; p ? (tp = hlist_entry(p, typeof(*tp), field)): NULL; p = p->next)
 
+#if 0
 #define	hlist_for_each_entry_safe(tp, p, n, head, field)		\
 	for (p = (head)->first;	p ?					\
 	    (n = p->next) | (tp = hlist_entry(p, typeof(*tp), field)) :	\
 	    NULL; p = n)
+#endif
+#define hlist_for_each_entry_safe(tpos, pos, n, head, member) 		 \
+	for (pos = (head)->first;					 \
+	     pos && ({ n = pos->next; 1; }) && 				 \
+		({ tpos = hlist_entry(pos, typeof(*tpos), member); 1;}); \
+	     pos = n)
 
 #endif /* _FBSD_LIST_H_ */
