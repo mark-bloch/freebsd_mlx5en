@@ -37,6 +37,7 @@
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/string.h>
+#include <linux/fs.h>
 
 #include <rdma/ib_mad.h>
 #include <rdma/ib_pma.h>
@@ -348,7 +349,7 @@ static ssize_t get_pma_counters(struct ib_port *p, struct port_attribute *attr,
 			      be32_to_cpup((__be32 *)(out_mad->data + 40 + offset / 8)));
 		break;
 	case 64:
-		ret = sprintf(buf, "%llu\n",
+		ret = sprintf(buf, "%lu\n",
 			      be64_to_cpup((__be64 *)(out_mad->data + 40 + offset / 8)));
 		break;
 	default:
@@ -486,6 +487,8 @@ static void ib_device_release(struct device *device)
 	kfree(dev);
 }
 
+#ifdef __linux__
+/* BSD supports this through devfs(5) and devd(8). */
 static int ib_device_uevent(struct device *device,
 			    struct kobj_uevent_env *env)
 {
@@ -500,6 +503,7 @@ static int ib_device_uevent(struct device *device,
 
 	return 0;
 }
+#endif
 
 static struct attribute **
 alloc_group_attrs(ssize_t (*show)(struct ib_port *,
@@ -604,8 +608,9 @@ static int add_port(struct ib_device *device, int port_num,
 	}
 
 	list_add_tail(&p->kobj.entry, &device->port_list);
-
+#ifdef __linux__
 	kobject_uevent(&p->kobj, KOBJ_ADD);
+#endif
 	return 0;
 
 err_remove_pkey:
@@ -738,7 +743,7 @@ static ssize_t show_cmd_avg(struct device *device,
 {
 	struct ib_device *dev = container_of(device, struct ib_device, dev);
 
-	return sprintf(buf, "%lld\n", dev->cmd_avg);
+	return sprintf(buf, "%lu\n", dev->cmd_avg);
 }
 
 static ssize_t set_cmd_avg(struct device *device,
@@ -784,7 +789,9 @@ static struct device_attribute *ib_class_attributes[] = {
 static struct class ib_class = {
 	.name    = "infiniband",
 	.dev_release = ib_device_release,
+#ifdef __linux__
 	.dev_uevent = ib_device_uevent,
+#endif
 };
 
 /* Show a given an attribute in the statistics group */
@@ -792,7 +799,7 @@ static ssize_t show_protocol_stat(const struct device *device,
 			    struct device_attribute *attr, char *buf,
 			    unsigned offset)
 {
-	struct ib_device *dev = container_of(device, struct ib_device, dev);
+	struct ib_device *dev = container_of(__DECONST(struct device *, device), struct ib_device, dev);
 	union rdma_protocol_stats stats;
 	ssize_t ret;
 
