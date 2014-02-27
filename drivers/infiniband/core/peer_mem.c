@@ -349,7 +349,7 @@ void ib_unregister_peer_memory_client(void *reg_handle)
 #ifdef __FreeBSD__
 	while (ib_peer_client->holdcount != 0) {
 		ib_peer_client->needwakeup = 1;
-		cv_wait(&ib_peer_client->peer_cv, &peer_memory_mutex);
+		cv_wait(&ib_peer_client->peer_cv, &peer_memory_mutex.sx);
 	}
 	cv_destroy(&ib_peer_client->peer_cv);
 #else
