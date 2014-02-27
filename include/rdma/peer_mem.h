@@ -38,6 +38,8 @@
 #include <linux/slab.h>
 #include <linux/errno.h>
 #include <linux/export.h>
+#include <linux/scatterlist.h>
+#include <linux/mutex.h>
 
 
 #define IB_PEER_MEMORY_NAME_MAX 64
