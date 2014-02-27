@@ -53,6 +53,7 @@ struct class {
 	devclass_t	bsdclass;
 	void		(*class_release)(struct class *class);
 	void		(*dev_release)(struct device *dev);
+	char *(*devnode)(struct device *dev, umode_t *mode);
 };
 
 struct device {

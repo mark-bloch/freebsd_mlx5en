@@ -47,6 +47,10 @@
 #include <linux/sysfs.h>
 #include <linux/workqueue.h>
 #include <linux/kdev_t.h>
+#include <linux/string.h>
+#include <linux/etherdevice.h>
+
+#include <asm/atomic-long.h>
 
 #include <rdma/ib_cache.h>
 #include <rdma/ib_cm.h>

@@ -54,6 +54,8 @@ typedef int64_t __s64;
 typedef vm_paddr_t dma_addr_t;
 typedef vm_paddr_t dma64_addr_t;
 
+typedef unsigned short umode_t;
+
 #endif	/* _KERNEL */
 
 #endif	/* _ASM_TYPES_H_ */
