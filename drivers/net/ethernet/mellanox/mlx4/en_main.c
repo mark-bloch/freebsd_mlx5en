@@ -294,9 +294,27 @@ static struct mlx4_interface mlx4_en_interface = {
 	.protocol	= MLX4_PROT_ETH,
 };
 
+static void mlx4_en_verify_params(void)
+{
+        if (pfctx > MAX_PFC_TX) {
+                pr_warn("mlx4_en: WARNING: illegal module parameter pfctx 0x%x - "
+                                "should be in range 0-0x%x, will be changed to default (0)\n",
+                                pfctx, MAX_PFC_TX);
+                pfctx = 0;
+        }
+
+        if (pfcrx > MAX_PFC_RX) {
+                pr_warn("mlx4_en: WARNING: illegal module parameter pfcrx 0x%x - "
+                                "should be in range 0-0x%x, will be changed to default (0)\n",
+                                pfcrx, MAX_PFC_RX);
+                pfcrx = 0;
+        }
+}
+
 
 static int __init mlx4_en_init(void)
 {
+        mlx4_en_verify_params();
 
 #ifdef CONFIG_DEBUG_FS
 	int err = 0;
