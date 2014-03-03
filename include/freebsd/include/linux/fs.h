@@ -108,6 +108,12 @@ struct file_operations {
 	int (*open)(struct inode *, struct file *);
 	int (*release)(struct inode *, struct file *);
 	int (*fasync)(int, struct file *, int);
+
+/* MY: Although not supported in FreeBSD, to align with Linux code
+ * we are adding llseek() only when it is mapped to no_llseek which returns 
+ * an illegal seek error
+ */
+	loff_t (*llseek)(struct file *, loff_t, int);
 #if 0
 	/* We do not support these methods.  Don't permit them to compile. */
 	loff_t (*llseek)(struct file *, loff_t, int);
@@ -180,6 +186,12 @@ iput(struct inode *inode)
 {
 
 	vrele(inode);
+}
+
+static inline loff_t 
+no_llseek(struct file *file, loff_t offset, int whence)
+{
+        return -ESPIPE;
 }
 
 #endif /* _FBSD_FS_H_ */

@@ -45,6 +45,8 @@
 #include <linux/cdev.h>
 #include <linux/anon_inodes.h>
 #include <linux/slab.h>
+#include <linux/ktime.h>
+#include <linux/rbtree.h>
 
 #include <asm/uaccess.h>
 
@@ -988,7 +990,7 @@ static ssize_t ib_uverbs_write(struct file *filp, const char __user *buf,
 		dev->cmd_avg = dividend;
 		spin_unlock(&dev->cmd_perf_lock);
 		if (dev->cmd_perf & COMMAND_INFO_MASK) {
-			pr_info("%s: %s execution time = %lld nsec\n",
+			pr_info("%s: %s execution time = %ld nsec\n",
 				file->device->ib_dev->name,
 				verbs_cmd_str(hdr.command), ds);
 		}
