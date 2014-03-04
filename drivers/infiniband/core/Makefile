@@ -12,7 +12,6 @@ SRCS+= agent.c multicast.c smi.c ud_header.c uverbs_main.c
 SRCS+= mad.c umem.c uverbs_marshall.c peer_mem.c 
 SRCS+= cache.c device.c packer.c sysfs.c user_mad.c verbs.c 
 SRCS+= cm.c fmr_pool.c mad_rmpp.c ucm.c cma.c 
-SRCS+= netlink.c
 SRCS+= linux_compat.c linux_radix.c linux_idr.c
 SRCS+= vnode_if.h device_if.h bus_if.h pci_if.h opt_inet.h opt_inet6.h
 
