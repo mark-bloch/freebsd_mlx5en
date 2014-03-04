@@ -49,6 +49,8 @@
 #include "mlx4_ib.h"
 #include "user.h"
 
+#define asm __asm
+
 enum {
 	MLX4_IB_ACK_REQ_FREQ	= 8,
 };
@@ -613,7 +615,7 @@ static int init_qpg_parent(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *pqp,
 	struct mlx4_ib_qpg_data *qpg_data;
 	int tss_num, rss_num;
 	int tss_align_num, rss_align_num;
-	int tss_base, rss_base;
+	int tss_base, rss_base = 0;
 	int err;
 
 	/* Parent is part of the TSS range (in SW TSS ARP is sent via parent) */
@@ -1738,7 +1740,7 @@ static int handle_eth_ud_smac_index(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *
 
 	ndev = dev->iboe.netdevs[qp->port - 1];
 	if (ndev) {
-		smac = ndev->dev_addr;
+                smac = IF_LLADDR(ndev);
 		u64_mac = mlx4_mac_to_u64(smac);
 	} else {
 		u64_mac = dev->dev->caps.def_mac[qp->port];
@@ -2634,8 +2636,7 @@ static int build_mlx_header(struct mlx4_ib_sqp *sqp, struct ib_send_wr *wr,
 		memcpy(&in6, sgid.raw, sizeof(in6));
 
 		if (!mlx4_is_mfunc(to_mdev(ib_dev)->dev))
-			smac = to_mdev(sqp->qp.ibqp.device)->
-				iboe.netdevs[sqp->qp.port - 1]->dev_addr;
+                        smac = IF_LLADDR(to_mdev(sqp->qp.ibqp.device)->iboe.netdevs[sqp->qp.port - 1]);
 		else
 			smac = ah->av.eth.s_mac;	/* use the src mac of the tunnel */
 		memcpy(sqp->ud_header.eth.smac_h, smac, 6);
