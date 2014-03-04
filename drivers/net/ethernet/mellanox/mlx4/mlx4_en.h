@@ -112,6 +112,26 @@ enum mlx4_en_alloc_type {
 	MLX4_EN_ALLOC_REPLACEMENT = 1,
 };
 
+/* Receive fragment sizes; we use at most 3 fragments (for 9600 byte MTU
+ * and 4K allocations) */
+#if MJUMPAGESIZE == 4096
+enum {
+	FRAG_SZ0 = MCLBYTES,
+	FRAG_SZ1 = MJUMPAGESIZE,
+	FRAG_SZ2 = MJUMPAGESIZE,
+};
+#define MLX4_EN_MAX_RX_FRAGS	3
+#elif MJUMPAGESIZE == 8192
+enum {
+	FRAG_SZ0 = MCLBYTES,
+	FRAG_SZ1 = MJUMPAGESIZE,
+};
+#define MLX4_EN_MAX_RX_FRAGS	2
+#elif MJUMPAGESIZE == 8192
+#else
+#error	"Unknown PAGE_SIZE"
+#endif
+
 /* Minimum packet number till arming the CQ */
 #define MLX4_EN_MIN_RX_ARM	2048
 #define MLX4_EN_MIN_TX_ARM	2048
@@ -307,10 +327,10 @@ struct mlx4_en_rx_ring {
 	u16 rx_alloc_order;
 	u32 rx_alloc_size;
 	u32 rx_buf_size;
-	u32 rx_skb_size;
+	u32 rx_mb_size;
 	int qpn;
 	void *buf;
-	struct mlx4_en_rx_buf *rx_info;
+	void *rx_info;
 	unsigned long bytes;
 	unsigned long packets;
 #ifdef LL_EXTENDED_STATS
@@ -468,6 +488,12 @@ struct en_port {
 	u8			vport_num;
 };
 
+struct mlx4_en_frag_info {
+        u16 frag_size;
+        u16 frag_prefix_size;
+};
+
+
 struct mlx4_en_priv {
 	struct mlx4_en_dev *mdev;
 	struct mlx4_en_port_profile *prof;
@@ -519,9 +545,11 @@ struct mlx4_en_priv {
 	u32 tx_ring_num;
 	u32 rx_ring_num;
 	u32 rx_mb_size;
+        struct mlx4_en_frag_info frag_info[MLX4_EN_MAX_RX_FRAGS];
 	u16 rx_alloc_order;
 	u32 rx_alloc_size;
 	u32 rx_buf_size;
+        u16 num_frags;
 	u16 log_rx_info;
 
 	struct mlx4_en_tx_ring **tx_ring;
@@ -755,6 +783,7 @@ void mlx4_en_fill_qp_context(struct mlx4_en_priv *priv, int size, int stride,
 void mlx4_en_sqp_event(struct mlx4_qp *qp, enum mlx4_event event);
 int mlx4_en_map_buffer(struct mlx4_buf *buf);
 void mlx4_en_unmap_buffer(struct mlx4_buf *buf);
+void mlx4_en_calc_rx_buf(struct net_device *dev);
 
 int mlx4_en_config_rss_steer(struct mlx4_en_priv *priv);
 void mlx4_en_release_rss_steer(struct mlx4_en_priv *priv);
