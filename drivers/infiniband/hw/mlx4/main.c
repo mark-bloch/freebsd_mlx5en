@@ -32,7 +32,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
@@ -40,6 +39,7 @@
 #include <linux/inetdevice.h>
 #include <linux/rtnetlink.h>
 #include <linux/if_vlan.h>
+#include <linux/fs.h>
 #include <net/ipv6.h>
 #include <net/addrconf.h>
 
@@ -426,7 +426,7 @@ static int eth_link_query_port(struct ib_device *ibdev, u8 port,
 	if (!ndev)
 		goto out_unlock;
 
-	tmp = iboe_get_mtu(ndev->mtu);
+	tmp = iboe_get_mtu(ndev->if_mtu);
 	props->active_mtu = tmp ? min(props->max_mtu, tmp) : IB_MTU_256;
 
 	props->state		= (netif_running(ndev) && netif_carrier_ok(ndev)) ?
@@ -1036,7 +1036,7 @@ int mlx4_ib_add_mc(struct mlx4_ib_dev *mdev, struct mlx4_ib_qp *mqp,
 	if (ndev) {
 		rdma_get_mcast_mac((struct in6_addr *)gid, mac);
 		rtnl_lock();
-		dev_mc_add(mdev->iboe.netdevs[mqp->port - 1], mac);
+		dev_mc_add(mdev->iboe.netdevs[mqp->port - 1], mac, 6, 0);
 		ret = 1;
 		rtnl_unlock();
 		dev_put(ndev);
@@ -1109,7 +1109,7 @@ static int parse_flow_attr(struct mlx4_dev *dev,
 	return hw_rule_sz(dev, type);
 }
 
-int __mlx4_ib_create_flow(struct ib_qp *qp, struct ib_flow_attr *flow_attr,
+static int __mlx4_ib_create_flow(struct ib_qp *qp, struct ib_flow_attr *flow_attr,
 			  int domain,
 			  enum mlx4_net_trans_promisc_mode flow_type,
 			  u64 *reg_id)
@@ -1181,7 +1181,7 @@ int __mlx4_ib_create_flow(struct ib_qp *qp, struct ib_flow_attr *flow_attr,
 	return ret;
 }
 
-int __mlx4_ib_destroy_flow(struct mlx4_dev *dev, u64 reg_id)
+static int __mlx4_ib_destroy_flow(struct mlx4_dev *dev, u64 reg_id)
 {
 	int err;
 	err = mlx4_cmd(dev, reg_id, 0, 0,
@@ -1301,7 +1301,7 @@ static int del_gid_entry(struct ib_qp *ibqp, union ib_gid *gid)
 		rdma_get_mcast_mac((struct in6_addr *)gid, mac);
 		if (ndev) {
 			rtnl_lock();
-			dev_mc_del(mdev->iboe.netdevs[ge->port - 1], mac);
+			dev_mc_delete(mdev->iboe.netdevs[ge->port - 1], mac, 6, 0);
 			rtnl_unlock();
 			dev_put(ndev);
 		}
@@ -2315,7 +2315,7 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	struct mlx4_ib_iboe *iboe;
 	int dev_idx;
 
-	pr_info_once("%s", mlx4_ib_version);
+        pr_info_once("%s", mlx4_ib_version);
 
 	mlx4_foreach_ib_transport_port(i, dev)
 		num_ports++;
