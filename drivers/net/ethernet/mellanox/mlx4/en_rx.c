@@ -823,6 +823,7 @@ int mlx4_en_poll_rx_cq(struct napi_struct *napi, int budget)
 	}
 	return budget;
 }
+#endif
 
 /* RSS related functions */
 
@@ -834,11 +835,12 @@ static int mlx4_en_config_rss_qp(struct mlx4_en_priv *priv, int qpn,
 	struct mlx4_en_dev *mdev = priv->mdev;
 	struct mlx4_qp_context *context;
 	int err = 0;
-	int disable_vstrip = 0;
+#if 0
+        int disable_vstrip = 0;
 
-	if (priv->hwtstamp_config.rx_filter)
-		disable_vstrip = 1;
-
+        if (priv->hwtstamp_config.rx_filter)
+                disable_vstrip = 1;
+#endif
 	context = kmalloc(sizeof *context , GFP_KERNEL);
 	if (!context) {
 		en_err(priv, "Failed to allocate qp context\n");
@@ -1016,4 +1018,3 @@ void mlx4_en_release_rss_steer(struct mlx4_en_priv *priv)
 	}
 	mlx4_qp_release_range(mdev->dev, rss_map->base_qpn, priv->rx_ring_num);
 }
-#endif
