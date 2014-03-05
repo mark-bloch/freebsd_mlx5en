@@ -35,10 +35,8 @@
 #include <linux/mlx4/cq.h>
 #include <linux/slab.h>
 #include <linux/mlx4/qp.h>
-#include <linux/skbuff.h>
 #include <linux/if_vlan.h>
 #include <linux/vmalloc.h>
-#include <linux/tcp.h>
 #include <linux/moduleparam.h>
 
 #include "mlx4_en.h"
@@ -151,11 +149,11 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 		ring->bf_enabled = false;
 	} else
 		ring->bf_enabled = true;
-
-	ring->hwtstamp_tx_type = priv->hwtstamp_config.tx_type;
-
+#if 0
+        ring->hwtstamp_tx_type = priv->hwtstamp_config.tx_type;
+#endif
 	ring->queue_index = queue_idx;
-	if (queue_idx < priv->num_tx_rings_p_up && cpu_online(queue_idx))
+	if (queue_idx < priv->num_tx_rings_p_up )
 		CPU_SET(queue_idx, &ring->affinity_mask);
 
 	*pring = ring;
@@ -221,10 +219,10 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 
 	err = mlx4_qp_to_ready(mdev->dev, &ring->wqres.mtt, &ring->context,
 			       &ring->qp, &ring->qp_state);
-
-	if (!user_prio && cpu_online(ring->queue_index))
-		netif_set_xps_queue(priv->dev, &ring->affinity_mask,
-				    ring->queue_index);
+#if 0
+        if (!user_prio && cpu_online(ring->queue_index))
+                netif_set_xps_queue(priv->dev, &ring->affinity_mask,ring->queue_index);
+#endif
 	return err;
 }
 
@@ -236,6 +234,7 @@ void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 	mlx4_qp_modify(mdev->dev, NULL, ring->qp_state,
 		       MLX4_QP_STATE_RST, NULL, 0, 0, &ring->qp);
 }
+#if 0
 
 static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
 		       struct mlx4_en_tx_ring *ring,
@@ -924,3 +923,4 @@ tx_drop:
 	return NETDEV_TX_OK;
 }
 
+#endif

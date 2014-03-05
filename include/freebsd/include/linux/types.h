@@ -38,6 +38,8 @@
 
 #include <asm/types.h>
 
+#define __read_mostly
+
 #ifndef __bitwise__
 #ifdef __CHECKER__
 #define __bitwise__ __attribute__((bitwise))

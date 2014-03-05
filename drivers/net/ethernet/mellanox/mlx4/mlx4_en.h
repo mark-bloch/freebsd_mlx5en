@@ -133,6 +133,9 @@ enum {
 #error	"Unknown PAGE_SIZE"
 #endif
 
+/* Maximum ring sizes */
+#define MLX4_EN_DEF_TX_QUEUE_SIZE       4096
+
 /* Minimum packet number till arming the CQ */
 #define MLX4_EN_MIN_RX_ARM	2048
 #define MLX4_EN_MIN_TX_ARM	2048
@@ -267,6 +270,7 @@ struct mlx4_en_tx_desc {
 #define MLX4_EN_CX3_HIGH_ID	0x1005
 
 struct mlx4_en_tx_ring {
+        spinlock_t tx_lock;
 	struct mlx4_hwq_resources wqres;
 	u32 size ; /* number of TXBBs */
 	u32 size_mask;
