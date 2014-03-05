@@ -41,6 +41,7 @@
 #include <linux/kobject.h>
 #include <linux/netdevice.h>
 #include <linux/if_vlan.h>
+#include <linux/if_ether.h>
 #ifdef CONFIG_MLX4_EN_DCB
 #include <linux/dcbnl.h>
 #endif

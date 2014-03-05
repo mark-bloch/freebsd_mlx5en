@@ -37,11 +37,13 @@
 
 #include "mlx4_en.h"
 
+
 static void mlx4_en_cq_event(struct mlx4_cq *cq, enum mlx4_event event)
 {
 	return;
 }
 
+#if 0
 
 int mlx4_en_create_cq(struct mlx4_en_priv *priv,
 		      struct mlx4_en_cq **pcq,
@@ -94,6 +96,7 @@ err_cq:
 	kfree(cq);
 	return err;
 }
+#endif
 
 int mlx4_en_activate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq,
 			int cq_idx)
@@ -113,7 +116,7 @@ int mlx4_en_activate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq,
 	if (cq->is_tx == RX) {
 		if (mdev->dev->caps.comp_pool) {
 			if (!cq->vector) {
-				sprintf(name, "%s-%d", priv->dev->name,
+				sprintf(name, "%s-%d", if_name(priv->dev),
 					cq->ring);
 				/* Set IRQ for specific name (per ring) */
 				if (mlx4_assign_eq(mdev->dev, name, &cq->vector)) {
@@ -141,11 +144,11 @@ int mlx4_en_activate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq,
 
 	if (!cq->is_tx)
 		cq->size = priv->rx_ring[cq->ring]->actual_size;
-
-	if ((cq->is_tx && priv->hwtstamp_config.tx_type) ||
-	    (!cq->is_tx && priv->hwtstamp_config.rx_filter))
-		timestamp_en = 1;
-
+#if 0
+        if ((cq->is_tx && priv->hwtstamp_config.tx_type) ||
+                (!cq->is_tx && priv->hwtstamp_config.rx_filter))
+                        timestamp_en = 1;
+#endif
 	err = mlx4_cq_alloc(mdev->dev, cq->size, &cq->wqres.mtt,
 			    &mdev->priv_uar, cq->wqres.db.dma, &cq->mcq,
 			    cq->vector, 0, timestamp_en);
@@ -164,6 +167,7 @@ int mlx4_en_activate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq,
 
 	return 0;
 }
+#if 0
 
 void mlx4_en_destroy_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq **pcq)
 {
@@ -177,6 +181,7 @@ void mlx4_en_destroy_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq **pcq)
 	kfree(cq);
 	*pcq = NULL;
 }
+#endif
 
 void mlx4_en_deactivate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq)
 {
@@ -188,6 +193,7 @@ void mlx4_en_deactivate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq)
 
         mlx4_cq_free(mdev->dev, &cq->mcq);
 }
+
 
 /* Set rx cq moderation parameters */
 int mlx4_en_set_cq_moder(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq)
