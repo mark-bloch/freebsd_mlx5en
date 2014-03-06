@@ -293,7 +293,6 @@ void mlx4_en_calc_rx_buf(struct net_device *dev)
 }
 
 
-#if 0
 int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 			   struct mlx4_en_rx_ring **pring,
 			   u32 size, int node)
@@ -338,9 +337,9 @@ int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 		goto err_hwq;
 	}
 	ring->buf = ring->wqres.buf.direct.buf;
-
+#if 0
 	ring->hwtstamp_rx_filter = priv->hwtstamp_config.rx_filter;
-
+#endif
 	*pring = ring;
 	return 0;
 
@@ -354,7 +353,6 @@ err_ring:
 	return err;
 }
 
-#endif
 
 int mlx4_en_activate_rx_rings(struct mlx4_en_priv *priv)
 {
