@@ -420,7 +420,6 @@ err_buffers:
 	return err;
 }
 
-#if 0
 
 void mlx4_en_destroy_rx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_rx_ring **pring,
@@ -438,7 +437,6 @@ void mlx4_en_destroy_rx_ring(struct mlx4_en_priv *priv,
 	mlx4_en_cleanup_filters(priv, ring);
 #endif
 }
-#endif
 
 
 void mlx4_en_deactivate_rx_ring(struct mlx4_en_priv *priv,
@@ -782,6 +780,8 @@ out:
 	return polled;
 }
 
+
+
 void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 {
 	struct mlx4_en_cq *cq = container_of(mcq, struct mlx4_en_cq, mcq);
@@ -792,6 +792,16 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 	else
 		mlx4_en_arm_cq(priv, cq);
 }
+void mlx4_en_rx_que(void *context, int pending)
+{       
+        struct mlx4_en_cq *cq;
+
+        cq = context;
+        while (mlx4_en_poll_rx_cq(cq, MLX4_EN_MAX_RX_POLL)
+                        == MLX4_EN_MAX_RX_POLL);
+        mlx4_en_arm_cq(cq->dev->if_softc, cq);
+}       
+
 
 /* Rx CQ polling - called by NAPI */
 int mlx4_en_poll_rx_cq(struct napi_struct *napi, int budget)

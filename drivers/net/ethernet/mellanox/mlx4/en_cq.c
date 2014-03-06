@@ -43,7 +43,6 @@ static void mlx4_en_cq_event(struct mlx4_cq *cq, enum mlx4_event event)
 	return;
 }
 
-#if 0
 
 int mlx4_en_create_cq(struct mlx4_en_priv *priv,
 		      struct mlx4_en_cq **pcq,
@@ -96,7 +95,7 @@ err_cq:
 	kfree(cq);
 	return err;
 }
-#endif
+
 
 int mlx4_en_activate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq,
 			int cq_idx)
