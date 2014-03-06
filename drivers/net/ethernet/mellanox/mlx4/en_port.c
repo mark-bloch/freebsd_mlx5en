@@ -31,7 +31,7 @@
  *
  */
 
-
+#include <sys/types.h>
 #include <linux/if_vlan.h>
 
 #include <linux/mlx4/device.h>
@@ -40,6 +40,8 @@
 #include "en_port.h"
 #include "mlx4_en.h"
 #define EN_IFQ_MIN_INTERVAL 3000
+
+#if 0
 
 int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv)
 {
@@ -120,6 +122,7 @@ out:
 	mlx4_free_cmd_mailbox(mdev->dev, mailbox);
 	return err;
 }
+#endif
 
 int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 {
@@ -176,7 +179,7 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 
 	mlx4_en_stats = mailbox->buf;
 
-	spin_lock_bh(&priv->stats_lock);
+	spin_lock(&priv->stats_lock);
 
 	priv->port_stats.rx_chksum_good = 0;
 	priv->port_stats.rx_chksum_none = 0;
@@ -520,10 +523,10 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 	}
 
 	memset(&tmp_vport_stats, 0, sizeof(tmp_vport_stats));
-	spin_unlock_bh(&priv->stats_lock);
+	spin_unlock(&priv->stats_lock);
 	err = mlx4_get_vport_ethtool_stats(mdev->dev, port,
 					   &tmp_vport_stats, reset);
-	spin_lock_bh(&priv->stats_lock);
+	spin_lock(&priv->stats_lock);
 	if (!err) {
 		/* ethtool stats format */
 		vport_stats->rx_unicast_packets = tmp_vport_stats.rx_unicast_packets;
@@ -543,30 +546,6 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 		vport_stats->tx_errors = tmp_vport_stats.tx_errors;
 	}
 
-	if (mlx4_is_mfunc(mdev->dev) && (!err)) {
-		/* netdevice stats format */
-		priv->stats.rx_packets = tmp_vport_stats.rx_unicast_packets +
-			tmp_vport_stats.rx_broadcast_packets +
-			tmp_vport_stats.rx_multicast_packets;
-		priv->stats.tx_packets = tmp_vport_stats.tx_unicast_packets +
-			tmp_vport_stats.tx_broadcast_packets +
-			tmp_vport_stats.tx_multicast_packets;
-		priv->stats.rx_bytes = tmp_vport_stats.rx_unicast_bytes +
-			tmp_vport_stats.rx_broadcast_bytes +
-			tmp_vport_stats.rx_multicast_bytes;
-		priv->stats.tx_bytes = tmp_vport_stats.tx_unicast_bytes +
-			tmp_vport_stats.tx_broadcast_bytes +
-			tmp_vport_stats.tx_multicast_bytes;
-		priv->stats.rx_errors = tmp_vport_stats.rx_errors;
-		priv->stats.rx_dropped = tmp_vport_stats.rx_dropped;
-		priv->stats.tx_dropped = tmp_vport_stats.tx_errors;
-		priv->stats.multicast = tmp_vport_stats.rx_multicast_packets +
-			tmp_vport_stats.tx_multicast_bytes;
-
-		priv->if_counters_rx_errors = vport_stats->rx_errors;
-		priv->if_counters_rx_no_buffer = vport_stats->rx_dropped;
-	}
-
 	if (!mlx4_is_mfunc(mdev->dev)) {
 		/* netdevice stats format */
                 dev                     = mdev->pndev[port];
@@ -581,7 +560,7 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
                 dev->if_collisions      = 0;
 	}
 
-	spin_unlock_bh(&priv->stats_lock);
+	spin_unlock(&priv->stats_lock);
 
 out:
 	mlx4_free_cmd_mailbox(mdev->dev, mailbox_flow);
@@ -593,6 +572,7 @@ mailbox_out:
 
 	return err;
 }
+#if 0
 
 int mlx4_en_get_vport_stats(struct mlx4_en_dev *mdev, u8 port)
 {
@@ -662,4 +642,4 @@ int mlx4_en_get_vport_stats(struct mlx4_en_dev *mdev, u8 port)
 
 	return err;
 }
-
+#endif
