@@ -266,7 +266,7 @@ static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
 		}
 }
 
-
+#endif
 static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring,
 				int index, u8 owner, u64 timestamp)
@@ -275,18 +275,18 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 	struct mlx4_en_tx_info *tx_info = &ring->tx_info[index];
 	struct mlx4_en_tx_desc *tx_desc = ring->buf + index * TXBB_SIZE;
 	struct mlx4_wqe_data_seg *data = (void *) tx_desc + tx_info->data_offset;
-	struct sk_buff *skb = tx_info->skb;
-	struct skb_frag_struct *frag;
+        struct mbuf *mb = tx_info->mb;
 	void *end = ring->buf + ring->buf_size;
-	int frags = skb_shinfo(skb)->nr_frags;
+	int frags = tx_info->nr_segs;;
 	int i;
-	struct skb_shared_hwtstamps hwts;
+#if 0
+        struct skb_shared_hwtstamps hwts;
 
-	if (timestamp) {
-		mlx4_en_fill_hwtstamps(mdev, &hwts, timestamp);
-		skb_tstamp_tx(skb, &hwts);
-	}
-
+        if (timestamp) {                
+                mlx4_en_fill_hwtstamps(mdev, &hwts, timestamp);         
+                skb_tstamp_tx(skb, &hwts);              
+        }
+#endif
 	/* Optimize the common case when there are no wraparounds */
 	if (likely((void *) tx_desc + tx_info->nr_txbb * TXBB_SIZE <= end)) {
 		if (!tx_info->inl) {
@@ -299,10 +299,9 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 			}
 
 			for (i = 0; i < frags; i++) {
-				frag = &skb_shinfo(skb)->frags[i];
-				dma_unmap_page(priv->ddev,
-					(dma_addr_t) be64_to_cpu(data[i].addr),
-					skb_frag_size(frag), PCI_DMA_TODEVICE);
+                                pci_unmap_single(mdev->pdev,
+                                                (dma_addr_t) be64_to_cpu(data[i].addr),
+                                                data[i].byte_count, PCI_DMA_TODEVICE);
 			}
 		}
 	} else {
@@ -323,15 +322,14 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 				/* Check for wraparound before unmapping */
 				if ((void *) data >= end)
 					data = ring->buf;
-				frag = &skb_shinfo(skb)->frags[i];
-				dma_unmap_page(priv->ddev,
-					(dma_addr_t) be64_to_cpu(data->addr),
-					 skb_frag_size(frag), PCI_DMA_TODEVICE);
+                                pci_unmap_single(mdev->pdev,
+                                                (dma_addr_t) be64_to_cpu(data->addr),
+                                                data->byte_count, PCI_DMA_TODEVICE);
 				++data;
 			}
 		}
 	}
-	dev_kfree_skb(skb);
+        m_freem(mb);
 	return tx_info->nr_txbb;
 }
 
@@ -364,6 +362,7 @@ int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring)
 
 	return cnt;
 }
+#if 0
 
 static int mlx4_en_process_tx_cq(struct net_device *dev,
 				 struct mlx4_en_cq *cq,

@@ -438,6 +438,8 @@ void mlx4_en_destroy_rx_ring(struct mlx4_en_priv *priv,
 	mlx4_en_cleanup_filters(priv, ring);
 #endif
 }
+#endif
+
 
 void mlx4_en_deactivate_rx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_rx_ring *ring)
@@ -446,6 +448,8 @@ void mlx4_en_deactivate_rx_ring(struct mlx4_en_priv *priv,
 	if (ring->stride <= TXBB_SIZE)
 		ring->buf -= TXBB_SIZE;
 }
+
+#if 0
 
 static int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
 				     struct mlx4_en_rx_ring *ring,

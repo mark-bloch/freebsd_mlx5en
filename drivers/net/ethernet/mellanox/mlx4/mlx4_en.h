@@ -234,15 +234,16 @@ enum cq_type {
 #define XNOR(x, y)		(!(x) == !(y))
 #define ILLEGAL_MAC(addr)	(addr == 0xffffffffffffULL || addr == 0x0)
 
-
 struct mlx4_en_tx_info {
-	struct sk_buff *skb;
-	u32 nr_txbb;
-	u32 nr_bytes;
-	u8 linear;
-	u8 data_offset;
-	u8 inl;
+        struct mbuf *mb;
+        u32 nr_txbb;
+        u8 linear;
+        u8 nr_segs;
+        u8 data_offset;
+        u8 inl;
+#if 0
 	u8 ts_requested;
+#endif
 };
 
 
@@ -756,7 +757,7 @@ int mlx4_en_set_cq_moder(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
 int mlx4_en_arm_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
 
 void mlx4_en_tx_irq(struct mlx4_cq *mcq);
-u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb);
+u16 mlx4_en_select_queue(struct net_device *dev, struct mbuf *mb);
 
 int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 			   struct mlx4_en_tx_ring **pring,
