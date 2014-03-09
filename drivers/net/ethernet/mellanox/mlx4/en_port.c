@@ -41,7 +41,6 @@
 #include "mlx4_en.h"
 #define EN_IFQ_MIN_INTERVAL 3000
 
-#if 0
 
 int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv)
 {
@@ -62,8 +61,9 @@ int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv)
 	for (i = VLAN_FLTR_SIZE - 1; i >= 0; i--) {
 		entry = 0;
 		for (j = 0; j < 32; j++)
-			if (test_bit(index++, priv->active_vlans))
+			if (test_bit(index, priv->active_vlans))
 				entry |= 1 << j;
+                        index++;
 		filter->entry[i] = cpu_to_be32(entry);
 	}
 	err = mlx4_cmd(dev, mailbox->dma, priv->port, 0, MLX4_CMD_SET_VLAN_FLTR,
@@ -71,6 +71,7 @@ int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv)
 	mlx4_free_cmd_mailbox(dev, mailbox);
 	return err;
 }
+#if 0
 
 int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port)
 {
