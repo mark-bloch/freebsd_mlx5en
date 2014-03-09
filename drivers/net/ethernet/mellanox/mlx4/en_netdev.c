@@ -1408,9 +1408,10 @@ static void mlx4_en_service_task(struct work_struct *work)
 
 	mutex_lock(&mdev->state_lock);
 	if (mdev->device_up) {
+#if 0
 		if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_TS)
 			mlx4_en_ptp_overflow_check(mdev);
-
+#endif
 		queue_delayed_work(mdev->workqueue, &priv->service_task,
 				   SERVICE_TASK_DELAY);
 	}
