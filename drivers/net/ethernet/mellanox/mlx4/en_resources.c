@@ -37,6 +37,7 @@
 
 #include "mlx4_en.h"
 
+
 void mlx4_en_fill_qp_context(struct mlx4_en_priv *priv, int size, int stride,
 			     int is_tx, int rss, int qpn, int cqn,
 			     int user_prio, struct mlx4_qp_context *context)
@@ -75,7 +76,7 @@ void mlx4_en_fill_qp_context(struct mlx4_en_priv *priv, int size, int stride,
 	context->cqn_send = cpu_to_be32(cqn);
 	context->cqn_recv = cpu_to_be32(cqn);
 	context->db_rec_addr = cpu_to_be64(priv->res.db.dma << 2);
-	if (!(dev->features & NETIF_F_HW_VLAN_CTAG_RX))
+	if (!(dev->if_capabilities & IFCAP_VLAN_HWCSUM))
 		context->param3 |= cpu_to_be32(1 << 30);
 }
 
@@ -85,7 +86,9 @@ int mlx4_en_map_buffer(struct mlx4_buf *buf)
 	struct page **pages;
 	int i;
 
-	if (BITS_PER_LONG == 64 || buf->nbufs == 1)
+        // if nbufs == 1 - there is no need to vmap 
+        // if buf->direct.buf is not NULL it means that vmap was already done by mlx4_alloc_buff
+	if (buf->direct.buf != NULL || buf->nbufs == 1)
 		return 0;
 
 	pages = kmalloc(sizeof *pages * buf->nbufs, GFP_KERNEL);
