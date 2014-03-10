@@ -554,14 +554,17 @@ static int is_inline(struct sk_buff *skb, void **pfrag, int thold)
 	return 0;
 }
 
-static int inline_size(struct sk_buff *skb)
+static int inline_size(struct mbuf *mb)
 {
-	if (skb->len + CTRL_SIZE + sizeof(struct mlx4_wqe_inline_seg)
+	int len;
+
+	len = mb->m_pkthdr.len;
+	if (len + CTRL_SIZE + sizeof(struct mlx4_wqe_inline_seg)
 	    <= MLX4_INLINE_ALIGN)
-		return ALIGN(skb->len + CTRL_SIZE +
+		return ALIGN(len + CTRL_SIZE +
 			     sizeof(struct mlx4_wqe_inline_seg), 16);
 	else
-		return ALIGN(skb->len + CTRL_SIZE + 2 *
+		return ALIGN(len + CTRL_SIZE + 2 *
 			     sizeof(struct mlx4_wqe_inline_seg), 16);
 }
 
