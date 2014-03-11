@@ -777,9 +777,9 @@ out:
 	mlx4_en_update_rx_prod_db(ring);
 	return polled;
 }
+#endif
 
-
-
+#if 0
 void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 {
 	struct mlx4_en_cq *cq = container_of(mcq, struct mlx4_en_cq, mcq);
@@ -790,6 +790,13 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 	else
 		mlx4_en_arm_cq(priv, cq);
 }
+#endif
+void mlx4_en_rx_irq(struct mlx4_cq *mcq)
+{
+        return;
+}
+
+#if 0
 void mlx4_en_rx_que(void *context, int pending)
 {       
         struct mlx4_en_cq *cq;
@@ -799,7 +806,13 @@ void mlx4_en_rx_que(void *context, int pending)
                         == MLX4_EN_MAX_RX_POLL);
         mlx4_en_arm_cq(cq->dev->if_softc, cq);
 }       
+#endif
+void mlx4_en_rx_que(void *context, int pending)
+{       
+        return;
+}
 
+#if 0
 
 /* Rx CQ polling - called by NAPI */
 int mlx4_en_poll_rx_cq(struct napi_struct *napi, int budget)
@@ -1030,3 +1043,4 @@ void mlx4_en_release_rss_steer(struct mlx4_en_priv *priv)
 	}
 	mlx4_qp_release_range(mdev->dev, rss_map->base_qpn, priv->rx_ring_num);
 }
+

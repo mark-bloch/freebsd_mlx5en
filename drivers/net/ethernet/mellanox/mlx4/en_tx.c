@@ -459,7 +459,9 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 	}
 	return done;
 }
+#endif
 
+#if 0
 void mlx4_en_tx_irq(struct mlx4_cq *mcq)
 {
 	struct mlx4_en_cq *cq = container_of(mcq, struct mlx4_en_cq, mcq);
@@ -470,7 +472,12 @@ void mlx4_en_tx_irq(struct mlx4_cq *mcq)
 	else
 		mlx4_en_arm_cq(priv, cq);
 }
-
+#endif
+void mlx4_en_tx_irq(struct mlx4_cq *mcq)
+{
+        return;
+}
+#if 0
 /* TX CQ polling - called by NAPI */
 int mlx4_en_poll_tx_cq(struct napi_struct *napi, int budget)
 {
@@ -500,7 +507,12 @@ int mlx4_en_poll_tx_cq(struct napi_struct *napi, int budget)
 	}
 	return budget;
 }
-
+#endif
+void mlx4_en_poll_tx_cq(unsigned long data)
+{
+        return;
+}
+#if 0
 static struct mlx4_en_tx_desc *mlx4_en_bounce_to_desc(struct mlx4_en_priv *priv,
 						      struct mlx4_en_tx_ring *ring,
 						      u32 index,
@@ -923,3 +935,4 @@ tx_drop:
 }
 
 #endif
+
