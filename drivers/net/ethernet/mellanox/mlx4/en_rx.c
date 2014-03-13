@@ -638,6 +638,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev,
 	u64 timestamp;
 	int ip_summed;
 
+
 	if (!priv->port_up)
 		return 0;
 
@@ -779,76 +780,52 @@ out:
 }
 #endif
 
-#if 0
+/* Rx CQ polling - called by NAPI */
+static int mlx4_en_poll_rx_cq(struct mlx4_en_cq *cq, int budget)
+{
+        struct net_device *dev = cq->dev;
+        int done;
+
+        done = mlx4_en_process_rx_cq(dev, cq, budget);
+        cq->tot_rx += done;
+
+        return done;
+
+}
 void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 {
 	struct mlx4_en_cq *cq = container_of(mcq, struct mlx4_en_cq, mcq);
 	struct mlx4_en_priv *priv = netdev_priv(cq->dev);
+        int done;
 
-	if (priv->port_up)
-		napi_schedule(&cq->napi);
+        // shoot one within the irq context 
+        // I guess it is because there is no NAPI in freeBSD
+        done = mlx4_en_poll_rx_cq(cq, MLX4_EN_RX_BUDGET);
+
+	if (priv->port_up) {
+                if (done == MLX4_EN_RX_BUDGET) // there is more data in the queues
+                        taskqueue_enqueue(cq->tq, &cq->cq_task);
+        }
 	else
 		mlx4_en_arm_cq(priv, cq);
 }
-#endif
+#if 0
 void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 {
         return;
 }
+#endif
 
-#if 0
 void mlx4_en_rx_que(void *context, int pending)
 {       
         struct mlx4_en_cq *cq;
 
         cq = context;
-        while (mlx4_en_poll_rx_cq(cq, MLX4_EN_MAX_RX_POLL)
-                        == MLX4_EN_MAX_RX_POLL);
+        while (mlx4_en_poll_rx_cq(cq, MLX4_EN_RX_BUDGET)
+                        == MLX4_EN_RX_BUDGET);
         mlx4_en_arm_cq(cq->dev->if_softc, cq);
 }       
-#endif
-void mlx4_en_rx_que(void *context, int pending)
-{       
-        return;
-}
 
-#if 0
-
-/* Rx CQ polling - called by NAPI */
-int mlx4_en_poll_rx_cq(struct napi_struct *napi, int budget)
-{
-	struct mlx4_en_cq *cq = container_of(napi, struct mlx4_en_cq, napi);
-	struct net_device *dev = cq->dev;
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-	int done;
-
-	if (!mlx4_en_cq_lock_napi(cq))
-		return budget;
-
-	done = mlx4_en_process_rx_cq(dev, cq, budget);
-
-	mlx4_en_cq_unlock_napi(cq);
-
-	/* If we used up all the quota - we're probably not done yet... */
-	cq->tot_rx += done;
-	if (done == budget) {
-		INC_PERF_COUNTER(priv->pstats.napi_quota);
-		if (cq->tot_rx >= MLX4_EN_MIN_RX_ARM) {
-			napi_complete(napi);
-			mlx4_en_arm_cq(priv, cq);
-			cq->tot_rx = 0;
-			return 0;
-		}
-	} else {
-		/* Done for now */
-		napi_complete(napi);
-		mlx4_en_arm_cq(priv, cq);
-		cq->tot_rx = 0;
-		return done;
-	}
-	return budget;
-}
-#endif
 
 /* RSS related functions */
 

@@ -264,7 +264,7 @@ struct mlx4_en_tx_desc {
 
 #define MLX4_EN_USE_SRQ		0x01000000
 
-#define MLX4_EN_TX_BUDGET 64
+#define MLX4_EN_TX_BUDGET 64*4 //Shahar I've multiply the linux val(64) by 4 to compensate for no NAPI in freeBSD - not sure it's the acurate thing to do.
 #define MLX4_EN_RX_BUDGET 64
 
 #define MLX4_EN_CX3_LOW_ID	0x1000
