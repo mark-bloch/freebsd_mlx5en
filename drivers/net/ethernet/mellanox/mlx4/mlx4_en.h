@@ -187,8 +187,8 @@ enum {
 
 #define MLX4_EN_64_ALIGN	(64 - NET_SKB_PAD)
 #define SMALL_PACKET_SIZE      (256 - NET_IP_ALIGN)
-#define HEADER_COPY_SIZE       (128 - NET_IP_ALIGN)
-#define MLX4_LOOPBACK_TEST_PAYLOAD (HEADER_COPY_SIZE - ETH_HLEN)
+#define HEADER_COPY_SIZE       (128)
+#define MLX4_LOOPBACK_TEST_PAYLOAD (HEADER_COPY_SIZE - ETHER_HDR_LEN)
 
 #define MLX4_EN_MIN_MTU		46
 #define ETH_BCAST		0xffffffffffffULL
@@ -337,6 +337,7 @@ struct mlx4_en_rx_ring {
 	int qpn;
 	void *buf;
 	void *rx_info;
+	unsigned long errors;
 	unsigned long bytes;
 	unsigned long packets;
 #ifdef LL_EXTENDED_STATS
