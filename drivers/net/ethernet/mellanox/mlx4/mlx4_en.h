@@ -237,6 +237,7 @@ enum cq_type {
 struct mlx4_en_tx_info {
         struct mbuf *mb;
         u32 nr_txbb;
+	u32 nr_bytes;
         u8 linear;
         u8 nr_segs;
         u8 data_offset;

@@ -39,6 +39,15 @@
 #include <linux/vmalloc.h>
 #include <linux/moduleparam.h>
 
+#include <netinet/in_systm.h>
+#include <netinet/in.h>
+#include <netinet/if_ether.h>
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+#include <netinet/tcp.h>
+#include <netinet/tcp_lro.h>
+#include <netinet/udp.h>
+
 #include "mlx4_en.h"
 
 enum {
@@ -697,7 +706,7 @@ static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct sk_buff *sk
 }
 #endif
 
-u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
+u16 mlx4_en_select_queue(struct net_device *dev, struct mbuf *mb)
 {
 	return 0;
 #if 0
@@ -720,19 +729,29 @@ static void mlx4_bf_copy(void __iomem *dst, unsigned long *src, unsigned bytecnt
 	__iowrite64_copy(dst, src, bytecnt / 8);
 }
 
-netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
+static u64 mlx4_en_mac_to_u64(u8 *addr)
+{
+        u64 mac = 0;
+        int i;
+
+        for (i = 0; i < ETHER_ADDR_LEN; i++) {
+                mac <<= 8;
+                mac |= addr[i];
+        }
+        return mac;
+}
+
+static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct mlx4_en_dev *mdev = priv->mdev;
-	struct device *ddev = priv->ddev;
 	struct mlx4_en_tx_ring *ring;
 	struct mlx4_en_tx_desc *tx_desc;
 	struct mlx4_wqe_data_seg *data;
-	struct skb_frag_struct *frag;
 	struct mlx4_en_tx_info *tx_info;
-	struct ethhdr *ethh;
-	int tx_ind = 0;
+	struct mbuf *m;
 	int nr_txbb;
+	int nr_segs;
 	int desc_size;
 	int real_size;
 	dma_addr_t dma;
@@ -741,32 +760,39 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 	u16 vlan_tag = 0;
 	int i;
 	int lso_header_size;
-	void *fragptr = NULL;
 	bool bounce = false;
 	bool inl = false;
+	struct mbuf *mb;
+	mb = *mbp;
 
 	if (!priv->port_up)
 		goto tx_drop;
 
-	tx_ind = skb->queue_mapping;
 	ring = priv->tx_ring[tx_ind];
 	ring_size = ring->size;
-	inl = is_inline(skb, &fragptr, ring->inline_thold);
-	real_size = get_real_size(skb, dev, &lso_header_size, inl);
+	inl = is_inline(mb);
+	real_size = get_real_size(mb, dev, &nr_segs, &lso_header_size, inl);
 	if (unlikely(!real_size))
 		goto tx_drop;
+
+	lso_header_size = 0; /* MENY: LSO disabled */
 
 	/* Align descriptor to TXBB size */
 	desc_size = ALIGN(real_size, TXBB_SIZE);
 	nr_txbb = desc_size / TXBB_SIZE;
 	if (unlikely(nr_txbb > MAX_DESC_TXBBS)) {
-		if (netif_msg_tx_err(priv))
-			en_warn(priv, "Oversized header or SG list\n");
+		/* MENY: Need to consider FreeBSD's m_defrag logic */
+		en_warn(priv, "Oversized header or SG list\n");
 		goto tx_drop;
 	}
 
-	if (vlan_tx_tag_present(skb))
-		vlan_tag = vlan_tx_tag_get(skb);
+	/* Obtain VLAN information if present */
+	if (mb->m_flags & M_VLANTAG) {
+		vlan_tag = mb->m_pkthdr.ether_vtag;
+	} 
+	/* MENY: consider passing vlan_tag as an atgument. 
+	 * Already used in select_queue().
+	 */
 
 	/* Track current inflight packets for performance analysis */
 	AVG_PERF_COUNTER(priv->pstats.inflight_avg,
@@ -785,10 +811,11 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 		bounce = true;
 	}
 
-	/* Save skb in tx_info ring */
+	/* Save mb in tx_info ring */
 	tx_info = &ring->tx_info[index];
-	tx_info->skb = skb;
+	tx_info->mb = mb;
 	tx_info->nr_txbb = nr_txbb;
+	tx_info->nr_segs = nr_segs;
 
 	if (lso_header_size)
 		data = ((void *)&tx_desc->lso + ALIGN(lso_header_size + 4,
@@ -799,47 +826,45 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* valid only for none inline segments */
 	tx_info->data_offset = (void *)data - (void *)tx_desc;
 
+#if 0 /* LSO - SKB */
 	tx_info->linear = (lso_header_size < skb_headlen(skb) &&
 			   !inl) ? 1 : 0;
 
 	data += skb_shinfo(skb)->nr_frags + tx_info->linear - 1;
+#endif
+	/* MENY: data should point to the last relevant txbb
+	* from there we go backwards. ctrl seg is handled last */
+        data += nr_segs;
 
 	if (inl) {
 		tx_info->inl = 1;
 	} else {
-		/* Map fragments */
-		for (i = skb_shinfo(skb)->nr_frags - 1; i >= 0; i--) {
-			frag = &skb_shinfo(skb)->frags[i];
-			dma = skb_frag_dma_map(ddev, frag,
-					       0, skb_frag_size(frag),
-					       DMA_TO_DEVICE);
-			if (dma_mapping_error(ddev, dma))
-				goto tx_drop_unmap;
-
-			data->addr = cpu_to_be64(dma);
-			data->lkey = cpu_to_be32(mdev->mr.key);
-			wmb();
-			data->byte_count = cpu_to_be32(skb_frag_size(frag));
-			--data;
-		}
-
-		/* Map linear part */
-		if (tx_info->linear) {
-			u32 byte_count = skb_headlen(skb) - lso_header_size;
-			dma = dma_map_single(ddev, skb->data +
-					     lso_header_size, byte_count,
-					     PCI_DMA_TODEVICE);
-			if (dma_mapping_error(ddev, dma))
-				goto tx_drop_unmap;
-
-			data->addr = cpu_to_be64(dma);
-			data->lkey = cpu_to_be32(mdev->mr.key);
-			wmb();
-			data->byte_count = cpu_to_be32(byte_count);
-		}
-		tx_info->inl = 0;
+		for (i = 0, m = mb; i < nr_segs; i++, m = m->m_next) {
+                        if (m->m_len == 0) {
+                                i--;
+                                continue;
+                        }
+                        dma = pci_map_single(mdev->dev->pdev, m->m_data,
+                                             m->m_len, PCI_DMA_TODEVICE);
+                        /* MENY: need to add check that dma passed,
+                        * it could fail after a few data segments,
+                        * then you'll need to unmap those who got already mapped*/
+                        //if (!dma)
+                        //        goto tx_drop_unmap;
+                        data->addr = cpu_to_be64(dma);
+                        data->lkey = cpu_to_be32(mdev->mr.key);
+                        wmb();
+                        data->byte_count = cpu_to_be32(m->m_len);
+                        --data; 
+                }
+                if (lso_header_size) {
+                        mb->m_data -= lso_header_size;
+                        mb->m_len += lso_header_size;
+                }
+                tx_info->inl = 0;
 	}
 
+#if 0 /* TIME STAMPING */
 	/*
 	 * For timestamping add flag to skb_shinfo and
 	 * set flag for further reference
@@ -849,31 +874,46 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 		tx_info->ts_requested = 1;
 	}
+#endif
 
 	/* Prepare ctrl segement apart opcode+ownership, which depends on
 	 * whether LSO is used */
 	tx_desc->ctrl.vlan_tag = cpu_to_be16(vlan_tag);
 	tx_desc->ctrl.ins_vlan = MLX4_WQE_CTRL_INS_VLAN *
-		!!vlan_tx_tag_present(skb);
+		!!vlan_tag;
 	tx_desc->ctrl.fence_size = (real_size / 16) & 0x3f;
 	tx_desc->ctrl.srcrb_flags = priv->ctrl_flags;
-	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
-		tx_desc->ctrl.srcrb_flags |= cpu_to_be32(MLX4_WQE_CTRL_IP_CSUM |
-							 MLX4_WQE_CTRL_TCP_UDP_CSUM);
-		ring->tx_csum++;
-	}
+	if (mb->m_pkthdr.csum_flags & (CSUM_IP|CSUM_TCP|CSUM_UDP)) {
+                if (mb->m_pkthdr.csum_flags & CSUM_IP)
+                        tx_desc->ctrl.srcrb_flags |=
+                            cpu_to_be32(MLX4_WQE_CTRL_IP_CSUM);
+                if (mb->m_pkthdr.csum_flags & (CSUM_TCP|CSUM_UDP))
+                        tx_desc->ctrl.srcrb_flags |=
+                            cpu_to_be32(MLX4_WQE_CTRL_TCP_UDP_CSUM);
+                priv->port_stats.tx_chksum_offload++; // MENY: ?
+                ring->tx_csum++;
+        }
 
 	if (priv->flags & MLX4_EN_FLAG_ENABLE_HW_LOOPBACK) {
-		/* Copy dst mac address to wqe. This allows loopback in eSwitch,
-		 * so that VFs and PF can communicate with each other
-		 */
-		ethh = (struct ethhdr *)skb->data;
-		tx_desc->ctrl.srcrb_flags16[0] = get_unaligned((__be16 *)ethh->h_dest);
-		tx_desc->ctrl.imm = get_unaligned((__be32 *)(ethh->h_dest + 2));
+	/* MENY: validate use of this flag instead of 'validate_loopback()' */
+		/* Copy dst mac address to wqe */
+                struct ether_header *ethh;
+                u64 mac;
+                u32 mac_l, mac_h;
+
+                ethh = mtod(mb, struct ether_header *);
+                mac = mlx4_en_mac_to_u64(ethh->ether_dhost);
+                if (mac) {
+                        mac_h = (u32) ((mac & 0xffff00000000ULL) >> 16);
+                        mac_l = (u32) (mac & 0xffffffff);
+                        tx_desc->ctrl.srcrb_flags |= cpu_to_be32(mac_h);
+                        tx_desc->ctrl.imm = cpu_to_be32(mac_l);
+                }
 	}
 
 	/* Handle LSO (TSO) packets */
 	if (lso_header_size) {
+		int segsz;
 		/* Mark opcode as LSO */
 		op_own = cpu_to_be32(MLX4_OPCODE_LSO | (1 << 6)) |
 			((ring->prod & ring_size) ?
@@ -881,33 +921,40 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 
 		/* Fill in the LSO prefix */
 		tx_desc->lso.mss_hdr_size = cpu_to_be32(
-			skb_shinfo(skb)->gso_size << 16 | lso_header_size);
+			mb->m_pkthdr.tso_segsz << 16 | lso_header_size);
 
 		/* Copy headers;
 		 * note that we already verified that it is linear */
-		memcpy(tx_desc->lso.header, skb->data, lso_header_size);
+		memcpy(tx_desc->lso.header, mb->m_data, lso_header_size);
+                data = ((void *) &tx_desc->lso +
+                        ALIGN(lso_header_size + 4, DS_SIZE));
 
-		priv->port_stats.tso_packets++;
-		i = ((skb->len - lso_header_size) / skb_shinfo(skb)->gso_size) +
-			!!((skb->len - lso_header_size) % skb_shinfo(skb)->gso_size);
-		tx_info->nr_bytes = skb->len + (i - 1) * lso_header_size;
-		ring->packets += i;
+                priv->port_stats.tso_packets++;
+                segsz = mb->m_pkthdr.tso_segsz;
+                i = ((mb->m_pkthdr.len - lso_header_size) / segsz) +
+                        !!((mb->m_pkthdr.len - lso_header_size) % segsz);
+                tx_info->nr_bytes= mb->m_pkthdr.len + (i - 1) * lso_header_size;
+                ring->packets += i;
+                mb->m_data += lso_header_size;
+                mb->m_len -= lso_header_size;
 	} else {
 		/* Normal (Non LSO) packet */
 		op_own = cpu_to_be32(MLX4_OPCODE_SEND) |
 			((ring->prod & ring_size) ?
 			 cpu_to_be32(MLX4_EN_BIT_DESC_OWN) : 0);
-		tx_info->nr_bytes = max_t(unsigned int, skb->len, ETH_ZLEN);
+		tx_info->nr_bytes = max(mb->m_pkthdr.len,
+                    (unsigned int)ETHER_MIN_LEN - ETHER_CRC_LEN);
 		ring->packets++;
 
 	}
 	ring->bytes += tx_info->nr_bytes;
-	netdev_tx_sent_queue(ring->tx_queue, tx_info->nr_bytes);
-	AVG_PERF_COUNTER(priv->pstats.tx_pktsz_avg, skb->len);
+	AVG_PERF_COUNTER(priv->pstats.tx_pktsz_avg, mb->m_pkthdr.len);
 
 	if (tx_info->inl) {
+#if 0 /* INLINE */
 		build_inline_wqe(tx_desc, skb, real_size, &vlan_tag,
 				 tx_ind, fragptr);
+#endif
 		tx_info->inl = 1;
 	}
 
@@ -921,17 +968,18 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 	 */
 	if (unlikely((int)(ring->prod - ring->cons) > ring->full_size)) {
 		/* every full Tx ring stops queue */
-		netif_tx_stop_queue(ring->tx_queue);
+		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE); /* MENY: this stopps the queue */
+                priv->port_stats.queue_stopped++; /* MENY: check if needed */
 		ring->queue_stopped++;
 	}
 
 	/* If we used a bounce buffer then copy descriptor back into place */
 	if (unlikely(bounce))
 		tx_desc = mlx4_en_bounce_to_desc(priv, ring, index, desc_size);
-
+#if 0 /* TIME STAMPING */
 	skb_tx_timestamp(skb);
-
-	if (ring->bf_enabled && desc_size <= MAX_BF && !bounce && !vlan_tx_tag_present(skb)) {
+#endif
+	if (ring->bf_enabled && desc_size <= MAX_BF && !bounce && !vlan_tag) {
 		*(__be32 *) (&tx_desc->ctrl.vlan_tag) |= cpu_to_be32(ring->doorbell_qpn);
 		op_own |= htonl((bf_index & 0xffff) << 8);
 		/* Ensure new descirptor hits memory
@@ -953,24 +1001,25 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 		wmb();
 		tx_desc->ctrl.owner_opcode = op_own;
 		wmb();
-		iowrite32be(ring->doorbell_qpn, ring->bf.uar->map + MLX4_SEND_DOORBELL);
+		writel(ring->doorbell_qpn, ring->bf.uar->map + MLX4_SEND_DOORBELL);
 	}
 
-	return NETDEV_TX_OK;
-
+	return 0;
+#if 0
 tx_drop_unmap:
-	en_err(priv, "DMA mapping error\n");
+        en_err(priv, "DMA mapping error\n");
 
-	for (i++; i < skb_shinfo(skb)->nr_frags; i++) {
-		data++;
-		dma_unmap_page(ddev, (dma_addr_t) be64_to_cpu(data->addr),
-			       be32_to_cpu(data->byte_count),
-			       PCI_DMA_TODEVICE);
-	}
-
+         for (i++; i < nr_segs; i++) {
+                data++;
+                pci_unmap_single(mdev->dev->pdev, dma,
+                                             m->m_len, PCI_DMA_TODEVICE);
+        }
+#endif
 tx_drop:
-	dev_kfree_skb_any(skb);
-	priv->stats.tx_dropped++;
-	return NETDEV_TX_OK;
+	*mbp = NULL;
+        m_freem(mb);
+        //priv->stats.tx_dropped++;
+        //ring->errors++;
+        return EINVAL;
 }
 
