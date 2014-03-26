@@ -517,7 +517,7 @@ void mlx4_en_poll_tx_cq(unsigned long data)
 {
         return;
 }
-#if 0
+
 static struct mlx4_en_tx_desc *mlx4_en_bounce_to_desc(struct mlx4_en_priv *priv,
 						      struct mlx4_en_tx_ring *ring,
 						      u32 index,
@@ -546,8 +546,10 @@ static struct mlx4_en_tx_desc *mlx4_en_bounce_to_desc(struct mlx4_en_priv *priv,
 	return ring->buf + index * TXBB_SIZE;
 }
 
-static int is_inline(struct sk_buff *skb, void **pfrag, int thold)
+static int is_inline(struct mbuf *mb)
 {
+	return 0;
+#if 0
 	void *ptr;
 
 	if (skb->len <= thold && !skb_is_gso(skb)) {
@@ -567,6 +569,7 @@ static int is_inline(struct sk_buff *skb, void **pfrag, int thold)
 	}
 
 	return 0;
+#endif
 }
 
 static int inline_size(struct mbuf *mb)
@@ -614,7 +617,7 @@ static int get_real_size(struct sk_buff *skb, struct net_device *dev,
 
 	return real_size;
 }
-
+#if 0
 static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct sk_buff *skb,
 			     int real_size, u16 *vlan_tag, int tx_ind, void *fragptr)
 {
@@ -664,9 +667,12 @@ static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct sk_buff *sk
 		(!!vlan_tx_tag_present(skb));
 	tx_desc->ctrl.fence_size = (real_size / 16) & 0x3f;
 }
+#endif
 
 u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
 {
+	return 0;
+#if 0
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	u16 rings_p_up = priv->num_tx_rings_p_up;
 	u8 up = 0;
@@ -678,6 +684,7 @@ u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
 		up = vlan_tx_tag_get(skb) >> VLAN_PRIO_SHIFT;
 
 	return __netdev_pick_tx(dev, skb) % rings_p_up + up * rings_p_up;
+#endif
 }
 
 static void mlx4_bf_copy(void __iomem *dst, unsigned long *src, unsigned bytecnt)
@@ -938,6 +945,4 @@ tx_drop:
 	priv->stats.tx_dropped++;
 	return NETDEV_TX_OK;
 }
-
-#endif
 
