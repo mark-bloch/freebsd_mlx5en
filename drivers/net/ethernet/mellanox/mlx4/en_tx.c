@@ -338,6 +338,10 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 {
 	return 0;
 }
+void mlx4_en_qflush(struct ifnet *dev)
+{
+	return;
+}
 
 int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring)
 {

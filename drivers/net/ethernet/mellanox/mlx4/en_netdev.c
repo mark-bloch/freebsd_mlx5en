@@ -2118,6 +2118,7 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 
 	en_dbg(DRV, priv, "Destroying netdev on port:%d\n", priv->port);
 
+
         if (priv->vlan_attach != NULL)
                 EVENTHANDLER_DEREGISTER(vlan_config, priv->vlan_attach);
         if (priv->vlan_detach != NULL)
@@ -2525,6 +2526,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	return (error);
 }
 
+
 int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			struct mlx4_en_port_profile *prof)
 {
@@ -2550,7 +2552,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	dev->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	dev->if_ioctl = mlx4_en_ioctl;
 	dev->if_transmit = mlx4_en_transmit;
-	//dev->if_qflush = mlx4_en_qflush;
+	dev->if_qflush = mlx4_en_qflush;
 	dev->if_snd.ifq_maxlen = prof->tx_ring_size;
 
 	/*
