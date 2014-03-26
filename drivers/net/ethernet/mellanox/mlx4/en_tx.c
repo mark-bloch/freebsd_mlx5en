@@ -590,37 +590,61 @@ static int inline_size(struct mbuf *mb)
 			     sizeof(struct mlx4_wqe_inline_seg), 16);
 }
 
-static int get_real_size(struct sk_buff *skb, struct net_device *dev,
-			 int *lso_header_size, bool inl)
+static int get_head_size(struct mbuf *mb)
 {
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-	int real_size;
+        struct tcphdr *th;
+        struct ip *ip;
+        int ip_hlen, tcp_hlen;
+        int len;
 
-	if (skb_is_gso(skb)) {
-		*lso_header_size = skb_transport_offset(skb) + tcp_hdrlen(skb);
-		real_size = CTRL_SIZE + skb_shinfo(skb)->nr_frags * DS_SIZE +
-			ALIGN(*lso_header_size + 4, DS_SIZE);
-		if (unlikely(*lso_header_size != skb_headlen(skb))) {
-			/* We add a segment for the skb linear buffer only if
-			 * it contains data */
-			if (*lso_header_size < skb_headlen(skb))
-				real_size += DS_SIZE;
-			else {
-				if (netif_msg_tx_err(priv))
-					en_warn(priv, "Non-linear headers\n");
-				return 0;
-			}
-		}
-	} else {
-		*lso_header_size = 0;
-		if (!inl)
-			real_size = CTRL_SIZE + (skb_shinfo(skb)->nr_frags + 1) * DS_SIZE;
-		else
-			real_size = inline_size(skb);
-	}
-
-	return real_size;
+        len = ETHER_HDR_LEN;
+        if (mb->m_len < len + sizeof(struct ip))
+                return (0);
+        ip = (struct ip *)(mtod(mb, char *) + len);
+        if (ip->ip_p != IPPROTO_TCP)
+                return (0);
+        ip_hlen = ip->ip_hl << 2;
+        len += ip_hlen;
+        if (mb->m_len < len + sizeof(struct tcphdr))
+                return (0);
+        th = (struct tcphdr *)(mtod(mb, char *) + len);
+        tcp_hlen = th->th_off << 2;
+        len += tcp_hlen;
+        if (mb->m_len < len)
+                return (0);
+        return (len);
 }
+
+static int get_real_size(struct mbuf *mb, struct net_device *dev, int *p_n_segs,
+    int *lso_header_size, int inl)
+{
+        struct mbuf *m;
+        int nr_segs = 0;
+
+        for (m = mb; m != NULL; m = m->m_next)
+                if (m->m_len)
+                        nr_segs++;
+
+        if (mb->m_pkthdr.csum_flags & CSUM_TSO) {
+                *lso_header_size = get_head_size(mb);
+                if (*lso_header_size) {
+                        if (mb->m_len == *lso_header_size)
+                                nr_segs--;
+                        *p_n_segs = nr_segs;
+                        return CTRL_SIZE + nr_segs * DS_SIZE +
+                            ALIGN(*lso_header_size + 4, DS_SIZE);
+                }
+        } else
+                *lso_header_size = 0;
+        *p_n_segs = nr_segs;
+	/* MENY: need to consider starting with inl condition
+	 * to improve performace for inline packets
+	 */
+        if (inl)
+                return inline_size(mb);
+        return (CTRL_SIZE + nr_segs * DS_SIZE);
+}
+
 #if 0
 static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct sk_buff *skb,
 			     int real_size, u16 *vlan_tag, int tx_ind, void *fragptr)
