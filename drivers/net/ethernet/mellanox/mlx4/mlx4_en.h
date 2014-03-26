@@ -737,6 +737,9 @@ static inline bool mlx4_en_cq_ll_polling(struct mlx4_en_cq *cq)
 
 #define MLX4_EN_WOL_DO_MODIFY (1ULL << 63)
 
+int mlx4_en_transmit(struct ifnet *dev, struct mbuf *m);
+
+
 void mlx4_en_destroy_netdev(struct net_device *dev);
 int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			struct mlx4_en_port_profile *prof);

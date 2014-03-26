@@ -333,6 +333,11 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 	return tx_info->nr_txbb;
 }
 
+int
+mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
+{
+	return 0;
+}
 
 int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring)
 {

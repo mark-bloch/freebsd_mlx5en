@@ -46,6 +46,8 @@
 #include <linux/mlx4/cmd.h>
 #include <linux/mlx4/cq.h>
 
+#include <sys/sockio.h>
+
 
 #include "mlx4_en.h"
 #include "en_port.h"
@@ -1455,6 +1457,7 @@ int mlx4_en_start_port(struct net_device *dev)
 	int j;
 	u8 mc_list[16] = {0};
 
+
 	if (priv->port_up) {
 		en_dbg(DRV, priv, "start port called while port already up\n");
 		return 0;
@@ -1607,7 +1610,7 @@ int mlx4_en_start_port(struct net_device *dev)
 	priv->flags &= ~(MLX4_EN_FLAG_PROMISC | MLX4_EN_FLAG_MC_PROMISC);
 
 	/* Schedule multicast task to populate multicast list */
-	queue_work(mdev->workqueue, &priv->rx_mode_task);
+	//queue_work(mdev->workqueue, &priv->rx_mode_task);
 
 	mlx4_set_stats_bitmap(mdev->dev, priv->stats_bitmap);
 
@@ -1621,6 +1624,7 @@ int mlx4_en_start_port(struct net_device *dev)
 #endif
         callout_reset(&priv->watchdog_timer, MLX4_EN_WATCHDOG_TIMEOUT,
                     mlx4_en_watchdog_timeout, priv);
+
 
 	return 0;
 
@@ -2119,13 +2123,13 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
         if (priv->vlan_detach != NULL)
                 EVENTHANDLER_DEREGISTER(vlan_unconfig, priv->vlan_detach);
 
-
 	/* Unregister device - this will close the port if it was up */
 	if (priv->registered)
 		ether_ifdetach(dev);
 
 	if (priv->allocated)
 		mlx4_free_hwq_res(mdev->dev, &priv->res, MLX4_EN_PAGE_SIZE);
+
 
 	cancel_delayed_work(&priv->stats_task);
 	cancel_delayed_work(&priv->service_task);
@@ -2137,6 +2141,7 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	mutex_lock(&mdev->state_lock);
 	mdev->pndev[priv->port] = NULL;
 	mutex_unlock(&mdev->state_lock);
+
 
 	mlx4_en_free_resources(priv);
 
@@ -2438,6 +2443,88 @@ static const struct net_device_ops mlx4_netdev_ops_master = {
 };
 #endif
 
+
+static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
+{
+	struct mlx4_en_priv *priv;
+	struct mlx4_en_dev *mdev;
+	struct ifreq *ifr;
+	int error;
+	int mask;
+
+	error = 0;
+	mask = 0;
+	priv = dev->if_softc;
+	mdev = priv->mdev;
+	ifr = (struct ifreq *) data;
+	switch (command) {
+
+// keep mlx4_en_ioctl at minimum - I'll deal with the reset later
+#if 0
+	case SIOCSIFMTU:
+		error = -mlx4_en_change_mtu(dev, ifr->ifr_mtu);
+		break;
+	case SIOCSIFFLAGS:
+		if (dev->if_flags & IFF_UP) {
+			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
+				mlx4_en_start_port(dev);
+			else
+				mlx4_en_set_multicast(dev);
+		} else {
+			if (dev->if_drv_flags & IFF_DRV_RUNNING) {
+				mlx4_en_stop_port(dev);
+                                if_link_state_change(dev, LINK_STATE_DOWN);
+                                /*
+				 * Since mlx4_en_stop_port is defered we
+				 * have to wait till it's finished.
+				 */
+                                for (int count=0; count<10; count++) {
+                                        if (dev->if_drv_flags & IFF_DRV_RUNNING) {
+                                                DELAY(20000);
+                                        } else {
+                                                break;
+                                        }
+                                }
+			}
+		}
+		break;
+	case SIOCADDMULTI:
+	case SIOCDELMULTI:
+		mlx4_en_set_multicast(dev);
+		break;
+	case SIOCSIFMEDIA:
+	case SIOCGIFMEDIA:
+		error = ifmedia_ioctl(dev, ifr, &priv->media, command);
+		break;
+	case SIOCSIFCAP:
+		mutex_lock(&mdev->state_lock);
+		mask = ifr->ifr_reqcap ^ dev->if_capenable;
+		if (mask & IFCAP_HWCSUM)
+			dev->if_capenable ^= IFCAP_HWCSUM;
+		if (mask & IFCAP_TSO4)
+			dev->if_capenable ^= IFCAP_TSO4;
+		if (mask & IFCAP_LRO)
+			dev->if_capenable ^= IFCAP_LRO;
+		if (mask & IFCAP_VLAN_HWTAGGING)
+			dev->if_capenable ^= IFCAP_VLAN_HWTAGGING;
+		if (mask & IFCAP_VLAN_HWFILTER)
+			dev->if_capenable ^= IFCAP_VLAN_HWFILTER;
+		if (mask & IFCAP_WOL_MAGIC)
+			dev->if_capenable ^= IFCAP_WOL_MAGIC;
+		if (dev->if_drv_flags & IFF_DRV_RUNNING)
+			mlx4_en_start_port(dev);
+		mutex_unlock(&mdev->state_lock);
+		VLAN_CAPABILITIES(dev);
+		break;
+#endif
+	default:
+		error = ether_ioctl(dev, command, data);
+		break;
+	}
+
+	return (error);
+}
+
 int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			struct mlx4_en_port_profile *prof)
 {
@@ -2461,8 +2548,8 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	dev->if_baudrate = 1000000000;
 	dev->if_init = mlx4_en_open;
 	dev->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
-	//dev->if_ioctl = mlx4_en_ioctl;
-	//dev->if_transmit = mlx4_en_transmit;
+	dev->if_ioctl = mlx4_en_ioctl;
+	dev->if_transmit = mlx4_en_transmit;
 	//dev->if_qflush = mlx4_en_qflush;
 	dev->if_snd.ifq_maxlen = prof->tx_ring_size;
 
