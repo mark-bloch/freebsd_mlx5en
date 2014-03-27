@@ -738,11 +738,6 @@ static inline bool mlx4_en_cq_ll_polling(struct mlx4_en_cq *cq)
 
 #define MLX4_EN_WOL_DO_MODIFY (1ULL << 63)
 
-int mlx4_en_transmit(struct ifnet *dev, struct mbuf *m);
-void mlx4_en_qflush(struct ifnet *dev);
-
-
-
 void mlx4_en_destroy_netdev(struct net_device *dev);
 int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			struct mlx4_en_port_profile *prof);
@@ -766,6 +761,7 @@ int mlx4_en_arm_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq);
 void mlx4_en_tx_irq(struct mlx4_cq *mcq);
 u16 mlx4_en_select_queue(struct net_device *dev, struct mbuf *mb);
 
+int mlx4_en_transmit(struct ifnet *dev, struct mbuf *m);
 int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 			   struct mlx4_en_tx_ring **pring,
 			   u32 size, u16 stride, int node, int queue_idx);
@@ -776,6 +772,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     int cq, int user_prio);
 void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring);
+void mlx4_en_qflush(struct ifnet *dev);
 
 int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 			   struct mlx4_en_rx_ring **pring,

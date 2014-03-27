@@ -342,16 +342,6 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 	return tx_info->nr_txbb;
 }
 
-int
-mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
-{
-	return 0;
-}
-void mlx4_en_qflush(struct ifnet *dev)
-{
-	return;
-}
-
 int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -1023,3 +1013,39 @@ tx_drop:
         return EINVAL;
 }
 
+static int
+mlx4_en_transmit_locked(struct ifnet *dev, int tx_ind, struct mbuf *m)
+{
+	int err = 0;
+	err = mlx4_en_xmit(dev, tx_ind, &m);
+	return 0;
+}
+
+int
+mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
+{
+	struct mlx4_en_priv *priv = netdev_priv(dev);
+	struct mlx4_en_tx_ring *ring;
+	int i = 0, err = 0;
+
+        ring = priv->tx_ring[i];
+
+	if (spin_trylock(&ring->tx_lock)) {
+		err = mlx4_en_transmit_locked(dev, i, m);
+		spin_unlock(&ring->tx_lock);
+		/* Poll CQ here */
+		//mlx4_en_xmit_poll(priv, i);
+	} else {
+		printf("Can't lock ring!!");
+		//err = drbr_enqueue(dev, ring->br, m);
+		//cq = &priv->tx_cq[i];
+		//taskqueue_enqueue(cq->tq, &cq->cq_task);
+	}
+
+	return (err);
+}
+
+void mlx4_en_qflush(struct ifnet *dev)
+{
+	return;
+}
