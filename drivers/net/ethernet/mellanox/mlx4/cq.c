@@ -380,6 +380,7 @@ int mlx4_init_cq_table(struct mlx4_dev *dev)
 	int err;
 
 	spin_lock_init(&cq_table->lock);
+	rwlock_init(&cq_table->cq_table_lock);
 	INIT_RADIX_TREE(&cq_table->tree, GFP_ATOMIC);
 	if (mlx4_is_slave(dev))
 		return 0;
