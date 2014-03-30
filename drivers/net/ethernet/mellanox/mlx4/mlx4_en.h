@@ -284,6 +284,7 @@ struct mlx4_en_tx_ring {
 	u32 doorbell_qpn;
 	void *buf;
 	u16 poll_cnt;
+	int blocked;
 	struct mlx4_en_tx_info *tx_info;
 	u8 *bounce_buf;
 	u8 queue_index;
@@ -306,6 +307,7 @@ struct mlx4_en_tx_ring {
 	int hwtstamp_tx_type;
 	int full_size;
 	int inline_thold;
+	u64 watchdog_time;
 };
 
 struct mlx4_en_rx_desc {
@@ -590,6 +592,7 @@ struct mlx4_en_priv {
 	eventhandler_tag vlan_detach;
 	struct callout watchdog_timer;
         struct ifmedia media;
+	volatile int blocked;
 	struct sysctl_oid *sysctl;
 	struct sysctl_ctx_list conf_ctx;
 	struct sysctl_ctx_list stat_ctx;

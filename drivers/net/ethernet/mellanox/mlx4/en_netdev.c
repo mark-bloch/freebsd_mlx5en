@@ -1767,7 +1767,22 @@ static void mlx4_en_restart(struct work_struct *work)
 						 watchdog_task);
 	struct mlx4_en_dev *mdev = priv->mdev;
 	struct net_device *dev = priv->dev;
+	struct mlx4_en_tx_ring *ring;
+	int i;
 
+
+	if (priv->blocked == 0 || priv->port_up == 0)
+		return;
+	for (i = 0; i < priv->tx_ring_num; i++) {
+		ring = priv->tx_ring[i];
+		if (ring->blocked &&
+				ring->watchdog_time + MLX4_EN_WATCHDOG_TIMEOUT < ticks)
+			goto reset;
+	}
+	return;
+
+reset:
+	priv->port_stats.tx_timeout++;
 	en_dbg(DRV, priv, "Watchdog task called for port %d\n", priv->port);
 
 	mutex_lock(&mdev->state_lock);

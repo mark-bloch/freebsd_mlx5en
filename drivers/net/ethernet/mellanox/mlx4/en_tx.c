@@ -215,6 +215,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 	ring->cons = 0xffffffff;
 	ring->last_nr_txbb = 1;
 	ring->poll_cnt = 0;
+	ring->blocked = 0;
 	memset(ring->tx_info, 0, ring->size * sizeof(struct mlx4_en_tx_info));
 	memset(ring->buf, 0, ring->buf_size);
 
@@ -1016,8 +1017,17 @@ tx_drop:
 static int
 mlx4_en_transmit_locked(struct ifnet *dev, int tx_ind, struct mbuf *m)
 {
+	struct mlx4_en_priv *priv = netdev_priv(dev);
 	int err = 0;
+	int enqueued = 0;
+
+	struct mlx4_en_tx_ring *ring;
+	ring = priv->tx_ring[tx_ind];
+
 	err = mlx4_en_xmit(dev, tx_ind, &m);
+
+	if (enqueued > 0)
+		ring->watchdog_time = ticks;
 	return 0;
 }
 
