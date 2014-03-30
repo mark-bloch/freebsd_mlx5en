@@ -1487,7 +1487,6 @@ int mlx4_en_start_port(struct net_device *dev)
 		cq = priv->rx_cq[i];
 
 		mlx4_en_cq_init_lock(cq);
-
 		err = mlx4_en_activate_cq(priv, cq, i);
 		if (err) {
 			en_err(priv, "Failed activating Rx CQ\n");
@@ -2445,6 +2444,106 @@ static const struct net_device_ops mlx4_netdev_ops_master = {
 #endif
 
 
+static int mlx4_en_calc_media(struct mlx4_en_priv *priv)
+{
+	int trans_type;
+	int active;
+
+	active = IFM_ETHER;
+	if (priv->last_link_state == MLX4_DEV_EVENT_PORT_DOWN)
+		return (active);
+	/*
+	 * [ShaharK] mlx4_en_QUERY_PORT sleeps and cannot be called under a
+	 * non-sleepable lock.
+	 * I moved it to the periodic mlx4_en_do_get_stats.
+ 	if (mlx4_en_QUERY_PORT(priv->mdev, priv->port))
+ 		return (active);
+	*/
+	active |= IFM_FDX;
+	trans_type = priv->port_state.transciver;
+	/* XXX I don't know all of the transceiver values. */
+	switch (priv->port_state.link_speed) {
+	case 1000:
+		active |= IFM_1000_T;
+		break;
+	case 10000:
+		if (trans_type > 0 && trans_type <= 0xC)
+			active |= IFM_10G_SR;
+		else if (trans_type == 0x80 || trans_type == 0)
+			active |= IFM_10G_CX4;
+		break;
+	case 40000:
+		active |= IFM_40G_CR4;
+		break;
+	}
+	if (priv->prof->tx_pause)
+		active |= IFM_ETH_TXPAUSE;
+	if (priv->prof->rx_pause)
+		active |= IFM_ETH_RXPAUSE;
+
+	return (active);
+}
+
+
+static void mlx4_en_media_status(struct ifnet *dev, struct ifmediareq *ifmr)
+{
+	struct mlx4_en_priv *priv;
+
+	priv = dev->if_softc;
+	ifmr->ifm_status = IFM_AVALID;
+	if (priv->last_link_state != MLX4_DEV_EVENT_PORT_DOWN)
+		ifmr->ifm_status |= IFM_ACTIVE;
+	ifmr->ifm_active = mlx4_en_calc_media(priv);
+
+	return;
+}
+
+static int mlx4_en_media_change(struct ifnet *dev)
+{
+	struct mlx4_en_priv *priv;
+        struct ifmedia *ifm;
+	int rxpause;
+	int txpause;
+	int error;
+
+	priv = dev->if_softc;
+	ifm = &priv->media;
+	rxpause = txpause = 0;
+	error = 0;
+
+	if (IFM_TYPE(ifm->ifm_media) != IFM_ETHER)
+		return (EINVAL);
+        switch (IFM_SUBTYPE(ifm->ifm_media)) {
+        case IFM_AUTO:
+		break;
+	case IFM_10G_SR:
+	case IFM_10G_CX4:
+	case IFM_1000_T:
+		if (IFM_SUBTYPE(ifm->ifm_media) ==
+		    IFM_SUBTYPE(mlx4_en_calc_media(priv)) &&
+		    (ifm->ifm_media & IFM_FDX))
+			break;
+		/* Fallthrough */
+	default:
+                printf("%s: Only auto media type\n", if_name(dev));
+                return (EINVAL);
+	}
+	/* Allow user to set/clear pause */
+	if (IFM_OPTIONS(ifm->ifm_media) & IFM_ETH_RXPAUSE)
+		rxpause = 1;
+	if (IFM_OPTIONS(ifm->ifm_media) & IFM_ETH_TXPAUSE)
+		txpause = 1;
+	if (priv->prof->tx_pause != txpause || priv->prof->rx_pause != rxpause) {
+		priv->prof->tx_pause = txpause;
+		priv->prof->rx_pause = rxpause;
+		error = -mlx4_SET_PORT_general(priv->mdev->dev, priv->port,
+		     priv->rx_mb_size + ETHER_CRC_LEN, priv->prof->tx_pause,
+		     priv->prof->tx_ppp, priv->prof->rx_pause,
+		     priv->prof->rx_ppp);
+	}
+	return (error);
+}
+
 static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 {
 	struct mlx4_en_priv *priv;
@@ -2493,6 +2592,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	case SIOCDELMULTI:
 		mlx4_en_set_multicast(dev);
 		break;
+#endif
 	case SIOCSIFMEDIA:
 	case SIOCGIFMEDIA:
 		error = ifmedia_ioctl(dev, ifr, &priv->media, command);
@@ -2517,7 +2617,6 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		mutex_unlock(&mdev->state_lock);
 		VLAN_CAPABILITIES(dev);
 		break;
-#endif
 	default:
 		error = ether_ioctl(dev, command, data);
 		break;
@@ -2684,7 +2783,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 
 	ether_ifattach(dev, dev_addr);
-#if 0
         // part of the ethtool/ioctl -SK
 	ifmedia_init(&priv->media, IFM_IMASK | IFM_ETH_FMASK,
 	    mlx4_en_media_change, mlx4_en_media_status);
@@ -2693,7 +2791,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_10G_CX4, 0, NULL);
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_AUTO, 0, NULL);
 	ifmedia_set(&priv->media, IFM_ETHER | IFM_AUTO);
-#endif
 
 	en_warn(priv, "Using %d TX rings\n", prof->tx_ring_num);
 	en_warn(priv, "Using %d RX rings\n", prof->rx_ring_num);
