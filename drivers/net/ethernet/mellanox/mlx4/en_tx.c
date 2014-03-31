@@ -825,7 +825,7 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 #endif
 	/* MENY: data should point to the last relevant txbb
 	* from there we go backwards. ctrl seg is handled last */
-        data += nr_segs;
+        data += nr_segs -1;
 
 	if (inl) {
 		tx_info->inl = 1;
@@ -1040,17 +1040,7 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 
         ring = priv->tx_ring[i];
 
-	if (spin_trylock(&ring->tx_lock)) {
-		err = mlx4_en_transmit_locked(dev, i, m);
-		spin_unlock(&ring->tx_lock);
-		/* Poll CQ here */
-		//mlx4_en_xmit_poll(priv, i);
-	} else {
-		printf("Can't lock ring!!");
-		//err = drbr_enqueue(dev, ring->br, m);
-		//cq = &priv->tx_cq[i];
-		//taskqueue_enqueue(cq->tq, &cq->cq_task);
-	}
+	err = mlx4_en_transmit_locked(dev, i, m);
 
 	return (err);
 }
