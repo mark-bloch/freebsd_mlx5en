@@ -896,6 +896,12 @@ static struct mbuf *mlx4_en_rx_mb(struct mlx4_en_priv *priv,
 	return mb;
 }
 
+/* For cpu arch with cache line of 64B the performance is better when cqe size==64B
+ * To enlarge cqe size from 32B to 64B --> 32B of garbage (i.e. 0xccccccc)
+ * was added in the beginning of each cqe (the real data is in the corresponding 32B).
+ * The following calc ensures that when factor==1, it means we are alligned to 64B
+ * and we get the real cqe data*/
+#define CQE_FACTOR_INDEX(index, factor) ((index << factor) + factor)
 int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int budget)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -904,12 +910,18 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 	struct mbuf **mb_list;
 	struct mlx4_en_rx_desc *rx_desc;
 	struct mbuf *mb;
+	struct mlx4_cq *mcq = &cq->mcq;
+	struct mlx4_cqe *buf = cq->buf;
 #ifdef INET
 	struct lro_entry *queued;
 #endif
 	int index;
 	unsigned int length;
 	int polled = 0;
+	u32 cons_index = mcq->cons_index;
+	u32 size_mask = ring->size_mask;
+	int size = cq->size;
+	int factor = priv->cqe_factor;
 
 	if (!priv->port_up)
 		return 0;
@@ -917,13 +929,12 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 	/* We assume a 1:1 mapping between CQEs and Rx descriptors, so Rx
 	 * descriptor offset can be deduced from the CQE index instead of
 	 * reading 'cqe->index' */
-	index = cq->mcq.cons_index & ring->size_mask;
-	cqe = &cq->buf[index];
+	index = cons_index & size_mask;
+	cqe = &buf[CQE_FACTOR_INDEX(index, factor)];
 
 	/* Process all completed CQEs */
 	while (XNOR(cqe->owner_sr_opcode & MLX4_CQE_OWNER_MASK,
-		    cq->mcq.cons_index & cq->size)) {
-
+		    cons_index & size)) {
 		mb_list = ring->rx_info + (index << priv->log_rx_info);
 		rx_desc = ring->buf + (index << ring->log_stride);
 
@@ -932,9 +943,9 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 		 */
 		rmb();
 
-		if (invalid_cqe(priv, cqe))
+		if (invalid_cqe(priv, cqe)) {
 			goto next;
-
+		}
 		/*
 		 * Packet is OK - process it.
 		 */
@@ -1001,9 +1012,9 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 		dev->if_input(dev, mb);
 
 next:
-		++cq->mcq.cons_index;
-		index = (cq->mcq.cons_index) & ring->size_mask;
-		cqe = &cq->buf[index];
+		++cons_index;
+		index = cons_index & size_mask;
+		cqe = &buf[CQE_FACTOR_INDEX(index, factor)];
 		if (++polled == budget)
 			goto out;
 	}
@@ -1017,12 +1028,14 @@ out:
 	}
 #endif
 	AVG_PERF_COUNTER(priv->pstats.rx_coal_avg, polled);
-	mlx4_cq_set_ci(&cq->mcq);
+	mcq->cons_index = cons_index;
+	mlx4_cq_set_ci(mcq);
 	wmb(); /* ensure HW sees CQ consumer before we post new buffers */
-	ring->cons = cq->mcq.cons_index;
+	ring->cons = mcq->cons_index;
 	ring->prod += polled; /* Polled descriptors were realocated in place */
 	mlx4_en_update_rx_prod_db(ring);
 	return polled;
+
 }
 
 /* Rx CQ polling - called by NAPI */
@@ -1046,13 +1059,12 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq)
         // shoot one within the irq context 
         // I guess it is because there is no NAPI in freeBSD
         done = mlx4_en_poll_rx_cq(cq, MLX4_EN_RX_BUDGET);
-
-	if (priv->port_up) {
-                if (done == MLX4_EN_RX_BUDGET) // there is more data in the queues
-                        taskqueue_enqueue(cq->tq, &cq->cq_task);
+	if (priv->port_up  && (done == MLX4_EN_RX_BUDGET) ) {
+		taskqueue_enqueue(cq->tq, &cq->cq_task);
         }
-	else
+	else {
 		mlx4_en_arm_cq(priv, cq);
+	}
 }
 #if 0
 void mlx4_en_rx_irq(struct mlx4_cq *mcq)
