@@ -244,7 +244,6 @@ void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 	mlx4_qp_modify(mdev->dev, NULL, ring->qp_state,
 		       MLX4_QP_STATE_RST, NULL, 0, 0, &ring->qp);
 }
-#if 0
 
 static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
 		       struct mlx4_en_tx_ring *ring,
@@ -276,7 +275,6 @@ static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
 		}
 }
 
-#endif
 static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring,
 				int index, u8 owner, u64 timestamp)
@@ -371,11 +369,9 @@ int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring)
 
 	return cnt;
 }
-#if 0
 
 static int mlx4_en_process_tx_cq(struct net_device *dev,
-				 struct mlx4_en_cq *cq,
-				 int budget)
+				 struct mlx4_en_cq *cq)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct mlx4_cq *mcq = &cq->mcq;
@@ -406,7 +402,7 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 
 	/* Process all completed CQEs */
 	while (XNOR(cqe->owner_sr_opcode & MLX4_CQE_OWNER_MASK,
-			cons_index & size) && (done < budget)) {
+			cons_index & size)) {
 		/*
 		 * make sure we read the CQE after we read the
 		 * ownership bit
@@ -427,9 +423,10 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 		do {
 			txbbs_skipped += ring->last_nr_txbb;
 			ring_index = (ring_index + ring->last_nr_txbb) & size_mask;
+#if 0 /* TIME STAMPING */
 			if (ring->tx_info[ring_index].ts_requested)
 				timestamp = mlx4_en_get_cqe_ts(cqe);
-
+#endif
 			/* free next descriptor */
 			ring->last_nr_txbb = mlx4_en_free_tx_desc(
 					priv, ring, ring_index,
@@ -442,7 +439,7 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 			txbbs_stamp = txbbs_skipped;
 			packets++;
 			bytes += ring->tx_info[ring_index].nr_bytes;
-		} while ((++done < budget) && (ring_index != new_index));
+		} while (ring_index != new_index);
 
 		++cons_index;
 		index = cons_index & size_mask;
@@ -458,34 +455,27 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 	mlx4_cq_set_ci(mcq);
 	wmb();
 	ring->cons += txbbs_skipped;
-	netdev_tx_completed_queue(ring->tx_queue, packets, bytes);
 
 	/* Wakeup Tx queue if it was stopped and ring is not full */
-	if (netif_tx_queue_stopped(netdev_get_tx_queue(dev, cq->ring)) &&
+	if (unlikely(ring->blocked) &&
 	    (ring->prod - ring->cons) <= ring->full_size) {
-		netif_tx_wake_queue(ring->tx_queue);
+		ring->blocked = 0;
+		if (atomic_fetchadd_int(&priv->blocked, -1) == 1)
+			atomic_clear_int(&dev->if_drv_flags ,IFF_DRV_OACTIVE);
 		ring->wake_queue++;
+		priv->port_stats.wake_queue++;
 	}
 	return done;
 }
-#endif
 
-#if 0
 void mlx4_en_tx_irq(struct mlx4_cq *mcq)
 {
 	struct mlx4_en_cq *cq = container_of(mcq, struct mlx4_en_cq, mcq);
-	struct mlx4_en_priv *priv = netdev_priv(cq->dev);
 
-	if (priv->port_up)
-		napi_schedule(&cq->napi);
-	else
-		mlx4_en_arm_cq(priv, cq);
+	mlx4_en_process_tx_cq(cq->dev, cq);
+
 }
-#endif
-void mlx4_en_tx_irq(struct mlx4_cq *mcq)
-{
-        return;
-}
+
 #if 0
 /* TX CQ polling - called by NAPI */
 int mlx4_en_poll_tx_cq(struct napi_struct *napi, int budget)
@@ -959,7 +949,10 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	 */
 	if (unlikely((int)(ring->prod - ring->cons) > ring->full_size)) {
 		/* every full Tx ring stops queue */
+		if (ring->blocked == 0)
+                        atomic_add_int(&priv->blocked, 1);
 		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE); /* MENY: this stopps the queue */
+		ring->blocked = 1;
                 priv->port_stats.queue_stopped++; /* MENY: check if needed */
 		ring->queue_stopped++;
 	}
