@@ -540,30 +540,13 @@ static struct mlx4_en_tx_desc *mlx4_en_bounce_to_desc(struct mlx4_en_priv *priv,
 	return ring->buf + index * TXBB_SIZE;
 }
 
-static int is_inline(struct mbuf *mb)
+static int is_inline(struct mbuf *mb, int thold)
 {
-	return 0;
-#if 0
-	void *ptr;
+	if (thold && mb->m_pkthdr.len <= thold &&
+		(mb->m_pkthdr.csum_flags & CSUM_TSO) == 0)
+		return 1;
 
-	if (skb->len <= thold && !skb_is_gso(skb)) {
-		if (skb_shinfo(skb)->nr_frags == 1) {
-			ptr = skb_frag_address_safe(&skb_shinfo(skb)->frags[0]);
-			if (unlikely(!ptr))
-				return 0;
-
-			if (pfrag)
-				*pfrag = ptr;
-
-			return 1;
-		} else if (unlikely(skb_shinfo(skb)->nr_frags))
-			return 0;
-		else
-			return 1;
-	}
-
-	return 0;
-#endif
+        return 0;
 }
 
 static int inline_size(struct mbuf *mb)
@@ -635,57 +618,57 @@ static int get_real_size(struct mbuf *mb, struct net_device *dev, int *p_n_segs,
         return (CTRL_SIZE + nr_segs * DS_SIZE);
 }
 
-#if 0
-static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct sk_buff *skb,
-			     int real_size, u16 *vlan_tag, int tx_ind, void *fragptr)
+static struct mbuf *mb_copy(struct mbuf *mb, int *offp, char *data, int len)
+{
+        int bytes;
+        int off;
+
+        off = *offp;
+        while (len) {
+                bytes = min(mb->m_len - off, len);
+                if (bytes)
+                        memcpy(data, mb->m_data + off, bytes);
+                len -= bytes;
+                data += bytes;
+                off += bytes;
+                if (off == mb->m_len) {
+                        off = 0;
+                        mb = mb->m_next;
+                }
+        }
+        *offp = off;
+        return (mb);
+}
+
+static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct mbuf *mb,
+                             int real_size, u16 *vlan_tag, int tx_ind)
 {
 	struct mlx4_wqe_inline_seg *inl = &tx_desc->inl;
 	int spc = MLX4_INLINE_ALIGN - CTRL_SIZE - sizeof *inl;
+	int len;
+	int off;
 
-	if (skb->len <= spc) {
+	off = 0;
+	len = mb->m_pkthdr.len;
+	if (len <= spc) {
 		inl->byte_count = cpu_to_be32(1 << 31 |
-					      max_t(typeof(skb->len),
-						    skb->len,
-						    MIN_PKT_LEN));
-		skb_copy_from_linear_data(skb, inl + 1, skb_headlen(skb));
-		if (skb_shinfo(skb)->nr_frags)
-			memcpy(((void *)(inl + 1)) + skb_headlen(skb), fragptr,
-			       skb_frag_size(&skb_shinfo(skb)->frags[0]));
-
-		if (skb->len < MIN_PKT_LEN)
-			memset(((void *)(inl + 1)) + skb->len, 0,
-			       MIN_PKT_LEN - skb->len);
-
+				(max_t(typeof(len), len, MIN_PKT_LEN)));
+		mb_copy(mb, &off, (void *)(inl + 1), len);
+		if (len < MIN_PKT_LEN)
+                        memset(((void *)(inl + 1)) + len, 0,
+                               MIN_PKT_LEN - len);
 	} else {
 		inl->byte_count = cpu_to_be32(1 << 31 | spc);
-		if (skb_headlen(skb) <= spc) {
-			skb_copy_from_linear_data(skb, inl + 1, skb_headlen(skb));
-			if (skb_headlen(skb) < spc) {
-				memcpy(((void *)(inl + 1)) + skb_headlen(skb),
-					fragptr, spc - skb_headlen(skb));
-				fragptr +=  spc - skb_headlen(skb);
-			}
-			inl = (void *) (inl + 1) + spc;
-			memcpy(((void *)(inl + 1)), fragptr, skb->len - spc);
-		} else {
-			skb_copy_from_linear_data(skb, inl + 1, spc);
-			inl = (void *) (inl + 1) + spc;
-			skb_copy_from_linear_data_offset(skb, spc, inl + 1,
-					skb_headlen(skb) - spc);
-			if (skb_shinfo(skb)->nr_frags)
-				memcpy(((void *)(inl + 1)) + skb_headlen(skb) - spc,
-					fragptr, skb_frag_size(&skb_shinfo(skb)->frags[0]));
-		}
-
+		mb = mb_copy(mb, &off, (void *)(inl + 1), spc);
+		inl = (void *) (inl + 1) + spc;
+		mb_copy(mb, &off, (void *)(inl + 1), len - spc);
 		wmb();
-		inl->byte_count = cpu_to_be32(1 << 31 | (skb->len - spc));
+		inl->byte_count = cpu_to_be32(1 << 31 | (len - spc));
 	}
 	tx_desc->ctrl.vlan_tag = cpu_to_be16(*vlan_tag);
-	tx_desc->ctrl.ins_vlan = MLX4_WQE_CTRL_INS_VLAN *
-		(!!vlan_tx_tag_present(skb));
+	tx_desc->ctrl.ins_vlan = MLX4_WQE_CTRL_INS_VLAN * !!(*vlan_tag);
 	tx_desc->ctrl.fence_size = (real_size / 16) & 0x3f;
 }
-#endif
 
 u16 mlx4_en_select_queue(struct net_device *dev, struct mbuf *mb)
 {
@@ -751,7 +734,7 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 
 	ring = priv->tx_ring[tx_ind];
 	ring_size = ring->size;
-	inl = is_inline(mb);
+	inl = is_inline(mb, ring->inline_thold);
 	real_size = get_real_size(mb, dev, &nr_segs, &lso_header_size, inl);
 	if (unlikely(!real_size))
 		goto tx_drop;
@@ -932,10 +915,7 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	AVG_PERF_COUNTER(priv->pstats.tx_pktsz_avg, mb->m_pkthdr.len);
 
 	if (tx_info->inl) {
-#if 0 /* INLINE */
-		build_inline_wqe(tx_desc, skb, real_size, &vlan_tag,
-				 tx_ind, fragptr);
-#endif
+		build_inline_wqe(tx_desc, mb, real_size, &vlan_tag, tx_ind);
 		tx_info->inl = 1;
 	}
 
