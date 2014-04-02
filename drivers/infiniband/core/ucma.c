@@ -55,6 +55,8 @@ MODULE_LICENSE("Dual BSD/GPL");
 static unsigned int max_backlog = 1024;
 
 #ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+/* XXX ODED: Linux sysctl*/
+#if 0
 static struct ctl_table_header *ucma_ctl_table_hdr;
 static ctl_table ucma_ctl_table[] = {
 	{
@@ -67,7 +69,7 @@ static ctl_table ucma_ctl_table[] = {
 	{ }
 };
 #endif
-
+#endif
 struct ucma_file {
 	struct mutex		mut;
 	struct file		*filp;
@@ -948,7 +950,7 @@ static int ucma_set_ib_path(struct ucma_context *ctx,
 static int ucma_set_option_ib(struct ucma_context *ctx, int optname,
 			      void *optval, size_t optlen)
 {
-	int ret;
+	int ret = 0;
 
 	switch (optname) {
 	case RDMA_OPTION_IB_PATH:
