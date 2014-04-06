@@ -702,9 +702,14 @@ static int ib_ucm_alloc_data(const void **dest, u64 src, u32 len)
 	if (!len)
 		return 0;
 
-	data = memdup_user((void __user *)(unsigned long)src, len);
-	if (IS_ERR(data))
-		return PTR_ERR(data);
+	data = kmalloc(len, GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	if (copy_from_user(data, (void __user *)(unsigned long)src, len)) {
+		kfree(data);
+		return -EFAULT;
+	}
 
 	*dest = data;
 	return 0;
