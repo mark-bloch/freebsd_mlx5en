@@ -2170,42 +2170,41 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
         if_free(dev);
 
 }
-#if 0
 static int mlx4_en_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct mlx4_en_dev *mdev = priv->mdev;
 	int err = 0;
 
-	en_dbg(DRV, priv, "Change MTU called - current:%d new:%d\n",
-		 dev->mtu, new_mtu);
+	en_dbg(DRV, priv, "Change MTU called - current:%ld new:%d\n",
+			dev->if_mtu, new_mtu);
 
 	if ((new_mtu < MLX4_EN_MIN_MTU) || (new_mtu > priv->max_mtu)) {
 		en_err(priv, "Bad MTU size:%d.\n", new_mtu);
-		return -EINVAL;
+		return -EPERM;
 	}
-	dev->mtu = new_mtu;
-
-	if (netif_running(dev)) {
-		mutex_lock(&mdev->state_lock);
+	mutex_lock(&mdev->state_lock);
+	dev->if_mtu = new_mtu;
+	if (dev->if_drv_flags & IFF_DRV_RUNNING) {
 		if (!mdev->device_up) {
 			/* NIC is probably restarting - let watchdog task reset
-			 * the port */
+			 *                          * the port */
 			en_dbg(DRV, priv, "Change MTU called with card down!?\n");
 		} else {
 			mlx4_en_stop_port(dev);
 			err = mlx4_en_start_port(dev);
 			if (err) {
 				en_err(priv, "Failed restarting port:%d\n",
-					 priv->port);
+						priv->port);
 				queue_work(mdev->workqueue, &priv->watchdog_task);
 			}
 		}
-		mutex_unlock(&mdev->state_lock);
 	}
+	mutex_unlock(&mdev->state_lock);
 	return 0;
 }
 
+#if 0
 static int mlx4_en_hwtstamp_ioctl(struct net_device *dev, struct ifreq *ifr)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -2574,11 +2573,11 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	ifr = (struct ifreq *) data;
 	switch (command) {
 
-// keep mlx4_en_ioctl at minimum - I'll deal with the reset later
-#if 0
 	case SIOCSIFMTU:
 		error = -mlx4_en_change_mtu(dev, ifr->ifr_mtu);
 		break;
+// keep mlx4_en_ioctl at minimum - I'll deal with the reset later
+#if 0
 	case SIOCSIFFLAGS:
 		if (dev->if_flags & IFF_UP) {
 			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
