@@ -305,6 +305,7 @@ struct mlx4_en_tx_ring {
 	bool bf_enabled;
 	struct netdev_queue *tx_queue;
 	int hwtstamp_tx_type;
+	spinlock_t comp_lock;
 	int full_size;
 	int inline_thold;
 	u64 watchdog_time;
@@ -783,6 +784,7 @@ int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 void mlx4_en_destroy_rx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_rx_ring **pring,
 			     u32 size, u16 stride);
+void mlx4_en_tx_que(void *context, int pending);
 void mlx4_en_rx_que(void *context, int pending);
 int mlx4_en_activate_rx_rings(struct mlx4_en_priv *priv);
 void mlx4_en_deactivate_rx_ring(struct mlx4_en_priv *priv,

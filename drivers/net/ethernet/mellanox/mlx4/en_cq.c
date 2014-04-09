@@ -67,9 +67,16 @@ int mlx4_en_create_cq(struct mlx4_en_priv *priv,
 
 	cq->tq = taskqueue_create_fast("mlx4_en_que", M_NOWAIT,
                         taskqueue_thread_enqueue, &cq->tq);
-        TASK_INIT(&cq->cq_task, 0, mlx4_en_rx_que, cq);
-        taskqueue_start_threads(&cq->tq, 1, PI_NET, "%s rx cq",
-                        if_name(priv->dev));
+        if (mode == RX) {
+		TASK_INIT(&cq->cq_task, 0, mlx4_en_rx_que, cq);
+		taskqueue_start_threads(&cq->tq, 1, PI_NET, "%s rx cq",
+				if_name(priv->dev));
+
+	} else {
+		TASK_INIT(&cq->cq_task, 0, mlx4_en_tx_que, cq);
+		taskqueue_start_threads(&cq->tq, 1, PI_NET, "%s tx cq",
+				if_name(priv->dev));
+	}
 
 	cq->ring = ring;
 	cq->is_tx = mode;
@@ -172,6 +179,8 @@ void mlx4_en_destroy_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq **pcq)
 	struct mlx4_en_dev *mdev = priv->mdev;
 	struct mlx4_en_cq *cq = *pcq;
 
+	taskqueue_drain(cq->tq, &cq->cq_task);
+	taskqueue_free(cq->tq);
 	mlx4_en_unmap_buffer(&cq->wqres.buf);
 	mlx4_free_hwq_res(mdev->dev, &cq->wqres, cq->buf_size);
 	if (priv->mdev->dev->caps.comp_pool && cq->vector)

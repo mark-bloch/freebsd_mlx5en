@@ -84,6 +84,8 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->stride = stride;
 	ring->full_size = ring->size - HEADROOM - MAX_DESC_TXBBS;
 	ring->inline_thold = min(inline_thold, MAX_INLINE);
+	mtx_init(&ring->tx_lock.m, "mlx4 tx", NULL, MTX_DEF);
+	mtx_init(&ring->comp_lock.m, "mlx4 comp", NULL, MTX_DEF);
 
 	/* Allocate the buf ring */
 	ring->br = buf_ring_alloc(MLX4_EN_DEF_TX_QUEUE_SIZE, M_DEVBUF,
@@ -179,6 +181,7 @@ err_bounce:
 err_info:
 	vfree(ring->tx_info);
 err_ring:
+	buf_ring_free(ring->br, M_DEVBUF);
 	kfree(ring);
 	return err;
 }
@@ -190,6 +193,7 @@ void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 	struct mlx4_en_tx_ring *ring = *pring;
 	en_dbg(DRV, priv, "Destroying tx ring, qpn: %d\n", ring->qpn);
 
+	buf_ring_free(ring->br, M_DEVBUF);
 	if (ring->bf_enabled)
 		mlx4_bf_free(mdev->dev, &ring->bf);
 	mlx4_qp_remove(mdev->dev, &ring->qp);
@@ -199,6 +203,8 @@ void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 	mlx4_free_hwq_res(mdev->dev, &ring->wqres, ring->buf_size);
 	kfree(ring->bounce_buf);
 	vfree(ring->tx_info);
+	mtx_destroy(&ring->tx_lock.m);
+	mtx_destroy(&ring->comp_lock.m);
 	kfree(ring);
 	*pring = NULL;
 }
@@ -471,9 +477,14 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 void mlx4_en_tx_irq(struct mlx4_cq *mcq)
 {
 	struct mlx4_en_cq *cq = container_of(mcq, struct mlx4_en_cq, mcq);
+	struct mlx4_en_priv *priv = netdev_priv(cq->dev);
+	struct mlx4_en_tx_ring *ring = priv->tx_ring[cq->ring];
 
+	if (!spin_trylock(&ring->comp_lock))
+		return;
 	mlx4_en_process_tx_cq(cq->dev, cq);
-
+	mod_timer(&cq->timer, jiffies + 1);
+	spin_unlock(&ring->comp_lock);
 }
 
 #if 0
@@ -509,7 +520,27 @@ int mlx4_en_poll_tx_cq(struct napi_struct *napi, int budget)
 #endif
 void mlx4_en_poll_tx_cq(unsigned long data)
 {
-        return;
+	struct mlx4_en_cq *cq = (struct mlx4_en_cq *) data;
+	struct mlx4_en_priv *priv = netdev_priv(cq->dev);
+	struct mlx4_en_tx_ring *ring = priv->tx_ring[cq->ring];
+	u32 inflight;
+
+	INC_PERF_COUNTER(priv->pstats.tx_poll);
+
+	if (!spin_trylock(&ring->comp_lock)) {
+		mod_timer(&cq->timer, jiffies + MLX4_EN_TX_POLL_TIMEOUT);
+		return;
+	}
+	mlx4_en_process_tx_cq(cq->dev, cq);
+	inflight = (u32) (ring->prod - ring->cons - ring->last_nr_txbb);
+
+	/* If there are still packets in flight and the timer has not already
+	 * been scheduled by the Tx routine then schedule it here to guarantee
+	 * completion processing of these packets */
+	if (inflight && priv->port_up)
+		mod_timer(&cq->timer, jiffies + MLX4_EN_TX_POLL_TIMEOUT);
+
+	spin_unlock(&ring->comp_lock);
 }
 
 static struct mlx4_en_tx_desc *mlx4_en_bounce_to_desc(struct mlx4_en_priv *priv,
@@ -538,6 +569,24 @@ static struct mlx4_en_tx_desc *mlx4_en_bounce_to_desc(struct mlx4_en_priv *priv,
 
 	/* Return real descriptor location */
 	return ring->buf + index * TXBB_SIZE;
+}
+
+static inline void mlx4_en_xmit_poll(struct mlx4_en_priv *priv, int tx_ind)
+{
+	struct mlx4_en_cq *cq = priv->tx_cq[tx_ind];
+	struct mlx4_en_tx_ring *ring = priv->tx_ring[tx_ind];
+
+	/* If we don't have a pending timer, set one up to catch our recent
+	   post in case the interface becomes idle */
+	if (!timer_pending(&cq->timer))
+		mod_timer(&cq->timer, jiffies + MLX4_EN_TX_POLL_TIMEOUT);
+
+	/* Poll the CQ every mlx4_en_TX_MODER_POLL packets */
+	if ((++ring->poll_cnt & (MLX4_EN_TX_POLL_MODER - 1)) == 0)
+		if (spin_trylock(&ring->comp_lock)) {
+			mlx4_en_process_tx_cq(priv->dev, cq);
+			spin_unlock(&ring->comp_lock);
+		}
 }
 
 static int is_inline(struct mbuf *mb, int thold)
@@ -991,17 +1040,70 @@ static int
 mlx4_en_transmit_locked(struct ifnet *dev, int tx_ind, struct mbuf *m)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
-	int err = 0;
-	int enqueued = 0;
-
 	struct mlx4_en_tx_ring *ring;
-	ring = priv->tx_ring[tx_ind];
+	struct mbuf *next;
+	int enqueued, err = 0;
 
-	err = mlx4_en_xmit(dev, tx_ind, &m);
+	ring = priv->tx_ring[tx_ind];
+	if ((dev->if_drv_flags & (IFF_DRV_RUNNING | IFF_DRV_OACTIVE)) !=
+	    IFF_DRV_RUNNING || priv->port_up == 0) {
+		if (m != NULL)
+			err = drbr_enqueue(dev, ring->br, m);
+		return (err);
+	}
+
+	enqueued = 0;
+	if (m != NULL) {
+		if ((err = drbr_enqueue(dev, ring->br, m)) != 0)
+			return (err);
+	}
+	/* Process the queue */
+	while ((next = drbr_peek(dev, ring->br)) != NULL) {
+		if ((err = mlx4_en_xmit(dev, tx_ind, &next)) != 0) {
+			if (next == NULL) {
+				drbr_advance(dev, ring->br);
+			} else {
+				drbr_putback(dev, ring->br, next);
+			}
+			break;
+		}
+		drbr_advance(dev, ring->br);
+		enqueued++;
+		dev->if_obytes += next->m_pkthdr.len;
+		if (next->m_flags & M_MCAST)
+			dev->if_omcasts++;
+		/* Send a copy of the frame to the BPF listener */
+		ETHER_BPF_MTAP(dev, next);
+		if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
+			break;
+	}
 
 	if (enqueued > 0)
 		ring->watchdog_time = ticks;
-	return 0;
+
+	return (err);
+}
+
+void
+mlx4_en_tx_que(void *context, int pending)
+{
+	struct mlx4_en_tx_ring *ring;
+	struct mlx4_en_priv *priv;
+	struct net_device *dev;
+	struct mlx4_en_cq *cq;
+	int tx_ind;
+	cq = context;
+	dev = cq->dev;
+	priv = dev->if_softc;
+	tx_ind = cq->ring;
+	ring = priv->tx_ring[tx_ind];
+        if (dev->if_drv_flags & IFF_DRV_RUNNING) {
+		mlx4_en_xmit_poll(priv, tx_ind);
+		spin_lock(&ring->tx_lock);
+                if (!drbr_empty(dev, ring->br))
+			mlx4_en_transmit_locked(dev, tx_ind, NULL);
+		spin_unlock(&ring->tx_lock);
+	}
 }
 
 int
@@ -1009,16 +1111,46 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct mlx4_en_tx_ring *ring;
+	struct mlx4_en_cq *cq;
 	int i = 0, err = 0;
 
-        ring = priv->tx_ring[i];
+	/* Which queue to use */
+	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID)
+		i = m->m_pkthdr.flowid % 4 /* MENY (MLX4_EN_NUM_HASH_RINGS - 1)*/;
+	else
+		i = mlx4_en_select_queue(dev, m);
+	ring = priv->tx_ring[i];
 
-	err = mlx4_en_transmit_locked(dev, i, m);
+	if (spin_trylock(&ring->tx_lock)) {
+		err = mlx4_en_transmit_locked(dev, i, m);
+		spin_unlock(&ring->tx_lock);
+		/* Poll CQ here */
+		mlx4_en_xmit_poll(priv, i);
+	} else {
+		err = drbr_enqueue(dev, ring->br, m);
+		cq = priv->tx_cq[i];
+		taskqueue_enqueue(cq->tq, &cq->cq_task);
+	}
 
 	return (err);
 }
 
-void mlx4_en_qflush(struct ifnet *dev)
+/*
+ * Flush ring buffers.
+ */
+void
+mlx4_en_qflush(struct ifnet *dev)
 {
-	return;
+	struct mlx4_en_priv *priv = netdev_priv(dev);
+	struct mlx4_en_tx_ring *ring;
+	struct mbuf *m;
+
+	for (int i = 0; i < priv->tx_ring_num; i++) {
+		ring = priv->tx_ring[i];
+		spin_lock(&ring->tx_lock);
+		while ((m = buf_ring_dequeue_sc(ring->br)) != NULL)
+			m_freem(m);
+		spin_unlock(&ring->tx_lock);
+	}
+	if_qflush(dev);
 }
