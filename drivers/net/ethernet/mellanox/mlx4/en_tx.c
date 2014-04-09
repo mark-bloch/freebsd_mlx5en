@@ -487,37 +487,6 @@ void mlx4_en_tx_irq(struct mlx4_cq *mcq)
 	spin_unlock(&ring->comp_lock);
 }
 
-#if 0
-/* TX CQ polling - called by NAPI */
-int mlx4_en_poll_tx_cq(struct napi_struct *napi, int budget)
-{
-	struct mlx4_en_cq *cq = container_of(napi, struct mlx4_en_cq, napi);
-	struct net_device *dev = cq->dev;
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-	int done;
-
-	done = mlx4_en_process_tx_cq(dev, cq, budget);
-
-	/* If we used up all the quota - we're probably not done yet... */
-	cq->tot_tx += done;
-	if (done == budget) {
-		INC_PERF_COUNTER(priv->pstats.napi_quota);
-		if (cq->tot_tx >= MLX4_EN_MIN_TX_ARM) {
-			napi_complete(napi);
-			mlx4_en_arm_cq(priv, cq);
-			cq->tot_tx = 0;
-			return 0;
-		}
-	} else {
-		/* Done for now */
-		napi_complete(napi);
-		mlx4_en_arm_cq(priv, cq);
-		cq->tot_tx = 0;
-		return done;
-	}
-	return budget;
-}
-#endif
 void mlx4_en_poll_tx_cq(unsigned long data)
 {
 	struct mlx4_en_cq *cq = (struct mlx4_en_cq *) data;
