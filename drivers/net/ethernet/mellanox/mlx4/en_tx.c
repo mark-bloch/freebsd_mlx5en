@@ -808,16 +808,6 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	/* valid only for none inline segments */
 	tx_info->data_offset = (void *)data - (void *)tx_desc;
 
-#if 0 /* LSO - SKB */
-	tx_info->linear = (lso_header_size < skb_headlen(skb) &&
-			   !inl) ? 1 : 0;
-
-	data += skb_shinfo(skb)->nr_frags + tx_info->linear - 1;
-#endif
-	/* MENY: data should point to the last relevant txbb
-	* from there we go backwards. ctrl seg is handled last */
-        data += nr_segs -1;
-
 	if (inl) {
 		tx_info->inl = 1;
 	} else {
@@ -837,7 +827,7 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
                         data->lkey = cpu_to_be32(mdev->mr.key);
                         wmb();
                         data->byte_count = cpu_to_be32(m->m_len);
-                        --data; 
+                        data++;
                 }
                 if (lso_header_size) {
                         mb->m_data -= lso_header_size;
