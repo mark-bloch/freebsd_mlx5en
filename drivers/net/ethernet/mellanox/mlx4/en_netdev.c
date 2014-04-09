@@ -732,7 +732,6 @@ static void mlx4_en_clear_list(struct net_device *dev)
 	}
 }
 
-#if 0
 static int mlx4_en_cache_mclist(struct net_device *dev, u64 **mcaddrp)
 {
         struct ifmultiaddr *ifma;
@@ -827,9 +826,7 @@ static void update_mclist_flags(struct mlx4_en_priv *priv,
 		}
 	}
 }
-#endif
 
-#if 0
 static void mlx4_en_set_rx_mode(struct net_device *dev)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -844,7 +841,6 @@ static void mlx4_en_set_promisc_mode(struct mlx4_en_priv *priv,
 				     struct mlx4_en_dev *mdev)
 {
 	int err = 0;
-
 	if (!(priv->flags & MLX4_EN_FLAG_PROMISC)) {
 		priv->flags |= MLX4_EN_FLAG_PROMISC;
 
@@ -1064,7 +1060,6 @@ static void mlx4_en_do_multicast(struct mlx4_en_priv *priv,
 		}
 	}
 }
-#endif
 #if 0
 static void mlx4_en_do_uc_filter(struct mlx4_en_priv *priv,
 				 struct net_device *dev,
@@ -1188,13 +1183,13 @@ static void mlx4_en_do_uc_filter(struct mlx4_en_priv *priv,
 }
 #endif
 
-#if 0
 static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 {
 	struct mlx4_en_priv *priv = container_of(work, struct mlx4_en_priv,
 						 rx_mode_task);
 	struct mlx4_en_dev *mdev = priv->mdev;
 	struct net_device *dev = priv->dev;
+
 
 	mutex_lock(&mdev->state_lock);
 	if (!mdev->device_up) {
@@ -1205,7 +1200,7 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 		en_dbg(HW, priv, "Port is down, ignoring rx mode change.\n");
 		goto out;
 	}
-
+#if 0
 	if (!netif_carrier_ok(dev)) {
 		if (!mlx4_en_QUERY_PORT(mdev, priv->port)) {
 			if (priv->port_state.link_state) {
@@ -1218,6 +1213,8 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 
 	if (dev->priv_flags & IFF_UNICAST_FLT)
 		mlx4_en_do_uc_filter(priv, dev, mdev);
+
+#endif
 
 	/* Promsicuous mode: disable all filters */
 	if ((dev->if_flags & IFF_PROMISC) ||
@@ -1234,7 +1231,6 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 out:
 	mutex_unlock(&mdev->state_lock);
 }
-#endif
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 static void mlx4_en_netpoll(struct net_device *dev)
@@ -2574,39 +2570,31 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	switch (command) {
 
 	case SIOCSIFMTU:
+		/*XXX lock here*/
 		error = -mlx4_en_change_mtu(dev, ifr->ifr_mtu);
+		/*XXX unlock here*/
 		break;
-// keep mlx4_en_ioctl at minimum - I'll deal with the reset later
-#if 0
 	case SIOCSIFFLAGS:
+		/*XXX lock here*/
 		if (dev->if_flags & IFF_UP) {
 			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
 				mlx4_en_start_port(dev);
 			else
-				mlx4_en_set_multicast(dev);
+				mlx4_en_set_rx_mode(dev);
 		} else {
 			if (dev->if_drv_flags & IFF_DRV_RUNNING) {
 				mlx4_en_stop_port(dev);
                                 if_link_state_change(dev, LINK_STATE_DOWN);
-                                /*
-				 * Since mlx4_en_stop_port is defered we
-				 * have to wait till it's finished.
-				 */
-                                for (int count=0; count<10; count++) {
-                                        if (dev->if_drv_flags & IFF_DRV_RUNNING) {
-                                                DELAY(20000);
-                                        } else {
-                                                break;
-                                        }
-                                }
 			}
 		}
+		/*XXX unlock here*/
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		mlx4_en_set_multicast(dev);
+		/*XXX lock here*/
+		mlx4_en_do_multicast(priv, dev, mdev);
+		/*XXX unlock here*/
 		break;
-#endif
 	case SIOCSIFMEDIA:
 	case SIOCGIFMEDIA:
 		error = ifmedia_ioctl(dev, ifr, &priv->media, command);
@@ -2673,7 +2661,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	 */
 	priv->counter_index = 0xff;
 	spin_lock_init(&priv->stats_lock);
-	//INIT_WORK(&priv->rx_mode_task, mlx4_en_do_set_rx_mode);
+	INIT_WORK(&priv->rx_mode_task, mlx4_en_do_set_rx_mode);
 	INIT_WORK(&priv->watchdog_task, mlx4_en_restart);
 	INIT_WORK(&priv->linkstate_task, mlx4_en_linkstate);
 	INIT_DELAYED_WORK(&priv->stats_task, mlx4_en_do_get_stats);
