@@ -757,8 +757,6 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	if (unlikely(!real_size))
 		goto tx_drop;
 
-	lso_header_size = 0; /* MENY: LSO disabled */
-
 	/* Align descriptor to TXBB size */
 	desc_size = ALIGN(real_size, TXBB_SIZE);
 	nr_txbb = desc_size / TXBB_SIZE;
