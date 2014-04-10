@@ -628,9 +628,6 @@ static int get_real_size(struct mbuf *mb, struct net_device *dev, int *p_n_segs,
         } else
                 *lso_header_size = 0;
         *p_n_segs = nr_segs;
-	/* MENY: need to consider starting with inl condition
-	 * to improve performace for inline packets
-	 */
         if (inl)
                 return inline_size(mb);
         return (CTRL_SIZE + nr_segs * DS_SIZE);
@@ -781,7 +778,7 @@ retry:
 	/* Obtain VLAN information if present */
 	if (mb->m_flags & M_VLANTAG) {
 		vlan_tag = mb->m_pkthdr.ether_vtag;
-	} 
+	}
 	/* MENY: consider passing vlan_tag as an atgument. 
 	 * Already used in select_queue().
 	 */
@@ -828,11 +825,10 @@ retry:
                         }
                         dma = pci_map_single(mdev->dev->pdev, m->m_data,
                                              m->m_len, PCI_DMA_TODEVICE);
-                        /* MENY: need to add check that dma passed,
-                        * it could fail after a few data segments,
-                        * then you'll need to unmap those who got already mapped*/
-                        //if (!dma)
-                        //        goto tx_drop_unmap;
+#if 0	/* MY: pci_dma_mapping_error not implemented yet */ 
+			if (unlikely(pci_dma_mapping_error(mdev->dev->pdev, dma)))
+				goto tx_drop_unmap;
+#endif
                         data->addr = cpu_to_be64(dma);
                         data->lkey = cpu_to_be32(mdev->mr.key);
                         wmb();
@@ -949,7 +945,8 @@ retry:
 		/* every full Tx ring stops queue */
 		if (ring->blocked == 0)
                         atomic_add_int(&priv->blocked, 1);
-		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE); /* MENY: this stopps the queue */
+		/* Set HW-queue-is-full flag */
+		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
 		ring->blocked = 1;
                 priv->port_stats.queue_stopped++; /* MENY: check if needed */
 		ring->queue_stopped++;
@@ -987,15 +984,15 @@ retry:
 	}
 
 	return 0;
-#if 0
+#if 0 /* MY: uncomment after pci_dma_mapping_error is implemented */
 tx_drop_unmap:
-        en_err(priv, "DMA mapping error\n");
+	en_err(priv, "DMA mapping error\n");
 
-         for (i++; i < nr_segs; i++) {
-                data++;
-                pci_unmap_single(mdev->dev->pdev, dma,
-                                             m->m_len, PCI_DMA_TODEVICE);
-        }
+	for (; i > 0 ; i--) {
+		data--;
+		pci_unmap_single(mdev->pdev, dma,
+					m->m_len, PCI_DMA_TODEVICE);
+	}
 #endif
 tx_drop:
 	*mbp = NULL;
