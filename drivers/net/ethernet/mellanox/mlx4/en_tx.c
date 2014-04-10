@@ -746,6 +746,7 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	bool inl = false;
 	struct mbuf *mb;
 	mb = *mbp;
+	int defrag = 1;
 
 	if (!priv->port_up)
 		goto tx_drop;
@@ -753,6 +754,8 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	ring = priv->tx_ring[tx_ind];
 	ring_size = ring->size;
 	inl = is_inline(mb, ring->inline_thold);
+
+retry:
 	real_size = get_real_size(mb, dev, &nr_segs, &lso_header_size, inl);
 	if (unlikely(!real_size))
 		goto tx_drop;
@@ -761,7 +764,16 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	desc_size = ALIGN(real_size, TXBB_SIZE);
 	nr_txbb = desc_size / TXBB_SIZE;
 	if (unlikely(nr_txbb > MAX_DESC_TXBBS)) {
-		/* MENY: Need to consider FreeBSD's m_defrag logic */
+		if (defrag) {
+                        mb = m_defrag(*mbp, M_NOWAIT);
+                        if (mb == NULL) {
+                                mb = *mbp;
+                                goto tx_drop;
+                        }
+                        *mbp = mb;
+                        defrag = 0;
+                        goto retry;
+                }
 		en_warn(priv, "Oversized header or SG list\n");
 		goto tx_drop;
 	}
