@@ -868,12 +868,11 @@ retry:
                 if (mb->m_pkthdr.csum_flags & (CSUM_TCP|CSUM_UDP))
                         tx_desc->ctrl.srcrb_flags |=
                             cpu_to_be32(MLX4_WQE_CTRL_TCP_UDP_CSUM);
-                priv->port_stats.tx_chksum_offload++; // MENY: ?
+		priv->port_stats.tx_chksum_offload++;
                 ring->tx_csum++;
         }
 
-	if (priv->flags & MLX4_EN_FLAG_ENABLE_HW_LOOPBACK) {
-	/* MENY: validate use of this flag instead of 'validate_loopback()' */
+	if (unlikely(priv->validate_loopback)) {
 		/* Copy dst mac address to wqe */
                 struct ether_header *ethh;
                 u64 mac;
