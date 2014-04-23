@@ -1082,7 +1082,7 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 
 	/* Which queue to use */
 	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID)
-		i = m->m_pkthdr.flowid % 4 /* MENY (MLX4_EN_NUM_HASH_RINGS - 1)*/;
+		i = m->m_pkthdr.flowid % (priv->tx_ring_num - 1);
 	else
 		i = mlx4_en_select_queue(dev, m);
 	ring = priv->tx_ring[i];
