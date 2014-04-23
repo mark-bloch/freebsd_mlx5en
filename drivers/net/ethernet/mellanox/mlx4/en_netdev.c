@@ -732,33 +732,12 @@ static void mlx4_en_clear_list(struct net_device *dev)
 	}
 }
 
-static int mlx4_en_cache_mclist(struct net_device *dev, u64 **mcaddrp)
+static void mlx4_en_cache_mclist(struct net_device *dev)
 {
         struct ifmultiaddr *ifma;
-        u64 *mcaddr;
-        int cnt;
-        int i;
+	struct mlx4_en_mc_list *tmp;
+	struct mlx4_en_priv *priv = netdev_priv(dev);
 
-        *mcaddrp = NULL;
-restart:
-        cnt = 0;
-        if_maddr_rlock(dev);
-        TAILQ_FOREACH(ifma, &dev->if_multiaddrs, ifma_link) {
-                if (ifma->ifma_addr->sa_family != AF_LINK)
-                        continue;
-                if (((struct sockaddr_dl *)ifma->ifma_addr)->sdl_alen !=
-                                ETHER_ADDR_LEN)
-                        continue;
-                cnt++;
-        }
-        if_maddr_runlock(dev);
-        if (cnt == 0)
-                return (0);
-        mcaddr = kmalloc(sizeof(u64) * cnt, GFP_KERNEL);
-        if (mcaddr == NULL)
-                return (0);
-        i = 0;
-        if_maddr_rlock(dev);
         TAILQ_FOREACH(ifma, &dev->if_multiaddrs, ifma_link) {
                 if (ifma->ifma_addr->sa_family != AF_LINK)
                         continue;
@@ -766,16 +745,12 @@ restart:
                                 ETHER_ADDR_LEN)
                         continue;
                 /* Make sure the list didn't grow. */
-                if (i == cnt) {
-                        if_maddr_runlock(dev);
-                        kfree(mcaddr);
-                        goto restart;
-                }
-                mcaddr[i++] = mlx4_mac_to_u64(LLADDR((struct sockaddr_dl *)ifma->ifma_addr));
+		tmp = kzalloc(sizeof(struct mlx4_en_mc_list), GFP_ATOMIC);
+		memcpy(tmp->addr,
+			LLADDR((struct sockaddr_dl *)ifma->ifma_addr), ETH_ALEN);
+		list_add_tail(&tmp->list, &priv->mc_list);
         }
         if_maddr_runlock(dev);
-        *mcaddrp = mcaddr;
-        return (i);
 }
 
 static void update_mclist_flags(struct mlx4_en_priv *priv,
@@ -946,6 +921,8 @@ static void mlx4_en_do_multicast(struct mlx4_en_priv *priv,
 	struct mlx4_en_mc_list *mclist, *tmp;
 	u8 mc_list[16] = {0};
 	int err = 0;
+	u64 mcast_addr = 0;
+
 
 	/* Enable/disable the multicast filter according to IFF_ALLMULTI */
 	if (dev->if_flags & IFF_ALLMULTI) {
@@ -1012,14 +989,12 @@ static void mlx4_en_do_multicast(struct mlx4_en_priv *priv,
 
 		/* Update multicast list - we cache all addresses so they won't
 		 * change while HW is updated holding the command semaphor */
-                u64 *mcaddr;
-                int mccount;
-                int i;
-
-                mccount = mlx4_en_cache_mclist(dev, &mcaddr);
-                for (i = 0; i < mccount; i++) {
-                        mlx4_SET_MCAST_FLTR(mdev->dev, priv->port, mcaddr[i], 0, MLX4_MCAST_CONFIG);
-                }
+		mlx4_en_cache_mclist(dev);
+		list_for_each_entry(mclist, &priv->mc_list, list) {
+			mcast_addr = mlx4_mac_to_u64(mclist->addr);
+			mlx4_SET_MCAST_FLTR(mdev->dev, priv->port,
+					mcast_addr, 0, MLX4_MCAST_CONFIG);
+		}
 		err = mlx4_SET_MCAST_FLTR(mdev->dev, priv->port, 0,
 					  0, MLX4_MCAST_ENABLE);
 		if (err)
@@ -2592,7 +2567,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
 		/*XXX lock here*/
-		mlx4_en_do_multicast(priv, dev, mdev);
+		mlx4_en_set_rx_mode(dev);
 		/*XXX unlock here*/
 		break;
 	case SIOCSIFMEDIA:
@@ -2666,7 +2641,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	INIT_WORK(&priv->linkstate_task, mlx4_en_linkstate);
 	INIT_DELAYED_WORK(&priv->stats_task, mlx4_en_do_get_stats);
 	INIT_DELAYED_WORK(&priv->service_task, mlx4_en_service_task);
-	//INIT_WORK(&priv->mcast_task, mlx4_en_do_set_multicast);
 	callout_init(&priv->watchdog_timer, 1);
 #ifdef CONFIG_RFS_ACCEL
 	INIT_LIST_HEAD(&priv->filters);
