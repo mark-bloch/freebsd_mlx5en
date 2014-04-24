@@ -779,9 +779,6 @@ retry:
 	if (mb->m_flags & M_VLANTAG) {
 		vlan_tag = mb->m_pkthdr.ether_vtag;
 	}
-	/* MENY: consider passing vlan_tag as an atgument. 
-	 * Already used in select_queue().
-	 */
 
 	/* Track current inflight packets for performance analysis */
 	AVG_PERF_COUNTER(priv->pstats.inflight_avg,
@@ -947,7 +944,7 @@ retry:
 		/* Set HW-queue-is-full flag */
 		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
 		ring->blocked = 1;
-                priv->port_stats.queue_stopped++; /* MENY: check if needed */
+		priv->port_stats.queue_stopped++;
 		ring->queue_stopped++;
 	}
 
