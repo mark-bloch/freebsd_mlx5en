@@ -151,7 +151,7 @@ enum {
 #define MLX4_EN_SMALL_PKT_SIZE		64
 
 #define MLX4_EN_MAX_TX_RING_P_UP	32
-#define MLX4_EN_NUM_UP			8
+#define MLX4_EN_NUM_UP			1
 
 #define MAX_TX_RINGS			(MLX4_EN_MAX_TX_RING_P_UP * \
 					 (MLX4_EN_NUM_UP + 1))
