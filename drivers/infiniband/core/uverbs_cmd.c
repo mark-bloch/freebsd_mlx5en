@@ -37,9 +37,11 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/moduleparam.h>
+#include <linux/rbtree.h>
 #include <rdma/ib_addr.h>
 
 #include <asm/uaccess.h>
+#include <asm/fcntl.h>
 
 #include "uverbs.h"
 
