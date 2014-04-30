@@ -45,6 +45,7 @@
 #include <linux/idr.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/string.h>
 
 #include <asm/uaccess.h>
 
