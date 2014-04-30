@@ -2545,12 +2545,10 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	switch (command) {
 
 	case SIOCSIFMTU:
-		/*XXX lock here*/
 		error = -mlx4_en_change_mtu(dev, ifr->ifr_mtu);
-		/*XXX unlock here*/
 		break;
 	case SIOCSIFFLAGS:
-		/*XXX lock here*/
+		mutex_lock(&mdev->state_lock);
 		if (dev->if_flags & IFF_UP) {
 			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
 				mlx4_en_start_port(dev);
@@ -2562,13 +2560,11 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
                                 if_link_state_change(dev, LINK_STATE_DOWN);
 			}
 		}
-		/*XXX unlock here*/
+		mutex_unlock(&mdev->state_lock);
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
-		/*XXX lock here*/
 		mlx4_en_set_rx_mode(dev);
-		/*XXX unlock here*/
 		break;
 	case SIOCSIFMEDIA:
 	case SIOCGIFMEDIA:
