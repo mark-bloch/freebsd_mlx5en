@@ -734,6 +734,8 @@ static int mlx4_ib_dealloc_ucontext(struct ib_ucontext *ibcontext)
 	return 0;
 }
 
+/* XXX FBSD has no support for get_unmapped_area function */
+#if 0
 static unsigned long mlx4_ib_get_unmapped_area(struct file *file,
 			unsigned long addr,
 			unsigned long len, unsigned long pgoff,
@@ -786,6 +788,7 @@ full_search:
 		addr = ALIGN(vma->vm_end, 1 << page_size_order);
 	}
 }
+#endif
 
 static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
 {
@@ -2402,8 +2405,11 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	ibdev->ib_dev.alloc_ucontext	= mlx4_ib_alloc_ucontext;
 	ibdev->ib_dev.dealloc_ucontext	= mlx4_ib_dealloc_ucontext;
 	ibdev->ib_dev.mmap		= mlx4_ib_mmap;
-	ibdev->ib_dev.get_unmapped_area = mlx4_ib_get_unmapped_area;
-	ibdev->ib_dev.alloc_pd		= mlx4_ib_alloc_pd;
+/* XXX FBSD has no support for get_unmapped_area function */
+#if 0
+        ibdev->ib_dev.get_unmapped_area = mlx4_ib_get_unmapped_area;
+#endif
+        ibdev->ib_dev.alloc_pd		= mlx4_ib_alloc_pd;
 	ibdev->ib_dev.dealloc_pd	= mlx4_ib_dealloc_pd;
 	ibdev->ib_dev.create_ah		= mlx4_ib_create_ah;
 	ibdev->ib_dev.query_ah		= mlx4_ib_query_ah;
