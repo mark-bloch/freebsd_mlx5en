@@ -1400,6 +1400,8 @@ static int __init ucma_init(void)
 	}
 
 #ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+/* XXX ODED: Linux sysctl*/
+#if 0
 	ucma_ctl_table_hdr = register_net_sysctl(&init_net, "net/rdma_ucm", ucma_ctl_table);
 	if (!ucma_ctl_table_hdr) {
 		printk(KERN_ERR "rdma_ucm: couldn't register sysctl paths\n");
@@ -1407,10 +1409,14 @@ static int __init ucma_init(void)
 		goto err2;
 	}
 #endif
+#endif
 	return 0;
 #ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+/* XXX ODED: Linux sysctl*/
+#if 0
 err2:
 	device_remove_file(ucma_misc.this_device, &dev_attr_abi_version);
+#endif
 #endif
 err1:
 	misc_deregister(&ucma_misc);
@@ -1420,7 +1426,10 @@ err1:
 static void __exit ucma_cleanup(void)
 {
 #ifndef CONFIG_SYSCTL_SYSCALL_CHECK
+/* XXX ODED: Linux sysctl*/
+#if 0
 	unregister_net_sysctl_table(ucma_ctl_table_hdr);
+#endif
 #endif
 	device_remove_file(ucma_misc.this_device, &dev_attr_abi_version);
 	misc_deregister(&ucma_misc);
