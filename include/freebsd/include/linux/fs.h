@@ -162,6 +162,12 @@ unregister_chrdev_region(dev_t dev, unsigned range)
 	return;
 }
 
+/* No current support for seek op in FreeBSD */
+static int nonseekable_open(struct inode *inode, struct file *filp)
+{
+	return 0;
+}
+
 static inline dev_t
 iminor(struct inode *inode)
 {
