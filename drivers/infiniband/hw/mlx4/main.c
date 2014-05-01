@@ -125,6 +125,9 @@ static void do_slave_init(struct mlx4_ib_dev *ibdev, int slave, int do_init);
 static void mlx4_ib_scan_netdevs(struct mlx4_ib_dev *ibdev, struct net_device*,
 				 unsigned long);
 
+static u8 mlx4_ib_get_dev_port(struct net_device *dev,
+                                        struct mlx4_ib_dev *ibdev);
+
 static struct workqueue_struct *wq;
 
 static void init_query_mad(struct ib_smp *mad)
@@ -1196,7 +1199,7 @@ static int __mlx4_ib_destroy_flow(struct mlx4_dev *dev, u64 reg_id)
 	return err;
 }
 
-struct ib_flow *mlx4_ib_create_flow(struct ib_qp *qp,
+static struct ib_flow *mlx4_ib_create_flow(struct ib_qp *qp,
 				    struct ib_flow_attr *flow_attr,
 				    int domain)
 {
@@ -1250,7 +1253,7 @@ err_free:
 	return ERR_PTR(err);
 }
 
-int mlx4_ib_destroy_flow(struct ib_flow *flow_id)
+static int mlx4_ib_destroy_flow(struct ib_flow *flow_id)
 {
 	int err, ret = 0;
 	int i = 0;
@@ -1589,19 +1592,19 @@ static struct device_attribute *mlx4_class_attributes[] = {
 	&dev_attr_vsd
 };
 
-static void mlx4_addrconf_ifid_eui48(u8 *eui, u16 vlan_id, struct net_device *dev)
+static void mlx4_addrconf_ifid_eui48(u8 *eui, u16 vlan_id, struct net_device *dev, u8 port)
 {
-	u16 id = (vlan_id < 0x1000) ? vlan_id : dev->dev_id;
-	memcpy(eui, dev->dev_addr, 3);
-	memcpy(eui + 5, dev->dev_addr + 3, 3);
+	u16 id = (vlan_id < 0x1000) ? vlan_id : port-1;
+        memcpy(eui, IF_LLADDR(dev), 3);
+        memcpy(eui + 5, IF_LLADDR(dev) + 3, 3);
 	if (id || vlan_id == 0) {
 		eui[3] = (id >> 8) & 0xff;
 		eui[4] = id & 0xff;
-	} else if (!dev->dev_id) {
+	} else if (!port-1) {
 		eui[3] = 0xff;
 		eui[4] = 0xfe;
 	}
-	if (vlan_id < 0x1000 || !dev->dev_id)
+	if (vlan_id < 0x1000 || !port-1)
 		eui[0] ^= 2;
 }
 
@@ -1773,10 +1776,10 @@ static inline int netif_is_bond_master(struct net_device *dev)
 	return (dev->flags & IFF_MASTER) && (dev->priv_flags & IFF_BONDING);
 }
 
-static void mlx4_make_default_gid(struct  net_device *dev, union ib_gid *gid)
+static void mlx4_make_default_gid(struct  net_device *dev, union ib_gid *gid, u8 port)
 {
 	gid->global.subnet_prefix = cpu_to_be64(0xfe80000000000000LL);
-	mlx4_addrconf_ifid_eui48(&gid->raw[8], 0xffff, dev);
+	mlx4_addrconf_ifid_eui48(&gid->raw[8], 0xffff, dev, port);
 }
 
 static int mlx4_ib_addr_event(int event, struct net_device *event_netdev,
@@ -1791,8 +1794,8 @@ static int mlx4_ib_addr_event(int event, struct net_device *event_netdev,
 				rdma_vlan_dev_real_dev(event_netdev) :
 				event_netdev;
 
-
-	mlx4_make_default_gid(real_dev, &default_gid);
+        port = mlx4_ib_get_dev_port(real_dev, ibdev);
+	mlx4_make_default_gid(real_dev, &default_gidi, port);
 	if (event != NETDEV_DOWN && event != NETDEV_UP)
 		return 0;
 
@@ -1877,7 +1880,7 @@ static void mlx4_set_default_gid(struct mlx4_ib_dev *ibdev,
 				 struct  net_device *dev, u8 port)
 {
 	union ib_gid gid;
-	mlx4_make_default_gid(dev, &gid);
+	mlx4_make_default_gid(dev, &gid, port);
 	update_gid_table(ibdev, port, &gid, 0, 1);
 }
 
