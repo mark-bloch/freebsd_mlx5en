@@ -32,10 +32,8 @@
  */
 
 #include <linux/slab.h>
-#include <linux/proc_fs.h>
 #include <linux/module.h>
 #include <linux/sched.h>
-#include <linux/cred.h>
 
 #include "mlx4_ib.h"
 
@@ -48,6 +46,8 @@ static u32 convert_access(int acc)
 	       (acc & IB_ACCESS_MW_BIND       ? MLX4_PERM_BIND_MW      : 0) |
 	       MLX4_PERM_LOCAL_READ;
 }
+/* No suuport for Shared MR feature */
+#if 0
 static ssize_t shared_mr_proc_read(struct file *file,
 			  char __user *buffer,
 			  size_t len,
@@ -101,7 +101,7 @@ static mode_t convert_shared_access(int acc)
 	       (acc & IB_ACCESS_SHARED_MR_OTHER_WRITE   ? S_IWOTH  : 0);
 
 }
-
+#endif
 struct ib_mr *mlx4_ib_get_dma_mr(struct ib_pd *pd, int acc)
 {
 	struct mlx4_ib_mr *mr;
@@ -156,7 +156,7 @@ static int mlx4_ib_umem_write_mtt_block(struct mlx4_ib_dev *dev,
 	if (len & (mtt_size-1ULL)) {
 		WARN(1 ,
 		"write_block: len %llx is not aligned to mtt_size %llx\n",
-			len, mtt_size);
+			(unsigned long long)len, (unsigned long long)mtt_size);
 		return -EINVAL;
 	}
 
@@ -412,7 +412,7 @@ int mlx4_ib_umem_calc_optimal_mtt_size(struct ib_umem *umem,
 
 	WARN((total_len & ((1ULL<<block_shift)-1ULL)),
 		" misaligned total length detected (%llu, %llu)!",
-		total_len, block_shift);
+		(unsigned long long)total_len, (unsigned long long)block_shift);
 
 	*num_of_mtts = total_len >> block_shift;
 end:
@@ -422,7 +422,7 @@ end:
 		*/
 		WARN(1,
 		"mlx4_ib_umem_calc_optimal_mtt_size - unexpected shift %lld\n",
-		block_shift);
+		(unsigned long long)block_shift);
 
 		block_shift = min_shift;
 	}
@@ -430,6 +430,8 @@ end:
 
 }
 
+/* No suuport for Shared MR */
+#if 0
 static int prepare_shared_mr(struct mlx4_ib_mr *mr, int access_flags, int mr_id)
 {
 
@@ -493,6 +495,7 @@ static void free_smr_info(struct mlx4_ib_mr *mr)
 	kfree(mr->smr_info);
 	mr->smr_info = NULL;
 }
+#endif
 
 static void mlx4_invalidate_umem(void *invalidation_cookie,
 				struct ib_umem *umem,
@@ -557,6 +560,8 @@ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 		goto err_mr;
 
 	mr->ibmr.rkey = mr->ibmr.lkey = mr->mmr.key;
+/* No suuport for Shared MR */
+#if 0
 	/* Check whether MR should be shared */
 	if (is_shared_mr(access_flags)) {
 	/* start address and length must be aligned to page size in order
@@ -570,7 +575,7 @@ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 		if (err)
 			goto err_mr;
 	}
-
+#endif
 	if (ib_peer_mem) {
 		if (access_flags & IB_ACCESS_MW_BIND) {
 			/* Prevent binding MW on peer clients.
@@ -590,9 +595,11 @@ struct ib_mr *mlx4_ib_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	return &mr->ibmr;
 
 err_smr:
+/* No suuport for Shared MR */
+#if 0
 	if (mr->smr_info)
 		free_smr_info(mr);
-
+#endif
 err_mr:
 	(void) mlx4_mr_free(to_mdev(pd->device)->dev, &mr->mmr);
 
@@ -611,8 +618,11 @@ int mlx4_ib_dereg_mr(struct ib_mr *ibmr)
 	struct ib_umem *umem = mr->umem;
 	int ret;
 
+/* No suuport for Shared MR */
+#if 0
 	if (mr->smr_info)
 		free_smr_info(mr);
+#endif
 
 	if (atomic_inc_return(&mr->invalidated) > 1) {
 		wait_for_completion(&mr->invalidation_comp);
@@ -649,7 +659,7 @@ struct ib_mw *mlx4_ib_alloc_mw(struct ib_pd *pd, enum ib_mw_type type)
 	if (!mw)
 		return ERR_PTR(-ENOMEM);
 
-	err = mlx4_mw_alloc(dev->dev, to_mpd(pd)->pdn, type, &mw->mmw);
+	err = mlx4_mw_alloc(dev->dev, to_mpd(pd)->pdn, (enum mlx4_mw_type)type, &mw->mmw);
 	if (err)
 		goto err_free;
 
