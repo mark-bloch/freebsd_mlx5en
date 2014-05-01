@@ -41,6 +41,8 @@ struct miscdevice  {
 	const struct file_operations *fops;
 	struct cdev	*cdev;
 	int		minor;
+	const char *nodename;
+	umode_t mode;
 };
 
 extern struct class	miscclass;
