@@ -1837,7 +1837,7 @@ static u8 mlx4_ib_get_dev_port(struct net_device *dev, struct mlx4_ib_dev *ibdev
 
 static void mlx4_ib_get_dev_addr(struct net_device *dev, struct mlx4_ib_dev *ibdev, u8 port)
 {
-	struct in_device *in_dev;
+        struct ifaddr *ifa;
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	struct inet6_dev *in6_dev;
 	union ib_gid  *pgid;
@@ -1850,16 +1850,14 @@ static void mlx4_ib_get_dev_addr(struct net_device *dev, struct mlx4_ib_dev *ibd
 		return;
 
 	/* IPv4 gids */
-	in_dev = in_dev_get(dev);
-	if (in_dev) {
-		for_ifa(in_dev) {
-			/*ifa->ifa_address;*/
-			ipv6_addr_set_v4mapped(ifa->ifa_address, (struct in6_addr *)&gid);
-			update_gid_table(ibdev, port, &gid, 0, 0);
-		}
-		endfor_ifa(in_dev);
-		in_dev_put(in_dev);
-	}
+        TAILQ_FOREACH(ifa, &dev->if_addrhead, ifa_link) {
+                if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET){
+                        uint32_t addr = ((struct sockaddr_in *) ifa->ifa_addr)->sin_addr.s_addr;
+                        ipv6_addr_set_v4mapped(cpu_to_be32(addr), (struct in6_addr *)&gid);
+                        update_gid_table(ibdev, port, &gid, 0, 0);
+                }
+
+        }
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	/* IPv6 gids */
 	in6_dev = in6_dev_get(dev);
@@ -1883,16 +1881,15 @@ static void mlx4_set_default_gid(struct mlx4_ib_dev *ibdev,
 	update_gid_table(ibdev, port, &gid, 0, 1);
 }
 
-int mlx4_ib_init_gid_table(struct mlx4_ib_dev *ibdev)
+static int mlx4_ib_init_gid_table(struct mlx4_ib_dev *ibdev)
 {
 	struct	net_device *dev;
 
 	if (reset_gid_table(ibdev))
 		return -1;
 
-	read_lock(&dev_base_lock);
-
-	for_each_netdev(&init_net, dev) {
+        IFNET_RLOCK_NOSLEEP();
+        TAILQ_FOREACH(dev, &V_ifnet, if_link) {
 		u8 port = mlx4_ib_get_dev_port(dev, ibdev);
 		if (port) {
 			if (!rdma_vlan_dev_real_dev(dev) &&
@@ -1902,7 +1899,7 @@ int mlx4_ib_init_gid_table(struct mlx4_ib_dev *ibdev)
 		}
 	}
 
-	read_unlock(&dev_base_lock);
+        IFNET_RUNLOCK_NOSLEEP();
 
 	return 0;
 }
