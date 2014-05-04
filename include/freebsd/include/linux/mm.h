@@ -69,4 +69,18 @@ lowmem_page_address(struct page *page)
         return page_address(page);
 }
 
+/*
+ * This only works via mmap ops.
+*/
+static inline int
+io_remap_pfn_range(struct vm_area_struct *vma,
+    unsigned long addr, unsigned long pfn, unsigned long size,
+    vm_memattr_t prot)
+{
+        vma->vm_page_prot = prot;
+        vma->vm_pfn = pfn;
+
+        return (0);
+}
+
 #endif	/* _FBSD_MM_H_ */

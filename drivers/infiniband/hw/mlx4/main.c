@@ -868,6 +868,7 @@ static int mlx4_ib_ioctl(struct ib_ucontext *context, unsigned int cmd,
 {
 	struct mlx4_ib_dev *dev = to_mdev(context->device);
 	int ret;
+        int offset;
 
 	switch (cmd) {
 	case MLX4_IOCHWCLOCKOFFSET: {
@@ -875,7 +876,8 @@ static int mlx4_ib_ioctl(struct ib_ucontext *context, unsigned int cmd,
 		int ret;
 		ret = mlx4_get_internal_clock_params(dev->dev, &params);
 		if (!ret) {
-			ret = __put_user(params.offset % PAGE_SIZE,
+                        offset = params.offset % PAGE_SIZE;
+			ret = put_user(offset,
 					 (int *)arg);
 			return sizeof(int);
 		} else {
@@ -1195,7 +1197,7 @@ static int __mlx4_ib_destroy_flow(struct mlx4_dev *dev, u64 reg_id)
 		       MLX4_CMD_NATIVE);
 	if (err)
 		pr_err("Fail to detach network rule. registration id = 0x%llx\n",
-		       reg_id);
+		       (unsigned long long)reg_id);
 	return err;
 }
 
@@ -1795,7 +1797,7 @@ static int mlx4_ib_addr_event(int event, struct net_device *event_netdev,
 				event_netdev;
 
         port = mlx4_ib_get_dev_port(real_dev, ibdev);
-	mlx4_make_default_gid(real_dev, &default_gidi, port);
+	mlx4_make_default_gid(real_dev, &default_gid, port);
 	if (event != NETDEV_DOWN && event != NETDEV_UP)
 		return 0;
 
@@ -1985,9 +1987,6 @@ static int mlx4_ib_netdev_event(struct notifier_block *this, unsigned long event
 	struct net_device *dev = ptr;
 	struct mlx4_ib_dev *ibdev;
 
-	if (!net_eq(dev_net(dev), &init_net))
-		return NOTIFY_DONE;
-
 	ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb);
 	mlx4_ib_scan_netdevs(ibdev, dev, event);
 
@@ -2058,7 +2057,7 @@ static void mlx4_ib_alloc_eqs(struct mlx4_dev *dev, struct mlx4_ib_dev *ibdev)
 	mlx4_foreach_port(i, dev, MLX4_PORT_TYPE_IB) {
 		for (j = 0; j < eq_per_port; j++) {
 			sprintf(name, "mlx4-ib-%d-%d@%s",
-				i, j, dev->pdev->bus->name);
+				i, j, dev->pdev->bus->conf.pd_name);
 			/* Set IRQ for specific name (per ring) */
 			if (mlx4_assign_eq(dev, name,
 					   &ibdev->eq_table[eq])) {
