@@ -1773,9 +1773,13 @@ static int reset_gid_table(struct mlx4_ib_dev *dev)
 	return 0;
 }
 
+/* XXX BOND Related - stub (no support for these flags in FBSD)*/
 static inline int netif_is_bond_master(struct net_device *dev)
 {
+#if 0
 	return (dev->flags & IFF_MASTER) && (dev->priv_flags & IFF_BONDING);
+#endif
+        return 0;
 }
 
 static void mlx4_make_default_gid(struct  net_device *dev, union ib_gid *gid, u8 port)
@@ -1954,7 +1958,10 @@ static void mlx4_ib_scan_netdevs(struct mlx4_ib_dev *ibdev,
 	spin_lock_irqsave(&iboe->lock, flags);
 	mlx4_foreach_ib_transport_port(port, ibdev->dev) {
 		struct net_device *old_netdev = iboe->netdevs[port - 1];
+/* XXX BOND related */
+#if 0
 		struct net_device *old_master = iboe->masters[port - 1];
+#endif
 		iboe->masters[port - 1] = NULL;
 		iboe->netdevs[port - 1] =
 			mlx4_get_protocol_dev(ibdev->dev, MLX4_PROT_ETH, port);
@@ -1965,13 +1972,16 @@ static void mlx4_ib_scan_netdevs(struct mlx4_ib_dev *ibdev,
 		if (dev == iboe->netdevs[port - 1] &&
 		    event == NETDEV_CHANGEADDR)
 			init = 1;
-		if (iboe->netdevs[port - 1] && netif_is_bond_slave(iboe->netdevs[port - 1]))
+/* XXX BOND related */
+#if 0
+                if (iboe->netdevs[port - 1] && netif_is_bond_slave(iboe->netdevs[port - 1]))
 			iboe->masters[port - 1] = iboe->netdevs[port - 1]->master;
 
 		/* if bonding is used it is possible that we add it to masters only after
 		   IP address is assigned to the net bonding interface */
 		if (old_master != iboe->masters[port - 1])
 			init = 1;
+#endif
 	}
 
 	spin_unlock_irqrestore(&iboe->lock, flags);
