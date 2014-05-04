@@ -467,6 +467,27 @@ bitmap_find_free_region(unsigned long *bitmap, int bits, int order)
 }
 
 /**
+ * bitmap_allocate_region - allocate bitmap region
+ *      @bitmap: array of unsigned longs corresponding to the bitmap
+ *      @pos: beginning of bit region to allocate
+ *      @order: region size (log base 2 of number of bits) to allocate
+ *
+ * Allocate (set bits in) a specified region of a bitmap.
+ *
+ * Return 0 on success, or %-EBUSY if specified region wasn't
+ * free (not all bits were zero).
+ */
+
+static inline int
+bitmap_allocate_region(unsigned long *bitmap, int pos, int order)
+{
+        if (!__reg_op(bitmap, pos, order, REG_OP_ISFREE))
+                return -EBUSY;
+        __reg_op(bitmap, pos, order, REG_OP_ALLOC);
+        return 0;
+}
+
+/**
  * bitmap_release_region - release allocated bitmap region
  *      @bitmap: array of unsigned longs corresponding to the bitmap
  *      @pos: beginning of bit region to release
