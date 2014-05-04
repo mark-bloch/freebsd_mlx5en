@@ -2226,41 +2226,6 @@ static struct attribute_group diag_counters_group = {
 	.attrs  = diag_rprt_attrs
 };
 
-static int mlx4_ib_proc_init(void)
-{
-	/* Creating procfs directories /proc/drivers/mlx4_ib/ &&
-	      /proc/drivers/mlx4_ib/mrs for further use by the driver.
-	*/
-	int err;
-
-	mlx4_ib_driver_dir_entry = proc_mkdir(MLX4_IB_DRIVER_PROC_DIR_NAME,
-				NULL);
-
-	if (!mlx4_ib_driver_dir_entry) {
-		pr_err("mlx4_ib_proc_init has failed for %s\n",
-		       MLX4_IB_DRIVER_PROC_DIR_NAME);
-		err = -ENODEV;
-		goto error;
-	}
-
-	mlx4_mrs_dir_entry = proc_mkdir(MLX4_IB_MRS_PROC_DIR_NAME,
-					mlx4_ib_driver_dir_entry);
-	if (!mlx4_mrs_dir_entry) {
-		pr_err("mlx4_ib_proc_init has failed for %s\n",
-		       MLX4_IB_MRS_PROC_DIR_NAME);
-		err = -ENODEV;
-		goto remove_entry;
-	}
-
-	return 0;
-
-remove_entry:
-	remove_proc_entry(MLX4_IB_DRIVER_PROC_DIR_NAME,
-				NULL);
-error:
-	return err;
-}
-
 static void init_dev_assign(void)
 {
 	int i = 1;
@@ -2947,10 +2912,6 @@ static int __init mlx4_ib_init(void)
 	if (!wq)
 		return -ENOMEM;
 
-	err = mlx4_ib_proc_init();
-	if (err)
-		goto clean_wq;
-
 	err = mlx4_ib_mcg_init();
 	if (err)
 		goto clean_proc;
@@ -2967,11 +2928,6 @@ clean_mcg:
 	mlx4_ib_mcg_destroy();
 
 clean_proc:
-	remove_proc_entry(MLX4_IB_MRS_PROC_DIR_NAME,
-			  mlx4_ib_driver_dir_entry);
-	remove_proc_entry(MLX4_IB_DRIVER_PROC_DIR_NAME, NULL);
-
-clean_wq:
 	destroy_workqueue(wq);
 	return err;
 }
@@ -2982,10 +2938,6 @@ static void __exit mlx4_ib_cleanup(void)
 	mlx4_ib_mcg_destroy();
 	destroy_workqueue(wq);
 
-	/* Remove proc entries */
-	remove_proc_entry(MLX4_IB_MRS_PROC_DIR_NAME,
-				mlx4_ib_driver_dir_entry);
-	remove_proc_entry(MLX4_IB_DRIVER_PROC_DIR_NAME, NULL);
 	kfree(dev_num_str_bitmap);
 }
 
