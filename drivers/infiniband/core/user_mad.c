@@ -851,7 +851,7 @@ static int ib_umad_open(struct inode *inode, struct file *filp)
 	struct ib_umad_file *file;
 	int ret;
 
-	port = get_port(inode->i_cdev);
+	port = get_port(inode->i_cdev->si_drv1);
 	if (!port)
 		return -ENXIO;
 
@@ -947,7 +947,7 @@ static int ib_umad_sm_open(struct inode *inode, struct file *filp)
 	};
 	int ret;
 
-	port = get_port(inode->i_cdev);
+	port = get_port(inode->i_cdev->si_drv1);
 	if (!port)
 		return -ENXIO;
 

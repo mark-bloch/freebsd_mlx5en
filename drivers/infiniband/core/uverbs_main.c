@@ -1058,7 +1058,7 @@ static int ib_uverbs_open(struct inode *inode, struct file *filp)
 	struct ib_uverbs_file *file;
 	int ret;
 
-	dev = container_of(inode->i_cdev, struct ib_uverbs_device, cdev);
+	dev = container_of(inode->i_cdev->si_drv1, struct ib_uverbs_device, cdev);
 	if (dev)
 		kref_get(&dev->ref);
 	else
