@@ -526,7 +526,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 		return 0;
 
 	/* We assume a 1:1 mapping between CQEs and Rx descriptors, so Rx
-	 * descriptor offset can be deduced from the CQE index instead of
+	 * descriptor offset can be deducted from the CQE index instead of
 	 * reading 'cqe->index' */
 	index = cons_index & size_mask;
 	cqe = &buf[CQE_FACTOR_INDEX(index, factor)];
