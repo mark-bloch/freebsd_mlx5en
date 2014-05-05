@@ -420,5 +420,32 @@ static inline int dev_to_node(struct device *dev)
                 return -1;
 }
 
+static char *kvasprintf(gfp_t gfp, const char *fmt, va_list ap)
+{
+	unsigned int len;
+	char *p = NULL;
+	va_list aq;
+
+	va_copy(aq, ap);
+	len = vsnprintf(NULL, 0, fmt, aq);
+	va_end(aq);
+
+	vsnprintf(p, len+1, fmt, ap);
+
+	return p;
+}
+
+static char *kasprintf(gfp_t gfp, const char *fmt, ...)
+{
+	va_list ap;
+	char *p;
+
+	va_start(ap, fmt);
+	p = kvasprintf(gfp, fmt, ap);
+	va_end(ap);
+
+	return p;
+}
+
 
 #endif	/* _FBSD_DEVICE_H_ */
