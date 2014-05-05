@@ -34,7 +34,8 @@
 
 #define ECOMM           ESTALE
 #define ENODATA         ECONNREFUSED
-#define ERESTARTSYS     ERESTART
+#define ENOIOCTLCMD     ENOIOCTL                /* XXX this is negative */
+#define ERESTARTSYS     ERESTART		/* XXX this is negative */
 #define ENOTSUPP        EOPNOTSUPP
 
 // Taken from Linux kernel: include/uapi/asm-generic/errno.h
