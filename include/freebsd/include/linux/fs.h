@@ -162,6 +162,14 @@ unregister_chrdev_region(dev_t dev, unsigned range)
 	return;
 }
 
+static inline int
+alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count,
+			const char *name)
+{
+
+	return 0;
+}
+
 /* No current support for seek op in FreeBSD */
 static int nonseekable_open(struct inode *inode, struct file *filp)
 {
