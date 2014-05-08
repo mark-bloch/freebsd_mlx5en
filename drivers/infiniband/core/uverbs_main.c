@@ -1007,7 +1007,8 @@ static int ib_uverbs_mmap(struct file *filp, struct vm_area_struct *vma)
 	else
 		return file->device->ib_dev->mmap(file->ucontext, vma);
 }
-
+/* XXX Not supported in FreeBSD */
+#if 0
 static unsigned long ib_uverbs_get_unmapped_area(struct file *filp,
 		unsigned long addr,
 		unsigned long len, unsigned long pgoff, unsigned long flags)
@@ -1025,7 +1026,7 @@ static unsigned long ib_uverbs_get_unmapped_area(struct file *filp,
 								pgoff, flags);
 	}
 }
-
+#endif
 
 static long ib_uverbs_ioctl(struct file *filp,
 			   unsigned int cmd, unsigned long arg)
@@ -1123,7 +1124,10 @@ static const struct file_operations uverbs_mmap_fops = {
 	.open	 = ib_uverbs_open,
 	.release = ib_uverbs_close,
 	.llseek	 = no_llseek,
+/* XXX Not supported in FreeBSD */
+#if 0
 	.get_unmapped_area = ib_uverbs_get_unmapped_area,
+#endif
 	.unlocked_ioctl = ib_uverbs_ioctl,
 };
 
@@ -1153,7 +1157,7 @@ static ssize_t show_dev_ref_cnt(struct device *device,
 	if (!dev)
 		return -ENODEV;
 
-	return sprintf(buf, "%d\n",  atomic_read(&dev->ref.refcount));
+	return sprintf(buf, "%d\n",  dev->ref.count);
 }
 static DEVICE_ATTR(ref_cnt, S_IRUGO, show_dev_ref_cnt, NULL);
 
