@@ -108,7 +108,8 @@ struct class_attribute_string {
 	char *str;
 };
 
-static ssize_t show_class_attr_string(struct class *class,
+static inline ssize_t
+show_class_attr_string(struct class *class,
 				struct class_attribute *attr, char *buf)
 {
 	struct class_attribute_string *cs;
@@ -420,7 +421,7 @@ static inline int dev_to_node(struct device *dev)
                 return -1;
 }
 
-static char *kvasprintf(gfp_t gfp, const char *fmt, va_list ap)
+static inline char *kvasprintf(gfp_t gfp, const char *fmt, va_list ap)
 {
 	unsigned int len;
 	char *p = NULL;
@@ -435,7 +436,7 @@ static char *kvasprintf(gfp_t gfp, const char *fmt, va_list ap)
 	return p;
 }
 
-static char *kasprintf(gfp_t gfp, const char *fmt, ...)
+static inline char *kasprintf(gfp_t gfp, const char *fmt, ...)
 {
 	va_list ap;
 	char *p;
