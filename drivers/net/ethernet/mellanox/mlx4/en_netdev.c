@@ -52,6 +52,9 @@
 #include "mlx4_en.h"
 #include "en_port.h"
 
+static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv);
+static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv);
+
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
 /* must be called with local_bh_disable()d */
@@ -1905,7 +1908,7 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
 		goto err;
 #endif
         /* Re-create stat sysctls in case the number of rings changed. */
-        //mlx4_en_sysctl_stat(priv);
+	mlx4_en_sysctl_stat(priv);
 	return 0;
 
 err:
@@ -2706,10 +2709,9 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 	priv->stride = roundup_pow_of_two(sizeof(struct mlx4_en_rx_desc) +
 					  DS_SIZE);
-#if 0  
+
         // replaces linux ethtool and init_param - need to handle this later
 	mlx4_en_sysctl_conf(priv);
-#endif
 
 	err = mlx4_en_alloc_resources(priv);
 	if (err)
@@ -2806,7 +2808,21 @@ out:
 	return err;
 }
 
-#if 0
+static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
+{
+	struct net_device *dev;
+	struct sysctl_ctx_list *ctx;
+
+	dev = priv->dev;
+	ctx = &priv->conf_ctx;
+
+	sysctl_ctx_init(ctx);
+	priv->sysctl = SYSCTL_ADD_NODE(ctx, SYSCTL_STATIC_CHILDREN(_hw),
+			OID_AUTO, dev->if_xname, CTLFLAG_RD, 0, "mlx4 10gig ethernet");
+
+}
+
+
 static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 {
 	struct net_device *dev;
@@ -2860,8 +2876,109 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	    "TX checksum offloads");
 
 	/* Could strdup the names and add in a loop.  This is simpler. */
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "broadcast", CTLFLAG_RD,
-	    &priv->pkstats.broadcast, "Broadcast packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_bytes", CTLFLAG_RD,
+	    &priv->pkstats.rx_bytes, "RX Bytes");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_packets, "RX packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_multicast_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_multicast_packets, "RX Multicast Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_broadcast_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_broadcast_packets, "RX Broadcast Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_errors", CTLFLAG_RD,
+	    &priv->pkstats.rx_errors, "RX Errors");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_dropped", CTLFLAG_RD,
+	    &priv->pkstats.rx_dropped, "RX Dropped");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_length_errors", CTLFLAG_RD,
+	    &priv->pkstats.rx_length_errors, "RX Length Errors");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_over_errors", CTLFLAG_RD,
+	    &priv->pkstats.rx_over_errors, "RX Over Errors");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_crc_errors", CTLFLAG_RD,
+	    &priv->pkstats.rx_crc_errors, "RX CRC Errors");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_jabbers", CTLFLAG_RD,
+	    &priv->pkstats.rx_jabbers, "RX Jabbers");
+
+
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_in_range_length_error", CTLFLAG_RD,
+	    &priv->pkstats.rx_in_range_length_error, "RX IN_Range Length Error");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_out_range_length_error",
+		CTLFLAG_RD, &priv->pkstats.rx_out_range_length_error,
+		"RX Out Range Length Error");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_lt_64_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_lt_64_bytes_packets, "RX Lt 64 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_127_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_127_bytes_packets, "RX 127 bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_255_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_255_bytes_packets, "RX 255 bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_511_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_511_bytes_packets, "RX 511 bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_1023_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_1023_bytes_packets, "RX 1023 bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_1518_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_1518_bytes_packets, "RX 1518 bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_1522_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_1522_bytes_packets, "RX 1522 bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_1548_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_1548_bytes_packets, "RX 1548 bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_gt_1548_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.rx_gt_1548_bytes_packets,
+	    "RX Greater Then 1548 bytes Packets");
+
+struct mlx4_en_pkt_stats {
+	unsigned long tx_packets;
+	unsigned long tx_bytes;
+	unsigned long tx_multicast_packets;
+	unsigned long tx_broadcast_packets;
+	unsigned long tx_errors;
+	unsigned long tx_dropped;
+	unsigned long tx_lt_64_bytes_packets;
+	unsigned long tx_127_bytes_packets;
+	unsigned long tx_255_bytes_packets;
+	unsigned long tx_511_bytes_packets;
+	unsigned long tx_1023_bytes_packets;
+	unsigned long tx_1518_bytes_packets;
+	unsigned long tx_1522_bytes_packets;
+	unsigned long tx_1548_bytes_packets;
+	unsigned long tx_gt_1548_bytes_packets;
+	unsigned long rx_prio[NUM_PRIORITIES][NUM_PRIORITY_STATS];
+	unsigned long tx_prio[NUM_PRIORITIES][NUM_PRIORITY_STATS];
+#define NUM_PKT_STATS		72
+};
+
+
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_packets, "TX packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_bytes", CTLFLAG_RD,
+	    &priv->pkstats.tx_packets, "TX Bytes");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_multicast_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_multicast_packets, "TX Multicast Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_broadcast_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_broadcast_packets, "TX Broadcast Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_errors", CTLFLAG_RD,
+	    &priv->pkstats.tx_errors, "TX Errors");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_dropped", CTLFLAG_RD,
+	    &priv->pkstats.tx_dropped, "TX Dropped");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_lt_64_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_lt_64_bytes_packets, "TX Less Then 64 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_127_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_127_bytes_packets, "TX 127 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_255_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_255_bytes_packets, "TX 255 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_511_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_511_bytes_packets, "TX 511 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_1023_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_1023_bytes_packets, "TX 1023 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_1518_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_1518_bytes_packets, "TX 1518 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_1522_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_1522_bytes_packets, "TX 1522 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_1548_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_1548_bytes_packets, "TX 1548 Bytes Packets");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_gt_1548_bytes_packets", CTLFLAG_RD,
+	    &priv->pkstats.tx_gt_1548_bytes_packets,
+	    "TX Greater Then 1548 Bytes Packets");
+
+
+#if 0
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio0", CTLFLAG_RD,
 	    &priv->pkstats.tx_prio[0], "TX Priority 0 packets");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio1", CTLFLAG_RD,
@@ -2894,9 +3011,10 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	    &priv->pkstats.rx_prio[6], "RX Priority 6 packets");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio7", CTLFLAG_RD,
 	    &priv->pkstats.rx_prio[7], "RX Priority 7 packets");
+#endif
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		tx_ring = &priv->tx_ring[i];
+		tx_ring = priv->tx_ring[i];
 		snprintf(namebuf, sizeof(namebuf), "tx_ring%d", i);
 		ring_node = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO, namebuf,
 		    CTLFLAG_RD, NULL, "TX Ring");
@@ -2905,12 +3023,10 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 		    CTLFLAG_RD, &tx_ring->packets, "TX packets");
 		SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",
 		    CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
-		SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "error",
-		    CTLFLAG_RD, &tx_ring->errors, "TX soft errors");
 
 	}
 	for (i = 0; i < priv->rx_ring_num; i++) {
-		rx_ring = &priv->rx_ring[i];
+		rx_ring = priv->rx_ring[i];
 		snprintf(namebuf, sizeof(namebuf), "rx_ring%d", i);
 		ring_node = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO, namebuf,
 		    CTLFLAG_RD, NULL, "RX Ring");
@@ -2921,10 +3037,5 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 		    CTLFLAG_RD, &rx_ring->bytes, "RX bytes");
 		SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "error",
 		    CTLFLAG_RD, &rx_ring->errors, "RX soft errors");
-		SYSCTL_ADD_UINT(ctx, ring_list, OID_AUTO, "lro_queued",
-		    CTLFLAG_RD, &rx_ring->lro.lro_queued, 0, "LRO Queued");
-		SYSCTL_ADD_UINT(ctx, ring_list, OID_AUTO, "lro_flushed",
-		    CTLFLAG_RD, &rx_ring->lro.lro_flushed, 0, "LRO Flushed");
 	}
 }
-#endif
