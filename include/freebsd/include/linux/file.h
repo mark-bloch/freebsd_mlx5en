@@ -108,7 +108,7 @@ get_unused_fd(void)
 }
 
 static inline struct linux_file *
-_alloc_file(int mode, const struct file_operations *fops)
+alloc_file(int mode, const struct file_operations *fops)
 {
 	struct linux_file *filp;
 
@@ -135,8 +135,6 @@ static inline struct fd fdget(unsigned int fd)
 	struct linux_file *f = linux_fget(fd);
 	return (struct fd){f};
 }
-
-#define	alloc_file(mnt, root, mode, fops)	_alloc_file((mode), (fops))
 
 #define	file	linux_file
 #define	fget	linux_fget

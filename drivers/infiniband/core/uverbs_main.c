@@ -619,10 +619,18 @@ struct file *ib_uverbs_alloc_event_file(struct ib_uverbs_file *uverbs_file,
 	ev_file->is_async    = is_async;
 	ev_file->is_closed   = 0;
 
-	filp = anon_inode_getfile("[infinibandevent]", &uverbs_event_fops,
-				  ev_file, O_RDONLY);
-	if (IS_ERR(filp))
+	/*
+	* fops_get() can't fail here, because we're coming from a
+	* system call on a uverbs file, which will already have a
+	* module reference.
+	*/
+	filp = alloc_file(FMODE_READ, fops_get(&uverbs_event_fops));
+
+	if (IS_ERR(filp)) {
 		kfree(ev_file);
+	} else {
+		filp->private_data = ev_file;
+	}
 
 	return filp;
 }
