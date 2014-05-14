@@ -47,6 +47,7 @@
 #include <linux/slab.h>
 #include <linux/ktime.h>
 #include <linux/rbtree.h>
+#include <linux/math64.h>
 
 #include <asm/uaccess.h>
 

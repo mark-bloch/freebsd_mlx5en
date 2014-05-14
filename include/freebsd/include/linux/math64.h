@@ -31,13 +31,21 @@
  */
 
 #ifndef FBSD_MATH64_H
-#define FBSD_MATH64_H 1
+#define FBSD_MATH64_H
 
 #include <linux/types.h>
 #include <linux/bitops.h>
 
 #if BITS_PER_LONG == 64
  
+# define do_div(n, base) ({                                    \
+	uint32_t __base = (base);                               \
+	uint32_t __rem;                                         \
+	__rem = ((uint64_t)(n)) % __base;                       \
+	(n) = ((uint64_t)(n)) / __base;                         \
+	__rem;                                                  \
+})
+
 /**
 * div_u64_rem - unsigned 64bit divide with 32bit divisor with remainder
 *
@@ -52,7 +60,52 @@ static inline u64 div_u64_rem(u64 dividend, u32 divisor, u32 *remainder)
 
 
 #elif BITS_PER_LONG == 32
+
+static uint32_t __attribute__((weak)) __div64_32(uint64_t *n, uint32_t base)
+{
+	uint64_t rem = *n;
+	uint64_t b = base;
+	uint64_t res, d = 1;
+	uint32_t high = rem >> 32;
+
+	/* Reduce the thing a bit first */
+	res = 0;
+	if (high >= base) {
+		high /= base;
+		res = (uint64_t) high << 32;
+		rem -= (uint64_t) (high*base) << 32;
+	}
+
+	while ((int64_t)b > 0 && b < rem) {
+		b = b+b;
+		d = d+d;
+	}
+
+	do {
+		if (rem >= b) {
+			rem -= b;
+			res += d;
+		}
+		b >>= 1;
+		d >>= 1;
+	} while (d);
+
+	*n = res;
+	return rem;
+}
  
+# define do_div(n, base) ({                            \
+	uint32_t __base = (base);                       \
+	uint32_t __rem;                                 \
+	(void)(((typeof((n)) *)0) == ((uint64_t *)0));  \
+	if (likely(((n) >> 32) == 0)) {                 \
+		__rem = (uint32_t)(n) % __base;         \
+		(n) = (uint32_t)(n) / __base;           \
+	} else                                          \
+		__rem = __div64_32(&(n), __base);       \
+	__rem;                                          \
+})
+
 #ifndef div_u64_rem
 static inline u64 div_u64_rem(u64 dividend, u32 divisor, u32 *remainder)
 {
