@@ -36,7 +36,7 @@
  * Max number of FreeBSD events to map to Linux events per notify type.
  */
 #define	NOTIFY_DONE	0
-#define	_NOTIFY_COUNT	5
+#define	_NOTIFY_COUNT	7
 
 struct notifier_block {
 	int (*notifier_call)(struct notifier_block *, unsigned long, void *);
@@ -50,6 +50,8 @@ struct notifier_block {
 #define	NETDEV_DOWN		0x0002
 #define	NETDEV_REGISTER		0x0003
 #define	NETDEV_UNREGISTER	0x0004
+#define NETDEV_CHANGEADDR       0x0005
+#define NETDEV_CHANGEIFADDR     0x0006
 
 
 #endif	/* _LINUX_NOTIFIER_H_ */

@@ -72,8 +72,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRV_VERSION);
 
 int mlx4_ib_sm_guid_assign = 1;
-struct proc_dir_entry *mlx4_mrs_dir_entry;
-static struct proc_dir_entry *mlx4_ib_driver_dir_entry;
 
 module_param_named(sm_guid_assign, mlx4_ib_sm_guid_assign, int, 0444);
 MODULE_PARM_DESC(sm_guid_assign, "Enable SM alias_GUID assignment if sm_guid_assign > 0 (Default: 1)");
@@ -1788,45 +1786,6 @@ static void mlx4_make_default_gid(struct  net_device *dev, union ib_gid *gid, u8
 	mlx4_addrconf_ifid_eui48(&gid->raw[8], 0xffff, dev, port);
 }
 
-static int mlx4_ib_addr_event(int event, struct net_device *event_netdev,
-		struct mlx4_ib_dev *ibdev, union ib_gid *gid)
-{
-	struct mlx4_ib_iboe *iboe;
-	int port = 0;
-	union ib_gid default_gid;
-	unsigned long flags;
-
-	struct net_device *real_dev = rdma_vlan_dev_real_dev(event_netdev) ?
-				rdma_vlan_dev_real_dev(event_netdev) :
-				event_netdev;
-
-        port = mlx4_ib_get_dev_port(real_dev, ibdev);
-	mlx4_make_default_gid(real_dev, &default_gid, port);
-	if (event != NETDEV_DOWN && event != NETDEV_UP)
-		return 0;
-
-	if ((real_dev != event_netdev) &&
-	    (event == NETDEV_DOWN) &&
-	    rdma_link_local_addr((struct in6_addr *)gid))
-		return 0;
-
-	if (!memcmp(gid, &default_gid, sizeof(*gid)))
-		return 0;
-
-	iboe = &ibdev->iboe;
-	spin_lock_irqsave(&iboe->lock, flags);
-
-	for (port = 1; port <= MLX4_MAX_PORTS; ++port)
-		if ((netif_is_bond_master(real_dev) && (real_dev == iboe->masters[port - 1])) ||
-		    (!netif_is_bond_master(real_dev) && (real_dev == iboe->netdevs[port - 1])))
-			update_gid_table(ibdev, port, gid, event ==
-					 NETDEV_DOWN, 0);
-
-	spin_unlock_irqrestore(&iboe->lock, flags);
-	return 0;
-
-}
-
 static u8 mlx4_ib_get_dev_port(struct net_device *dev, struct mlx4_ib_dev *ibdev)
 {
 	u8 port = 0;
@@ -1913,38 +1872,6 @@ static int mlx4_ib_init_gid_table(struct mlx4_ib_dev *ibdev)
 	return 0;
 }
 
-static int mlx4_ib_inet_event(struct notifier_block *this, unsigned long event,
-				void *ptr)
-{
-	struct mlx4_ib_dev *ibdev;
-	struct in_ifaddr *ifa = ptr;
-	union ib_gid gid;
-	struct net_device *event_netdev = ifa->ifa_dev->dev;
-
-	ipv6_addr_set_v4mapped(ifa->ifa_address, (struct in6_addr *)&gid);
-
-	ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb_inet);
-
-	mlx4_ib_addr_event(event, event_netdev, ibdev, &gid);
-	return NOTIFY_DONE;
-}
-
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-static int mlx4_ib_inet6_event(struct notifier_block *this, unsigned long event,
-				void *ptr)
-{
-	struct mlx4_ib_dev *ibdev;
-	struct inet6_ifaddr *ifa = ptr;
-	union  ib_gid *gid = (union ib_gid *)&ifa->addr;
-	struct net_device *event_netdev = ifa->idev->dev;
-
-	ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb_inet6);
-
-	mlx4_ib_addr_event(event, event_netdev, ibdev, gid);
-	return NOTIFY_DONE;
-}
-#endif
-
 static void mlx4_ib_scan_netdevs(struct mlx4_ib_dev *ibdev,
 				 struct net_device *dev, unsigned long event)
 {
@@ -1998,10 +1925,42 @@ static int mlx4_ib_netdev_event(struct notifier_block *this, unsigned long event
 	struct mlx4_ib_dev *ibdev;
 
 	ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb);
+
 	mlx4_ib_scan_netdevs(ibdev, dev, event);
 
 	return NOTIFY_DONE;
 }
+
+/* This function initializes the gid table only if the event_netdev real device is an iboe
+ * device, will be invoked by the inet/inet6 events */
+static int mlx4_ib_inet_event(struct notifier_block *this, unsigned long event,
+                                void *ptr)
+{
+        struct net_device *event_netdev = ptr;
+        struct mlx4_ib_dev *ibdev;
+        struct mlx4_ib_iboe *ibdev_iboe;
+        int port = 0;
+
+        ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb);
+
+        struct net_device *real_dev = rdma_vlan_dev_real_dev(event_netdev) ?
+                        rdma_vlan_dev_real_dev(event_netdev) :
+                        event_netdev;
+
+        ibdev_iboe = &ibdev->iboe;
+
+        port = mlx4_ib_get_dev_port(real_dev, ibdev);
+
+        /* Perform init_gid_table if the event real_dev is the net_device which represents this port,
+         * otherwise this event is not related and would be ignored.*/
+        if(port && (real_dev == ibdev_iboe->netdevs[port - 1]))
+                if (mlx4_ib_init_gid_table(ibdev))
+                        pr_warn("Fail to reset gid table\n");
+
+        return NOTIFY_DONE;
+}
+
+
 static void init_pkeys(struct mlx4_ib_dev *ibdev)
 {
 	int port;
@@ -2548,16 +2507,6 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 				goto err_notify;
 			}
 		}
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-		if (!iboe->nb_inet6.notifier_call) {
-			iboe->nb_inet6.notifier_call = mlx4_ib_inet6_event;
-			err = register_inet6addr_notifier(&iboe->nb_inet6);
-			if (err) {
-				iboe->nb_inet6.notifier_call = NULL;
-				goto err_notify;
-			}
-		}
-#endif
 		mlx4_ib_scan_netdevs(ibdev, NULL, 0);
 	}
 	for (j = 0; j < ARRAY_SIZE(mlx4_class_attributes); ++j) {
@@ -2595,13 +2544,6 @@ err_notify:
 			pr_warn("failure unregistering notifier\n");
 		ibdev->iboe.nb_inet.notifier_call = NULL;
 	}
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	if (ibdev->iboe.nb_inet6.notifier_call) {
-		if (unregister_inet6addr_notifier(&ibdev->iboe.nb_inet6))
-			pr_warn("failure unregistering notifier\n");
-		ibdev->iboe.nb_inet6.notifier_call = NULL;
-	}
-#endif
 	flush_workqueue(wq);
 
 	mlx4_ib_close_sriov(ibdev);
@@ -2718,13 +2660,6 @@ static void mlx4_ib_remove(struct mlx4_dev *dev, void *ibdev_ptr)
 			pr_warn("failure unregistering notifier\n");
 		ibdev->iboe.nb_inet.notifier_call = NULL;
 	}
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	if (ibdev->iboe.nb_inet6.notifier_call) {
-		if (unregister_inet6addr_notifier(&ibdev->iboe.nb_inet6))
-			pr_warn("failure unregistering notifier\n");
-		ibdev->iboe.nb_inet6.notifier_call = NULL;
-	}
-#endif
 
 	mlx4_ib_close_sriov(ibdev);
 	sysfs_remove_group(&ibdev->ib_dev.dev.kobj, &diag_counters_group);
