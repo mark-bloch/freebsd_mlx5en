@@ -30,7 +30,7 @@
  * SOFTWARE.
  *
  */
-
+#include "opt_inet.h"
 #include <linux/mlx4/cq.h>
 #include <linux/slab.h>
 #include <linux/mlx4/qp.h>
@@ -337,7 +337,19 @@ int mlx4_en_activate_rx_rings(struct mlx4_en_priv *priv)
 		/* Initialize all descriptors */
 		for (i = 0; i < ring->size; i++)
 			mlx4_en_init_rx_desc(priv, ring, i);
+
+#ifdef INET
+		/* Configure lro mngr */
+		if (priv->dev->if_capenable & IFCAP_LRO) {
+			if (tcp_lro_init(&ring->lro))
+				priv->dev->if_capenable &= ~IFCAP_LRO;
+			else
+				ring->lro.ifp = priv->dev;
+		}
+#endif
 	}
+
+
 	err = mlx4_en_fill_rx_buffers(priv);
 	if (err)
 		goto err_buffers;
@@ -389,6 +401,9 @@ void mlx4_en_destroy_rx_ring(struct mlx4_en_priv *priv,
 void mlx4_en_deactivate_rx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_rx_ring *ring)
 {
+#ifdef INET
+	tcp_lro_free(&ring->lro);
+#endif
 	mlx4_en_free_rx_buf(priv, ring);
 	if (ring->stride <= TXBB_SIZE)
 		ring->buf -= TXBB_SIZE;
@@ -587,24 +602,18 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 			 */
 #ifdef INET
 			if (mlx4_en_can_lro(cqe->status) &&
-			    (dev->if_capenable & IFCAP_LRO)) {
+					(dev->if_capenable & IFCAP_LRO)) {
 				if (ring->lro.lro_cnt != 0 &&
-				    tcp_lro_rx(&ring->lro, mb, 0) == 0)
+						tcp_lro_rx(&ring->lro, mb, 0) == 0)
 					goto next;
 			}
-#endif
 
+#endif
 			/* LRO not possible, complete processing here */
 			INC_PERF_COUNTER(priv->pstats.lro_misses);
 		} else {
 			mb->m_pkthdr.csum_flags = 0;
 			priv->port_stats.rx_chksum_none++;
-#ifdef INET
-			if (priv->ip_reasm &&
-			    cqe->status & cpu_to_be16(MLX4_CQE_STATUS_IPV4) &&
-			    !mlx4_en_rx_frags(priv, ring, mb, cqe))
-				goto next;
-#endif
 		}
 
 		/* Push it up the stack */
@@ -620,7 +629,6 @@ next:
 	/* Flush all pending IP reassembly sessions */
 out:
 #ifdef INET
-	mlx4_en_flush_frags(priv, ring);
 	while ((queued = SLIST_FIRST(&ring->lro.lro_active)) != NULL) {
 		SLIST_REMOVE_HEAD(&ring->lro.lro_active, next);
 		tcp_lro_flush(&ring->lro, queued);

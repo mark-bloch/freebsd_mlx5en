@@ -55,6 +55,8 @@
 #include <linux/mlx4/cmd.h>
 #include <linux/bitmap.h>
 
+#include <netinet/tcp_lro.h>
+
 #include "en_port.h"
 #include "mlx4_stats.h"
 
@@ -353,7 +355,23 @@ struct mlx4_en_rx_ring {
 	unsigned long csum_none;
 	int hwtstamp_rx_filter;
 	int numa_node;
+	struct lro_ctrl lro;
 };
+
+static inline int mlx4_en_can_lro(__be16 status)
+{
+	return (status & cpu_to_be16(MLX4_CQE_STATUS_IPV4       |
+				MLX4_CQE_STATUS_IPV4F      |
+				MLX4_CQE_STATUS_IPV6       |
+				MLX4_CQE_STATUS_IPV4OPT    |
+				MLX4_CQE_STATUS_TCP        |
+				MLX4_CQE_STATUS_UDP        |
+				MLX4_CQE_STATUS_IPOK)) ==
+		cpu_to_be16(MLX4_CQE_STATUS_IPV4 |
+				MLX4_CQE_STATUS_IPOK |
+				MLX4_CQE_STATUS_TCP);
+}
+
 
 struct mlx4_en_cq {
 	struct mlx4_cq          mcq;
