@@ -1872,6 +1872,13 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 		if (priv->rx_cq[i])
 			mlx4_en_destroy_cq(priv, &priv->rx_cq[i]);
 	}
+
+	if (priv->sysctl)
+		sysctl_ctx_free(&priv->stat_ctx);
+
+        if (priv->sysctl)
+                sysctl_ctx_free(&priv->conf_ctx);
+
 }
 
 int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
@@ -2119,6 +2126,10 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	if (priv->allocated)
 		mlx4_free_hwq_res(mdev->dev, &priv->res, MLX4_EN_PAGE_SIZE);
 
+	mutex_lock(&mdev->state_lock);
+	mlx4_en_stop_port(dev);
+	mutex_unlock(&mdev->state_lock);
+
 
 	cancel_delayed_work(&priv->stats_task);
 	cancel_delayed_work(&priv->service_task);
@@ -2133,9 +2144,6 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 
 
 	mlx4_en_free_resources(priv);
-
-        if (priv->sysctl)
-                sysctl_ctx_free(&priv->conf_ctx);
 
 	kfree(priv->tx_ring);
 	kfree(priv->tx_cq);
