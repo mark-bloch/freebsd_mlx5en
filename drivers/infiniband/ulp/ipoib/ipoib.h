@@ -54,6 +54,11 @@
 #include <rdma/ib_sa.h>
 #include <linux/sched.h>
 #include <rdma/e_ipoib.h>
+#include "ipoib_allmulti.h"
+
+#define DRV_VERSION "2.2.0"
+#define DRV_RELDATE __DATE__
+extern const char ipoib_driver_version[];
 
 /* constants */
 
@@ -93,6 +98,7 @@ enum {
 	IPOIB_FLAG_SUBINTERFACE	  = 5,
 	IPOIB_MCAST_RUN		  = 6,
 	IPOIB_STOP_REAPER	  = 7,
+	IPOIB_ALL_MULTI           = 8,
 	IPOIB_FLAG_ADMIN_CM	  = 9,
 	IPOIB_FLAG_UMCAST	  = 10,
 	IPOIB_STOP_NEIGH_GC	  = 11,
@@ -100,6 +106,9 @@ enum {
 	IPOIB_FLAG_AUTO_MODER     = 13, /*indicates moderation is running*/
 	/*indicates if event handler was registered*/
 	IPOIB_FLAG_EVENTS_REGISTERED    = 14,
+	/*indicates interface in the middle of destruction, like delete_child*/
+	IPOIB_FLAG_INTF_ON_DESTROY	= 15,
+	IPOIB_ALL_MULTI_REST      = 16,
 
 	IPOIB_MAX_BACKOFF_SECONDS = 16,
 
@@ -108,6 +117,8 @@ enum {
 	IPOIB_MCAST_FLAG_BUSY	  = 2,	/* joining or already joined */
 	IPOIB_MCAST_FLAG_ATTACHED = 3,
 	IPOIB_MCAST_JOIN_STARTED  = 4,
+
+	IPOIB_USR_MC_MEMBER		= 7,	/* used for user-related mcg */
 
 	MAX_SEND_CQE		  = 16,
 	IPOIB_CM_COPYBREAK	  = 256,
@@ -422,6 +433,11 @@ struct ipoib_arp_repath {
 	struct net_device   *dev;
 };
 
+struct ipoib_qp_state_validate {
+	struct work_struct work;
+	struct ipoib_dev_priv   *priv;
+	struct ipoib_send_ring *send_ring;
+};
 
 /*
  * Device private locking: network stack tx_lock protects members used
@@ -489,6 +505,7 @@ struct ipoib_dev_priv {
 	struct list_head fs_list;
 	struct dentry *mcg_dentry;
 	struct dentry *path_dentry;
+	struct dentry *neigh_dentry;
 #endif
 	int	hca_caps;
 	struct ipoib_ethtool_st ethtool;
@@ -510,6 +527,10 @@ struct ipoib_dev_priv {
 
 	/* all state change operation over the ring's QP should be under lock*/
 	struct mutex		ring_qp_lock;
+	/* netlink */
+	struct genl_mdata	netlink;
+	/* promiscuous mc */
+	struct promisc_mc promisc;
 };
 
 struct ipoib_ah {
@@ -553,6 +574,12 @@ struct ipoib_neigh {
 	atomic_t	    refcnt;
 	unsigned long       alive;
 	int index; /* For ndo_select_queue and ring counters */
+};
+
+struct ipoib_neigh_iter {
+	struct net_device *dev;
+	struct ipoib_neigh *neigh;
+	int htbl_index;
 };
 
 #define IPOIB_UD_MTU(ib_mtu)		(ib_mtu - IPOIB_ENCAP_LEN)
@@ -645,6 +672,11 @@ struct ipoib_path_iter *ipoib_path_iter_init(struct net_device *dev);
 int ipoib_path_iter_next(struct ipoib_path_iter *iter);
 void ipoib_path_iter_read(struct ipoib_path_iter *iter,
 			  struct ipoib_path *path);
+struct ipoib_neigh_iter *ipoib_neigh_iter_init(struct net_device *dev);
+int ipoib_neigh_iter_next(struct ipoib_neigh_iter *iter);
+void ipoib_neigh_iter_read(struct ipoib_neigh_iter *iter,
+			  struct ipoib_neigh *neigh);
+
 #endif
 
 int ipoib_mcast_attach(struct net_device *dev, u16 mlid,
@@ -872,6 +904,9 @@ static inline void ipoib_unregister_debugfs(void) { }
 
 #define ipoib_warn(priv, format, arg...)		\
 	ipoib_printk(KERN_WARNING, priv, format , ## arg)
+
+#define ipoib_err(priv, format, arg...)			\
+	ipoib_printk(KERN_ERR, priv, format, ## arg)
 
 extern int ipoib_sendq_size;
 extern int ipoib_recvq_size;

@@ -35,6 +35,11 @@
 
 #include "ipoib.h"
 
+/* TX_CQ_COUNT value is irrelevant - when there are 17 packets polling will be
+ * called by ipoib_send. */
+#define TX_CQ_COUNT 128
+#define TX_CQ_PERIOD 1024
+
 static int set_qps_qkey(struct ipoib_dev_priv *priv)
 {
 	struct ib_qp_attr *qp_attr;
@@ -308,6 +313,8 @@ static int ipoib_transport_cq_init(struct net_device *dev,
 	req_vec += priv->child_index;
 	send_ring = priv->send_ring;
 	for (i = 0; i < priv->num_tx_queues; i++) {
+		struct ib_cq_attr  attr;
+		int ret;
 		cq = ib_create_cq(priv->ca,
 				  ipoib_send_comp_handler, NULL,
 				  send_ring, priv->sendq_size,
@@ -320,6 +327,19 @@ static int ipoib_transport_cq_init(struct net_device *dev,
 		send_ring->send_cq = cq;
 		allocated_tx++;
 		req_vec++;
+
+		memset(&attr, 0, sizeof(attr));
+		attr.moderation.cq_count = TX_CQ_COUNT;
+		attr.moderation.cq_period = TX_CQ_PERIOD;
+		ret = ib_modify_cq(send_ring->send_cq, &attr, IB_CQ_MODERATION);
+		if (ret && ret != -ENOSYS)
+			ipoib_warn(priv, "%s: failed modifying CQ on index %u (%d)\n",
+				   __func__, send_ring->index, ret);
+		ret = ib_req_notify_cq(send_ring->send_cq, IB_CQ_NEXT_COMP);
+		if (ret)
+			ipoib_err(priv, "%s: ib_req_notify_cq failed on index %u (%d)\n",
+				  __func__, send_ring->index, ret);
+
 		send_ring++;
 	}
 

@@ -66,7 +66,7 @@ struct ipoib_mcast_iter {
 	unsigned int       send_only;
 };
 
-static void ipoib_mcast_free(struct ipoib_mcast *mcast)
+void ipoib_mcast_free(struct ipoib_mcast *mcast)
 {
 	struct net_device *dev = mcast->dev;
 	struct ipoib_dev_priv *priv = netdev_priv(dev);
@@ -93,7 +93,7 @@ static void ipoib_mcast_free(struct ipoib_mcast *mcast)
 	kfree(mcast);
 }
 
-static struct ipoib_mcast *ipoib_mcast_alloc(struct net_device *dev,
+struct ipoib_mcast *ipoib_mcast_alloc(struct net_device *dev,
 					     int can_sleep)
 {
 	struct ipoib_mcast *mcast;
@@ -113,10 +113,12 @@ static struct ipoib_mcast *ipoib_mcast_alloc(struct net_device *dev,
 	return mcast;
 }
 
-static struct ipoib_mcast *__ipoib_mcast_find(struct net_device *dev, void *mgid)
+struct ipoib_mcast *__ipoib_mcast_find(struct net_device *dev,
+					      void *mgid, struct rb_root *root)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
-	struct rb_node *n = priv->multicast_tree.rb_node;
+	struct rb_node *n;
+
+	n = root->rb_node;
 
 	while (n) {
 		struct ipoib_mcast *mcast;
@@ -137,10 +139,12 @@ static struct ipoib_mcast *__ipoib_mcast_find(struct net_device *dev, void *mgid
 	return NULL;
 }
 
-static int __ipoib_mcast_add(struct net_device *dev, struct ipoib_mcast *mcast)
+int __ipoib_mcast_add(struct net_device *dev, struct ipoib_mcast *mcast,
+			     struct rb_root *root)
 {
-	struct ipoib_dev_priv *priv = netdev_priv(dev);
-	struct rb_node **n = &priv->multicast_tree.rb_node, *pn = NULL;
+	struct rb_node **n , *pn = NULL;
+
+	n = &root->rb_node;
 
 	while (*n) {
 		struct ipoib_mcast *tmcast;
@@ -149,8 +153,8 @@ static int __ipoib_mcast_add(struct net_device *dev, struct ipoib_mcast *mcast)
 		pn = *n;
 		tmcast = rb_entry(pn, struct ipoib_mcast, rb_node);
 
-		ret = memcmp(mcast->mcmember.mgid.raw, tmcast->mcmember.mgid.raw,
-			     sizeof (union ib_gid));
+		ret = memcmp(mcast->mcmember.mgid.raw,
+			     tmcast->mcmember.mgid.raw, sizeof (union ib_gid));
 		if (ret < 0)
 			n = &pn->rb_left;
 		else if (ret > 0)
@@ -160,7 +164,7 @@ static int __ipoib_mcast_add(struct net_device *dev, struct ipoib_mcast *mcast)
 	}
 
 	rb_link_node(&mcast->rb_node, pn, n);
-	rb_insert_color(&mcast->rb_node, &priv->multicast_tree);
+	rb_insert_color(&mcast->rb_node, root);
 
 	return 0;
 }
@@ -448,8 +452,6 @@ void ipoib_mcast_carrier_on_task(struct work_struct *work)
 
 out:
 	mutex_unlock(&priv->state_lock);
-
-
 }
 
 static int ipoib_mcast_join_complete(int status,
@@ -514,21 +516,26 @@ static int ipoib_mcast_join_complete(int status,
 				   mcast->backoff * HZ);
 	spin_unlock_irq(&priv->lock);
 	mutex_unlock(&mcast_mutex);
+
 out:
+	/* Notify GENL listeners */
+	if (__ipoib_mcast_find(dev, mcast->mcmember.mgid.raw,
+	    &priv->promisc.multicast_tree)) {
+		ipoib_mc_join_notify(priv, &mcast->mcmember);
+	}
 	complete(&mcast->done);
 	return status;
 }
 
-static void ipoib_mcast_join(struct net_device *dev, struct ipoib_mcast *mcast,
-			     int create)
+void ipoib_mcast_join(struct net_device *dev, struct ipoib_mcast *mcast,
+			     int create, int join_state)
 {
 	struct ipoib_dev_priv *priv = netdev_priv(dev);
 	struct ib_sa_mcmember_rec rec = {
-		.join_state = 1
+		.join_state = join_state
 	};
 	ib_sa_comp_mask comp_mask;
 	int ret = 0;
-
 	ipoib_dbg_mcast(priv, "joining MGID %pI6\n", mcast->mcmember.mgid.raw);
 
 	rec.mgid     = mcast->mcmember.mgid;
@@ -650,13 +657,13 @@ void ipoib_mcast_join_task(struct work_struct *work)
 		       sizeof (union ib_gid));
 		priv->broadcast = broadcast;
 
-		__ipoib_mcast_add(dev, priv->broadcast);
+		__ipoib_mcast_add(dev, priv->broadcast, &priv->multicast_tree);
 		spin_unlock_irq(&priv->lock);
 	}
 
 	if (!test_bit(IPOIB_MCAST_FLAG_ATTACHED, &priv->broadcast->flags)) {
 		if (!test_bit(IPOIB_MCAST_FLAG_BUSY, &priv->broadcast->flags))
-			ipoib_mcast_join(dev, priv->broadcast, 0);
+			ipoib_mcast_join(dev, priv->broadcast, 0, FULL_MEMBER);
 		return;
 	}
 
@@ -679,7 +686,7 @@ void ipoib_mcast_join_task(struct work_struct *work)
 			break;
 		}
 
-		ipoib_mcast_join(dev, mcast, 1);
+		ipoib_mcast_join(dev, mcast, 1, FULL_MEMBER);
 		return;
 	}
 
@@ -719,7 +726,7 @@ int ipoib_mcast_stop_thread(struct net_device *dev, int flush)
 	return 0;
 }
 
-static int ipoib_mcast_leave(struct net_device *dev, struct ipoib_mcast *mcast)
+int ipoib_mcast_leave(struct net_device *dev, struct ipoib_mcast *mcast)
 {
 	struct ipoib_dev_priv *priv = netdev_priv(dev);
 	int ret = 0;
@@ -735,9 +742,12 @@ static int ipoib_mcast_leave(struct net_device *dev, struct ipoib_mcast *mcast)
 		ret = ib_detach_mcast(priv->qp, &mcast->mcmember.mgid,
 				      be16_to_cpu(mcast->mcmember.mlid));
 		if (ret)
-			ipoib_warn(priv, "ib_detach_mcast failed (result = %d)\n", ret);
+			pr_warn("ib_detach_mcast failed (result = %d)\
+				\n", ret);
 	}
 
+	/* Notify GENL listeners */
+	ipoib_mc_leave_notify(priv, &mcast->mcmember);
 	return 0;
 }
 
@@ -759,7 +769,7 @@ void ipoib_mcast_send(struct net_device *dev, u8 *daddr, struct sk_buff *skb)
 		goto unlock;
 	}
 
-	mcast = __ipoib_mcast_find(dev, mgid);
+	mcast = __ipoib_mcast_find(dev, mgid, &priv->multicast_tree);
 	if (!mcast) {
 		/* Let's create a new send only group now */
 		ipoib_dbg_mcast(priv, "setting up send only multicast group for %pI6\n",
@@ -777,7 +787,7 @@ void ipoib_mcast_send(struct net_device *dev, u8 *daddr, struct sk_buff *skb)
 
 		set_bit(IPOIB_MCAST_FLAG_SENDONLY, &mcast->flags);
 		memcpy(mcast->mcmember.mgid.raw, mgid, sizeof (union ib_gid));
-		__ipoib_mcast_add(dev, mcast);
+		__ipoib_mcast_add(dev, mcast, &priv->multicast_tree);
 		list_add_tail(&mcast->list, &priv->multicast_list);
 	}
 
@@ -844,6 +854,9 @@ void ipoib_mcast_dev_flush(struct net_device *dev)
 	unsigned long flags;
 
 	ipoib_dbg_mcast(priv, "flushing multicast list\n");
+
+	if (test_bit(IPOIB_ALL_MULTI, &priv->flags))
+		ipoib_promisc_mc_stop(&priv->promisc);
 
 	spin_lock_irqsave(&priv->lock, flags);
 
@@ -921,7 +934,7 @@ void ipoib_mcast_restart_task(struct work_struct *work)
 
 		memcpy(mgid.raw, ha->addr + 4, sizeof mgid);
 
-		mcast = __ipoib_mcast_find(dev, &mgid);
+		mcast = __ipoib_mcast_find(dev, &mgid, &priv->multicast_tree);
 		if (!mcast || test_bit(IPOIB_MCAST_FLAG_SENDONLY, &mcast->flags)) {
 			struct ipoib_mcast *nmcast;
 
@@ -954,8 +967,10 @@ void ipoib_mcast_restart_task(struct work_struct *work)
 				rb_replace_node(&mcast->rb_node,
 						&nmcast->rb_node,
 						&priv->multicast_tree);
-			} else
-				__ipoib_mcast_add(dev, nmcast);
+			} else {
+				__ipoib_mcast_add(dev, nmcast,
+						  &priv->multicast_tree);
+			}
 
 			list_add_tail(&nmcast->list, &priv->multicast_list);
 		}
@@ -977,7 +992,6 @@ void ipoib_mcast_restart_task(struct work_struct *work)
 			list_move_tail(&mcast->list, &remove_list);
 		}
 	}
-
 	spin_unlock(&priv->lock);
 	netif_addr_unlock(dev);
 	local_irq_restore(flags);
@@ -986,6 +1000,22 @@ void ipoib_mcast_restart_task(struct work_struct *work)
 	list_for_each_entry_safe(mcast, tmcast, &remove_list, list) {
 		ipoib_mcast_leave(mcast->dev, mcast);
 		ipoib_mcast_free(mcast);
+	}
+
+	/* Promisc MC is set */
+	if (dev->flags & IFF_ALLMULTI && !test_bit(IPOIB_ALL_MULTI,
+						   &priv->flags)) {
+		if (!ipoib_promisc_mc_start(&priv->promisc))
+			pr_info("%s: Multicast promisc is enabled\n",
+				dev->name);
+	}
+
+	/* Promisc MC was removed */
+	if (!(dev->flags & IFF_ALLMULTI) && test_bit(IPOIB_ALL_MULTI,
+						     &priv->flags)) {
+		if (!ipoib_promisc_mc_stop(&priv->promisc))
+			pr_info("%s: Multicast promisc is disabled\n",
+				dev->name);
 	}
 
 	if (test_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags))

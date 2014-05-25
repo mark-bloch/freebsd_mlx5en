@@ -50,9 +50,12 @@
 #include <net/arp.h>
 #include <net/dst.h>
 
+const char ipoib_driver_version[] = DRV_VERSION " ("DRV_RELDATE")";
+
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("IP-over-InfiniBand net driver");
 MODULE_LICENSE("Dual BSD/GPL");
+MODULE_VERSION(DRV_VERSION " ("DRV_RELDATE")");
 
 int ipoib_sendq_size __read_mostly = IPOIB_TX_RING_SIZE;
 int ipoib_recvq_size __read_mostly = IPOIB_RX_RING_SIZE;
@@ -353,6 +356,8 @@ static void path_free(struct net_device *dev, struct ipoib_path *path)
 
 	while ((skb = __skb_dequeue(&path->queue)))
 		dev_kfree_skb_irq(skb);
+	if (path->pathrec.dlid)
+		ipoib_path_del_notify(netdev_priv(dev), &path->pathrec);
 
 	ipoib_dbg(netdev_priv(dev), "path_free\n");
 
@@ -366,6 +371,149 @@ static void path_free(struct net_device *dev, struct ipoib_path *path)
 }
 
 #ifdef CONFIG_INFINIBAND_IPOIB_DEBUG
+
+struct ipoib_neigh_iter *ipoib_neigh_iter_init(struct net_device *dev)
+{
+	struct ipoib_dev_priv *priv = netdev_priv(dev);
+	struct ipoib_neigh_table *ntbl = &priv->ntbl;
+	struct ipoib_neigh_iter *iter;
+	struct ipoib_neigh_hash *htbl;
+	struct ipoib_neigh *neigh;
+	struct ipoib_neigh __rcu **np;
+
+	if (!netif_carrier_ok(dev))
+		return NULL;
+	iter = kmalloc(sizeof(*iter), GFP_KERNEL);
+	if (!iter)
+		return NULL;
+
+	iter->dev = dev;
+	iter->htbl_index = 0;
+
+	rcu_read_lock_bh();
+	htbl = rcu_dereference_bh(ntbl->htbl);
+
+	if (!htbl) {
+		ipoib_warn(priv, "%s: failed to dereference htbl\n",
+			   __func__);
+		goto out_error;
+	}
+
+	/* find the first neigh in the hash table */
+	while (iter->htbl_index < htbl->size) {
+		np = &htbl->buckets[iter->htbl_index];
+		neigh = rcu_dereference_bh(*np);
+		if (neigh) {
+			if (!atomic_inc_not_zero(&neigh->refcnt)) {
+				/* neigh was deleted */
+				neigh = NULL;
+				iter->htbl_index++;
+				continue;
+			}
+			iter->neigh = neigh;
+			goto out_unlock;
+		}
+		iter->htbl_index++;
+	}
+	/* Getting here means there are no neighs */
+	goto out_error;
+
+out_error:
+	kfree(iter);
+	iter = NULL;
+out_unlock:
+	rcu_read_unlock_bh();
+	return iter;
+}
+
+/*
+* Find the next neigh in the hash table:
+* First, see if the current neigh has a 'hnext' neigh (in current hash
+* bucket).
+* If not, find the next hash bucket that contains a neigh.
+* Returns 0 if a neigh is found, non-zero otherwise.
+*/
+int ipoib_neigh_iter_next(struct ipoib_neigh_iter *iter)
+{
+	struct ipoib_dev_priv *priv = netdev_priv(iter->dev);
+	struct ipoib_neigh_table *ntbl = &priv->ntbl;
+	struct ipoib_neigh_hash *htbl;
+	struct ipoib_neigh *neigh;
+	struct ipoib_neigh __rcu **np;
+	int ret = -EINVAL;
+	int table_size = 0;
+
+	if (!iter) {
+		ipoib_warn(priv, "%s, got NULL iter\n", __func__);
+		goto out_no_lock;
+	}
+
+	if (!iter->neigh) {
+		ipoib_warn(priv, "neigh can't be NULL in %s\n",
+			   __func__);
+		goto out_no_lock;
+	}
+
+	rcu_read_lock_bh();
+
+	/* Check if the current neigh has a next one in the same hash
+	 * bucket */
+	neigh = rcu_dereference_bh(iter->neigh->hnext);
+	if (neigh != NULL) {
+		iter->neigh = neigh;
+		/* removing ref on current neigh */
+		ipoib_neigh_put(neigh);
+		/* getting ref on next neigh */
+		atomic_inc(&iter->neigh->refcnt);
+		iter->dev = neigh->dev;
+		ret = 0;
+		goto out_unlock;
+	}
+
+	/* No hnext - look for the next bucket */
+	htbl = rcu_dereference_bh(ntbl->htbl);
+	table_size = htbl->size;
+
+	if (!htbl || IS_ERR(htbl)) {
+		ipoib_warn(priv, "failed to dereference htbl\n");
+		goto out_unlock;
+	}
+
+	iter->htbl_index++;
+	while (iter->htbl_index < table_size) {
+		np = &htbl->buckets[iter->htbl_index];
+		neigh = rcu_dereference_bh(*np);
+		if (neigh != NULL) {
+			/* removing ref on current neigh */
+			ipoib_neigh_put(iter->neigh);
+			iter->neigh = neigh;
+			iter->dev = neigh->dev;
+			/* getting ref on next neigh */
+			atomic_inc(&iter->neigh->refcnt);
+			ret = 0;
+			goto out_unlock;
+		}
+		iter->htbl_index++;
+	}
+
+	/* getting here means there are no more neighs in the hash */
+	ipoib_neigh_put(iter->neigh);
+
+out_unlock:
+	rcu_read_unlock_bh();
+out_no_lock:
+	return ret;
+}
+
+void ipoib_neigh_iter_read(struct ipoib_neigh_iter *iter,
+			  struct ipoib_neigh *neigh)
+{
+	neigh->dev = iter->neigh->dev;
+	neigh->index = iter->neigh->index;
+	neigh->refcnt = iter->neigh->refcnt;
+	neigh->alive = iter->neigh->alive;
+	memcpy(neigh->daddr, iter->neigh->daddr, INFINIBAND_ALEN);
+}
 
 struct ipoib_path_iter *ipoib_path_iter_init(struct net_device *dev)
 {
@@ -435,6 +583,7 @@ void ipoib_mark_paths_invalid(struct net_device *dev)
 			be16_to_cpu(path->pathrec.dlid),
 			path->pathrec.dgid.raw);
 		path->valid =  0;
+		ipoib_path_del_notify(netdev_priv(dev), &path->pathrec);
 	}
 
 	spin_unlock_irq(&priv->lock);
@@ -499,6 +648,7 @@ static void path_rec_completion(int status,
 
 		if (!ib_init_ah_from_path(priv->ca, priv->port, pathrec, &av))
 			ah = ipoib_create_ah(dev, priv->pd, &av);
+		ipoib_path_add_notify(priv, pathrec);
 	}
 
 	spin_lock_irqsave(&priv->lock, flags);
@@ -772,7 +922,7 @@ void ipoib_repath_ah(struct work_struct *work)
 		/*check if we have the same path in the path cache:*/
 		if ((lid_from_cache && repath->lid) &&
 		    (repath->lid != lid_from_cache)) {
-			ipoib_warn(priv, "Found gid with mismach lids."
+			ipoib_warn(priv, "Found gid with mismatch lids."
 					 "(cache:%d,from arp: %d)\n",
 				   lid_from_cache, repath->lid);
 			clean_path_from_cache(path_from_cache, priv);
@@ -2043,6 +2193,9 @@ void ipoib_setup(struct net_device *dev)
 	INIT_DELAYED_WORK(&priv->ah_reap_task, ipoib_reap_ah);
 	INIT_DELAYED_WORK(&priv->neigh_reap_task, ipoib_reap_neigh);
 	INIT_DELAYED_WORK(&priv->adaptive_moder_task, ipoib_config_adapt_moder);
+
+	ipoib_init_promisc_mc(&priv->promisc);
+	ipoib_genl_intf_init(&priv->netlink);
 }
 
 struct ipoib_dev_priv *ipoib_intf_alloc(const char *name,
@@ -2739,13 +2892,17 @@ static int __init ipoib_init_module(void)
 	}
 	ib_sa_register_client(&ipoib_sa_client);
 
+	if (ipoib_register_genl())
+		pr_warn("IPoIB: ipoib_register_genl failed\n");
+
 	ret = ib_register_client(&ipoib_client);
 	if (ret)
-		goto err_sa;
+		goto err_genl;
 
 	return 0;
 
-err_sa:
+err_genl:
+	ipoib_unregister_genl();
 	ib_sa_unregister_client(&ipoib_sa_client);
 	destroy_workqueue(ipoib_auto_moder_workqueue);
 err_am:
@@ -2760,6 +2917,7 @@ err_fs:
 static void __exit ipoib_cleanup_module(void)
 {
 	ib_unregister_client(&ipoib_client);
+	ipoib_unregister_genl();
 	ib_sa_unregister_client(&ipoib_sa_client);
 	ipoib_unregister_debugfs();
 	destroy_workqueue(ipoib_workqueue);

@@ -138,10 +138,8 @@ int ipoib_vlan_add(struct net_device *pdev, unsigned short pkey,
 	priv = NULL;
 	ppriv = netdev_priv(pdev);
 
-	if (!rtnl_trylock()) {
-		ipoib_warn(ppriv, "%s: RTNL_LOCK is held, try later\n", __func__);
-		return -EPERM;
-	}
+	if (!rtnl_trylock())
+		return restart_syscall();
 
 	down_write(&ppriv->vlan_rwsem);
 
@@ -217,10 +215,8 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey,
 
 	ppriv = netdev_priv(pdev);
 
-	if (!rtnl_trylock()) {
-		ipoib_warn(ppriv, "%s: RTNL_LOCK is held, try later\n", __func__);
-		return -EPERM;
-	}
+	if (!rtnl_trylock())
+		return restart_syscall();
 
 	down_write(&ppriv->vlan_rwsem);
 
@@ -230,6 +226,8 @@ int ipoib_vlan_delete(struct net_device *pdev, unsigned short pkey,
 		    priv->child_index == child_index) {
 			list_del(&priv->list);
 			dev = priv->dev;
+			/*interface in the middle of destruction*/
+			set_bit(IPOIB_FLAG_INTF_ON_DESTROY, &priv->flags);
 			break;
 		}
 	}
