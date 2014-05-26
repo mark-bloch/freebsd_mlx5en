@@ -813,9 +813,15 @@ retry:
 	tx_info->nr_txbb = nr_txbb;
 	tx_info->nr_segs = nr_segs;
 
-	if (lso_header_size)
+	if (lso_header_size) {
+		memcpy(tx_desc->lso.header, mb->m_data, lso_header_size);
 		data = ((void *)&tx_desc->lso + ALIGN(lso_header_size + 4,
 						      DS_SIZE));
+		/* MY: lso header is part of m_data.
+		 * need to omit when mapping DMA */
+		mb->m_data += lso_header_size;
+		mb->m_len -= lso_header_size;
+	}
 	else
 		data = &tx_desc->data;
 
@@ -907,20 +913,12 @@ retry:
 		tx_desc->lso.mss_hdr_size = cpu_to_be32(
 			mb->m_pkthdr.tso_segsz << 16 | lso_header_size);
 
-		/* Copy headers;
-		 * note that we already verified that it is linear */
-		memcpy(tx_desc->lso.header, mb->m_data, lso_header_size);
-                data = ((void *) &tx_desc->lso +
-                        ALIGN(lso_header_size + 4, DS_SIZE));
-
                 priv->port_stats.tso_packets++;
                 segsz = mb->m_pkthdr.tso_segsz;
                 i = ((mb->m_pkthdr.len - lso_header_size) / segsz) +
                         !!((mb->m_pkthdr.len - lso_header_size) % segsz);
                 tx_info->nr_bytes= mb->m_pkthdr.len + (i - 1) * lso_header_size;
                 ring->packets += i;
-                mb->m_data += lso_header_size;
-                mb->m_len -= lso_header_size;
 	} else {
 		/* Normal (Non LSO) packet */
 		op_own = cpu_to_be32(MLX4_OPCODE_SEND) |
