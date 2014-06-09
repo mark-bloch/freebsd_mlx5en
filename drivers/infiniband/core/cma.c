@@ -42,6 +42,7 @@
 #include <linux/inetdevice.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/string.h>
 #include <net/route.h>
 
 #include <net/tcp.h>
@@ -66,6 +67,10 @@ MODULE_LICENSE("Dual BSD/GPL");
 static int cma_response_timeout = CMA_CM_RESPONSE_TIMEOUT;
 module_param_named(cma_response_timeout, cma_response_timeout, int, 0644);
 MODULE_PARM_DESC(cma_response_timeout, "CMA_CM_RESPONSE_TIMEOUT (default=20)");
+
+static int def_prec2sl = 3;
+module_param_named(def_prec2sl, def_prec2sl, int, 0644);
+MODULE_PARM_DESC(def_prec2sl, "Default value for SL priority with RoCE. Valid values 0 - 7");
 
 static int debug_level = 0;
 #define cma_pr(level, priv, format, arg...)		\
@@ -1920,6 +1925,11 @@ static int cma_resolve_iw_route(struct rdma_id_private *id_priv, int timeout_ms)
 	return 0;
 }
 
+static u8 tos_to_sl(u8 tos)
+{
+	        return def_prec2sl & 7;
+}
+
 static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
 {
 	struct rdma_route *route = &id_priv->id.route;
@@ -1958,7 +1968,7 @@ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
 
 	route->path_rec->vlan_id = rdma_vlan_dev_vlan_id(ndev);
 	memcpy(route->path_rec->dmac, addr->dev_addr.dst_dev_addr, ETH_ALEN);
-	memcpy(route->path_rec->smac, ndev->dev_addr, ndev->addr_len);
+	memcpy(route->path_rec->smac, IF_LLADDR(ndev), ndev->if_addrlen);
 
 
 	rdma_ip2gid((struct sockaddr *)&id_priv->id.route.addr.src_addr,
@@ -1970,12 +1980,9 @@ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
 	route->path_rec->reversible = 1;
 	route->path_rec->pkey = cpu_to_be16(0xffff);
 	route->path_rec->mtu_selector = IB_SA_EQ;
-	route->path_rec->sl = netdev_get_prio_tc_map(
-			ndev->priv_flags & IFF_802_1Q_VLAN ?
-				vlan_dev_real_dev(ndev) : ndev,
-			rt_tos2priority(id_priv->tos));
+	route->path_rec->sl = tos_to_sl(id_priv->tos);
 
-	route->path_rec->mtu = iboe_get_mtu(ndev->mtu);
+	route->path_rec->mtu = iboe_get_mtu(ndev->if_mtu);
 	route->path_rec->rate_selector = IB_SA_EQ;
 	route->path_rec->rate = iboe_get_rate(ndev);
 	dev_put(ndev);
@@ -2340,7 +2347,7 @@ static int cma_alloc_any_port(struct idr *ps, struct rdma_id_private *id_priv)
 
 	inet_get_local_port_range(&low, &high);
 	remaining = (high - low) + 1;
-	rover = net_random() % remaining + low;
+	rover = random() % remaining + low;
 retry:
 	if (last_used_port != rover &&
 	    !idr_find(ps, (unsigned short) rover)) {
@@ -2406,8 +2413,6 @@ static int cma_use_port(struct idr *ps, struct rdma_id_private *id_priv)
 	int ret;
 
 	snum = ntohs(cma_port((struct sockaddr *) &id_priv->id.route.addr.src_addr));
-	if (snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
-		return -EACCES;
 
 	bind_list = idr_find(ps, snum);
 	if (!bind_list) {
@@ -2470,14 +2475,14 @@ static int cma_get_port(struct rdma_id_private *id_priv)
 static int cma_check_linklocal(struct rdma_dev_addr *dev_addr,
 			       struct sockaddr *addr)
 {
-#if IS_ENABLED(CONFIG_IPV6)
+#if defined(INET6)
 	struct sockaddr_in6 *sin6;
 
 	if (addr->sa_family != AF_INET6)
 		return 0;
 
 	sin6 = (struct sockaddr_in6 *) addr;
-	if ((ipv6_addr_type(&sin6->sin6_addr) & IPV6_ADDR_LINKLOCAL) &&
+	if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr) &&
 	    !sin6->sin6_scope_id)
 			return -EINVAL;
 
@@ -2567,7 +2572,7 @@ int rdma_bind_addr(struct rdma_cm_id *id, struct sockaddr *addr)
 	if (!(id_priv->options & (1 << CMA_OPTION_AFONLY))) {
 		if (addr->sa_family == AF_INET)
 			id_priv->afonly = 1;
-#if IS_ENABLED(CONFIG_IPV6)
+#if defined(INET6)
 		else if (addr->sa_family == AF_INET6)
 			id_priv->afonly = init_net.ipv6.sysctl.bindv6only;
 #endif
@@ -3352,7 +3357,7 @@ static int cma_iboe_join_multicast(struct rdma_id_private *id_priv,
 	}
 	mc->multicast.ib->rec.rate = iboe_get_rate(ndev);
 	mc->multicast.ib->rec.hop_limit = 1;
-	mc->multicast.ib->rec.mtu = iboe_get_mtu(ndev->mtu);
+	mc->multicast.ib->rec.mtu = iboe_get_mtu(ndev->if_mtu);
 	dev_put(ndev);
 	if (!mc->multicast.ib->rec.mtu) {
 		err = -EINVAL;
@@ -3471,10 +3476,10 @@ static int cma_netdev_change(struct net_device *ndev, struct rdma_id_private *id
 
 	dev_addr = &id_priv->id.route.addr.dev_addr;
 
-	if ((dev_addr->bound_dev_if == ndev->ifindex) &&
-	    memcmp(dev_addr->src_dev_addr, ndev->dev_addr, ndev->addr_len)) {
+	if ((dev_addr->bound_dev_if == ndev->if_index) &&
+	    memcmp(dev_addr->src_dev_addr, IF_LLADDR(ndev), ndev->if_addrlen)) {
 		printk(KERN_INFO "RDMA CM addr change for ndev %s used by id %p\n",
-		       ndev->name, &id_priv->id);
+		       ndev->if_xname, &id_priv->id);
 		work = kzalloc(sizeof *work, GFP_KERNEL);
 		if (!work)
 			return -ENOMEM;
@@ -3497,6 +3502,8 @@ static int cma_netdev_callback(struct notifier_block *self, unsigned long event,
 	struct rdma_id_private *id_priv;
 	int ret = NOTIFY_DONE;
 
+/* BONDING related, commented out until the bonding is resolved */
+#if 0
 	if (dev_net(ndev) != &init_net)
 		return NOTIFY_DONE;
 
@@ -3504,6 +3511,9 @@ static int cma_netdev_callback(struct notifier_block *self, unsigned long event,
 		return NOTIFY_DONE;
 
 	if (!(ndev->flags & IFF_MASTER) || !(ndev->priv_flags & IFF_BONDING))
+		return NOTIFY_DONE;
+#endif
+	if (event != NETDEV_DOWN && event != NETDEV_UNREGISTER)
 		return NOTIFY_DONE;
 
 	mutex_lock(&lock);

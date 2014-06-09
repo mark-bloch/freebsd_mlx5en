@@ -101,4 +101,10 @@ static inline int ipv6_addr_v4mapped(const struct in6_addr *a)
 		(a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0);
 }
 
+static inline int ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr *a2)
+{
+        return memcmp(a1, a2, sizeof(struct in6_addr));
+}
+
+
 #endif	/* _NET_IPV6_H_ */
