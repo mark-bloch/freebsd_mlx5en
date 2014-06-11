@@ -94,7 +94,7 @@ do {									\
 
 inline int queue_work (struct workqueue_struct *q, struct work_struct *work)
 {
-	(work)->taskqueue = (q)->taskqueue;                             
+	(work)->taskqueue = (q)->taskqueue;
         return !taskqueue_enqueue((q)->taskqueue, &(work)->work_task); // Return opposite val to align with Linux logic 
 }
 
@@ -209,6 +209,15 @@ cancel_delayed_work_sync(struct delayed_work *work)
             taskqueue_cancel(work->work.taskqueue, &work->work.work_task, NULL))
                 taskqueue_drain(work->work.taskqueue, &work->work.work_task);
         return 0;
+}
+
+static inline bool
+mod_delayed_work(struct workqueue_struct *wq, struct delayed_work *dwork,
+		                      unsigned long delay)
+{
+	cancel_delayed_work(dwork);
+	queue_delayed_work(wq, dwork, delay);
+	return false;
 }
 
 #endif	/* _FBSD_WORKQUEUE_H_ */

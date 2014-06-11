@@ -46,6 +46,8 @@
 #include <net/addrconf.h>
 #include <net/ip6_route.h>
 #include <rdma/ib_addr.h>
+#include <netinet/if_ether.h>
+
 
 MODULE_AUTHOR("Sean Hefty");
 MODULE_DESCRIPTION("IB Address Translation");
@@ -64,11 +66,9 @@ struct addr_req {
 	int status;
 };
 
-static void process_req(struct work_struct *work);
-
 static DEFINE_MUTEX(lock);
 static LIST_HEAD(req_list);
-static DECLARE_DELAYED_WORK(work, process_req);
+static struct delayed_work work;
 static struct workqueue_struct *addr_wq;
 
 static struct rdma_addr_client self;
@@ -196,173 +196,151 @@ static void queue_req(struct addr_req *req)
 	mutex_unlock(&lock);
 }
 
-static int dst_fetch_ha(struct dst_entry *dst, struct rdma_dev_addr *dev_addr, void *daddr)
-{
-	struct neighbour *n;
-	int ret;
-
-	n = dst_neigh_lookup(dst, daddr);
-
-	rcu_read_lock();
-	if (!n || !(n->nud_state & NUD_VALID)) {
-		if (n)
-			neigh_event_send(n, NULL);
-		ret = -ENODATA;
-	} else {
-		ret = rdma_copy_addr(dev_addr, dst->dev, n->ha);
-	}
-	rcu_read_unlock();
-
-	if (n)
-		neigh_release(n);
-
-	return ret;
-}
-
-static int addr4_resolve(struct sockaddr_in *src_in,
-			 struct sockaddr_in *dst_in,
-			 struct rdma_dev_addr *addr)
-{
-	__be32 src_ip = src_in->sin_addr.s_addr;
-	__be32 dst_ip = dst_in->sin_addr.s_addr;
-	struct rtable *rt;
-	struct flowi4 fl4;
-	int ret;
-
-	memset(&fl4, 0, sizeof(fl4));
-	fl4.daddr = dst_ip;
-	fl4.saddr = src_ip;
-	fl4.flowi4_oif = addr->bound_dev_if;
-	rt = ip_route_output_key(&init_net, &fl4);
-	if (IS_ERR(rt)) {
-		ret = PTR_ERR(rt);
-		goto out;
-	}
-	src_in->sin_family = AF_INET;
-	src_in->sin_addr.s_addr = fl4.saddr;
-
-	if (rt->dst.dev->flags & IFF_LOOPBACK) {
-		ret = rdma_translate_ip((struct sockaddr *)dst_in, addr, NULL);
-		if (!ret)
-			memcpy(addr->dst_dev_addr, addr->src_dev_addr, MAX_ADDR_LEN);
-		goto put;
-	}
-
-	/* If the device does ARP internally, return 'done' */
-	if (rt->dst.dev->flags & IFF_NOARP) {
-		ret = rdma_copy_addr(addr, rt->dst.dev, NULL);
-		goto put;
-	}
-
-	ret = dst_fetch_ha(&rt->dst, addr, &fl4.daddr);
-put:
-	ip_rt_put(rt);
-out:
-	return ret;
-}
-
-#if IS_ENABLED(CONFIG_IPV6)
-static int addr6_resolve(struct sockaddr_in6 *src_in,
-			 struct sockaddr_in6 *dst_in,
-			 struct rdma_dev_addr *addr)
-{
-	struct flowi6 fl6;
-	struct dst_entry *dst;
-	int ret;
-
-	memset(&fl6, 0, sizeof fl6);
-	fl6.daddr = dst_in->sin6_addr;
-	fl6.saddr = src_in->sin6_addr;
-	fl6.flowi6_oif = addr->bound_dev_if;
-
-	dst = ip6_route_output(&init_net, NULL, &fl6);
-	if ((ret = dst->error))
-		goto put;
-
-	if (ipv6_addr_any(&fl6.saddr)) {
-		ret = ipv6_dev_get_saddr(&init_net, ip6_dst_idev(dst)->dev,
-					 &fl6.daddr, 0, &fl6.saddr);
-		if (ret)
-			goto put;
-
-		src_in->sin6_family = AF_INET6;
-		src_in->sin6_addr = fl6.saddr;
-	}
-
-	if (dst->dev->flags & IFF_LOOPBACK) {
-		ret = rdma_translate_ip((struct sockaddr *)dst_in, addr, NULL);
-		if (!ret)
-			memcpy(addr->dst_dev_addr, addr->src_dev_addr, MAX_ADDR_LEN);
-		goto put;
-	}
-
-	/* If the device does ARP internally, return 'done' */
-	if (dst->dev->flags & IFF_NOARP) {
-		ret = rdma_copy_addr(addr, dst->dev, NULL);
-		goto put;
-	}
-
-	ret = dst_fetch_ha(dst, addr, &fl6.daddr);
-put:
-	dst_release(dst);
-	return ret;
-}
-#else
-static int addr6_resolve(struct sockaddr_in6 *src_in,
-			 struct sockaddr_in6 *dst_in,
-			 struct rdma_dev_addr *addr)
-{
-	return -EADDRNOTAVAIL;
-}
-#endif
-
 static int addr_resolve(struct sockaddr *src_in,
-			struct sockaddr *dst_in,
-			struct rdma_dev_addr *addr)
+                        struct sockaddr *dst_in,
+                        struct rdma_dev_addr *addr)
 {
-	if (src_in->sa_family == AF_INET) {
-		return addr4_resolve((struct sockaddr_in *) src_in,
-			(struct sockaddr_in *) dst_in, addr);
-	} else
-		return addr6_resolve((struct sockaddr_in6 *) src_in,
-			(struct sockaddr_in6 *) dst_in, addr);
-}
+	struct sockaddr_in *sin;
+        struct sockaddr_in6 *sin6;
+        struct ifaddr *ifa;
+        struct ifnet *ifp;
+#if defined(INET) || defined(INET6)
+        struct llentry *lle;
+#endif
+        struct rtentry *rte;
+        in_port_t port;
+        u_char edst[MAX_ADDR_LEN];
+        int multi;
+        int bcast;
+        int error = 0;
+	/*
+         * Determine whether the address is unicast, multicast, or broadcast
+         * and whether the source interface is valid.
+         */
+	multi = 0;
+        bcast = 0;
+        sin = NULL;
+        sin6 = NULL;
+        ifp = NULL;
+        rte = NULL;
+        switch (dst_in->sa_family) {
+#ifdef INET
+        case AF_INET:
+                sin = (struct sockaddr_in *)dst_in;
+                if (sin->sin_addr.s_addr == INADDR_BROADCAST)
+                        bcast = 1;
+                if (IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
+                        multi = 1;
+                sin = (struct sockaddr_in *)src_in;
+                if (sin->sin_addr.s_addr != INADDR_ANY) {
+                        /*
+                         * Address comparison fails if the port is set
+                         * cache it here to be restored later.
+                         */
+                        port = sin->sin_port;
+                        sin->sin_port = 0;
+                        memset(&sin->sin_zero, 0, sizeof(sin->sin_zero));
+                } else
+                        src_in = NULL;
+                break;
+#endif
+#ifdef INET6
+        case AF_INET6:
+                sin6 = (struct sockaddr_in6 *)dst_in;
+                if (IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
+                        multi = 1;
+                sin6 = (struct sockaddr_in6 *)src_in;
+                if (!IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
+                        port = sin6->sin6_port;
+                        sin6->sin6_port = 0;
+                } else
+                        src_in = NULL;
+                break;
+#endif
+        default:
+                return -EINVAL;
+        }
+		/*
+         * If we have a source address to use look it up first and verify
+         * that it is a local interface.
+         */
+        if (src_in) {
+                ifa = ifa_ifwithaddr(src_in);
+                if (sin)
+                        sin->sin_port = port;
+                if (sin6)
+                        sin6->sin6_port = port;
+                if (ifa == NULL)
+                        return -ENETUNREACH;
+                ifp = ifa->ifa_ifp;
+                ifa_free(ifa);
+                if (bcast || multi)
+                        goto mcast;
+        }
+		/*
+         * Make sure the route exists and has a valid link.
+         */
+        rte = rtalloc1(dst_in, 1, 0);
+        if (rte == NULL || rte->rt_ifp == NULL || !RT_LINK_IS_UP(rte->rt_ifp)) {
+                if (rte)
+                        RTFREE_LOCKED(rte);
+                return -EHOSTUNREACH;
+        }
+		/*
+         * If it's not multicast or broadcast and the route doesn't match the
+         * requested interface return unreachable.  Otherwise fetch the
+         * correct interface pointer and unlock the route.
+         */
+        if (multi || bcast) {
+                if (ifp == NULL)
+                        ifp = rte->rt_ifp;
+                RTFREE_LOCKED(rte);
+        } else if (ifp && ifp != rte->rt_ifp) {
+                RTFREE_LOCKED(rte);
+                return -ENETUNREACH;
+        } else {
+                if (ifp == NULL)
+                        ifp = rte->rt_ifp;
+                RT_UNLOCK(rte);
+        }
+mcast:
+        if (bcast)
+                return rdma_copy_addr(addr, ifp, ifp->if_broadcastaddr);
+        if (multi) {
+                struct sockaddr *llsa;
 
-static void process_req(struct work_struct *work)
-{
-	struct addr_req *req, *temp_req;
-	struct sockaddr *src_in, *dst_in;
-	struct list_head done_list;
-
-	INIT_LIST_HEAD(&done_list);
-
-	mutex_lock(&lock);
-	list_for_each_entry_safe(req, temp_req, &req_list, list) {
-		if (req->status == -ENODATA) {
-			src_in = (struct sockaddr *) &req->src_addr;
-			dst_in = (struct sockaddr *) &req->dst_addr;
-			req->status = addr_resolve(src_in, dst_in, req->addr);
-			if (req->status && time_after_eq(jiffies, req->timeout))
-				req->status = -ETIMEDOUT;
-			else if (req->status == -ENODATA)
-				continue;
-		}
-		list_move_tail(&req->list, &done_list);
-	}
-
-	if (!list_empty(&req_list)) {
-		req = list_entry(req_list.next, struct addr_req, list);
-		set_timeout(req->timeout);
-	}
-	mutex_unlock(&lock);
-
-	list_for_each_entry_safe(req, temp_req, &done_list, list) {
-		list_del(&req->list);
-		req->callback(req->status, (struct sockaddr *) &req->src_addr,
-			req->addr, req->context);
-		put_client(req->client);
-		kfree(req);
-	}
+                error = ifp->if_resolvemulti(ifp, &llsa, dst_in);
+                if (error)
+                        return -error;
+                error = rdma_copy_addr(addr, ifp,
+                    LLADDR((struct sockaddr_dl *)llsa));
+                free(llsa, M_IFMADDR);
+                return error;
+        }
+        /*
+         * Resolve the link local address.
+         */
+        switch (dst_in->sa_family) {
+#ifdef INET
+        case AF_INET:
+                error = arpresolve(ifp, rte, NULL, dst_in, edst, &lle);
+                break;
+#endif
+#ifdef INET6
+        case AF_INET6:
+                error = nd6_storelladdr(ifp, NULL, dst_in, (u_char *)edst, &lle);
+                break;
+#endif
+        default:
+                /* XXX: Shouldn't happen. */
+                error = -EINVAL;
+        }
+        RTFREE(rte);
+        if (error == 0)
+                return rdma_copy_addr(addr, ifp, edst);
+        if (error == EWOULDBLOCK)
+                return -ENODATA;
+        return -error;
 }
 
 int rdma_resolve_ip(struct rdma_addr_client *client,
@@ -526,11 +504,7 @@ static int netevent_callback(struct notifier_block *self, unsigned long event,
 	void *ctx)
 {
 	if (event == NETEVENT_NEIGH_UPDATE) {
-		struct neighbour *neigh = ctx;
-
-		if (neigh->nud_state & NUD_VALID) {
 			set_timeout(jiffies);
-		}
 	}
 	return 0;
 }
