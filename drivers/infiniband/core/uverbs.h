@@ -42,6 +42,7 @@
 #include <linux/mutex.h>
 #include <linux/completion.h>
 #include <linux/cdev.h>
+#include <linux/rbtree.h>
 
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_verbs_exp.h>

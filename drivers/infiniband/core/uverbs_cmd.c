@@ -38,10 +38,12 @@
 #include <linux/slab.h>
 #include <linux/moduleparam.h>
 #include <linux/rbtree.h>
+#include <linux/lockdep.h>
 #include <rdma/ib_addr.h>
 
 #include <asm/uaccess.h>
 #include <asm/fcntl.h>
+#include <sys/priv.h>
 
 #include "uverbs.h"
 
@@ -759,7 +761,7 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uverbs_file *file,
 	struct ib_udata			udata;
 	struct ib_uxrcd_object         *obj;
 	struct ib_xrcd                 *xrcd = NULL;
-	struct fd			f = {NULL, 0};
+	struct fd			f = {NULL};
 	struct inode                   *inode = NULL;
 	int				ret = 0;
 	int				new_xrcd = 0;
@@ -784,7 +786,7 @@ ssize_t ib_uverbs_open_xrcd(struct ib_uverbs_file *file,
 			goto err_tree_mutex_unlock;
 		}
 
-		inode = f.file->f_path.dentry->d_inode;
+		inode = f.file->f_dentry->d_inode;
 		xrcd = find_xrcd(file->device, inode);
 		if (!xrcd && !(cmd.oflags & O_CREAT)) {
 			/* no file descriptor. Need CREATE flag */
@@ -1610,7 +1612,7 @@ ssize_t ib_uverbs_create_qp(struct ib_uverbs_file *file,
 	response = (void __user *)cmd->response;
 
 	if (!disable_raw_qp_enforcement &&
-	    cmd->qp_type == IB_QPT_RAW_PACKET && !capable(CAP_NET_RAW))
+	    cmd->qp_type == IB_QPT_RAW_PACKET && !priv_check(curthread, PRIV_NET_RAW))
 		return -EPERM;
 
 	INIT_UDATA(&udata, buf + cmd_size, response + resp_size,
@@ -3374,9 +3376,7 @@ int ib_uverbs_ex_create_flow(struct ib_uverbs_file *file,
 	if (cmd.comp_mask)
 		return -EINVAL;
 
-	if ((cmd.flow_attr.type == IB_FLOW_ATTR_SNIFFER &&
-	     !capable(CAP_NET_ADMIN)) ||
-	    (!capable(CAP_NET_RAW) && !disable_raw_qp_enforcement))
+	if (!priv_check(curthread, PRIV_NET_RAW) && !disable_raw_qp_enforcement)
 		return -EPERM;
 
 	if (cmd.flow_attr.num_of_specs > IB_FLOW_SPEC_SUPPORT_LAYERS)
@@ -3685,7 +3685,8 @@ ssize_t ib_uverbs_exp_create_qp(struct ib_uverbs_file *file,
 		return ret;
 
 	if (!disable_raw_qp_enforcement &&
-	    cmd_exp.qp_type == IB_QPT_RAW_PACKET && !capable(CAP_NET_RAW))
+	    cmd_exp.qp_type == IB_QPT_RAW_PACKET && !priv_check(curthread,
+		    PRIV_NET_RAW))
 		return -EPERM;
 
 	obj = kzalloc(sizeof(*obj), GFP_KERNEL);
