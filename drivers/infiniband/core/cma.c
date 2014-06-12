@@ -474,7 +474,7 @@ struct rdma_cm_id *rdma_create_id(rdma_cm_event_handler event_handler,
 	if (!id_priv)
 		return ERR_PTR(-ENOMEM);
 
-	id_priv->owner = task_pid_nr(current);
+	id_priv->owner = current->task_thread->td_proc->p_pid;
 	id_priv->state = RDMA_CM_IDLE;
 	id_priv->id.context = context;
 	id_priv->id.event_handler = event_handler;
@@ -2546,6 +2546,8 @@ int rdma_bind_addr(struct rdma_cm_id *id, struct sockaddr *addr)
 {
 	struct rdma_id_private *id_priv;
 	int ret;
+	int ipv6only;
+	size_t var_size = sizeof(int);
 
 	if (addr->sa_family != AF_INET && addr->sa_family != AF_INET6)
 		return -EAFNOSUPPORT;
@@ -2574,7 +2576,8 @@ int rdma_bind_addr(struct rdma_cm_id *id, struct sockaddr *addr)
 			id_priv->afonly = 1;
 #if defined(INET6)
 		else if (addr->sa_family == AF_INET6)
-			id_priv->afonly = init_net.ipv6.sysctl.bindv6only;
+			id_priv->afonly = kernel_sysctlbyname(&thread0, "net.inet6.ip6.v6only",
+			                    &ipv6only, &var_size, NULL, 0, NULL, 0);
 #endif
 	}
 	ret = cma_get_port(id_priv);
@@ -3001,7 +3004,7 @@ int rdma_accept(struct rdma_cm_id *id, struct rdma_conn_param *conn_param)
 
 	id_priv = container_of(id, struct rdma_id_private, id);
 
-	id_priv->owner = task_pid_nr(current);
+	id_priv->owner = current->task_thread->td_proc->p_pid;
 
 	if (!cma_comp(id_priv, RDMA_CM_CONNECT))
 		return -EINVAL;
