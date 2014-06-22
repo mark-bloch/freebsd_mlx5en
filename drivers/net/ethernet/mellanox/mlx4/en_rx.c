@@ -44,30 +44,6 @@
 
 #include "mlx4_en.h"
 
-static int mlx4_en_alloc_buf(struct mlx4_en_priv *priv,
-			     struct mlx4_en_rx_desc *rx_desc,
-			     struct mbuf **mb_list,
-			     int i)
-{
-	struct mlx4_en_dev *mdev = priv->mdev;
-	struct mlx4_en_frag_info *frag_info = &priv->frag_info[i];
-	struct mbuf *mb;
-	dma_addr_t dma;
-
-	if (i == 0)
-		mb = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, frag_info->frag_size);
-	else
-		mb = m_getjcl(M_NOWAIT, MT_DATA, 0, frag_info->frag_size);
-	if (mb == NULL) {
-		priv->port_stats.rx_alloc_failed++;
-		return -ENOMEM;
-	}
-	dma = pci_map_single(mdev->pdev, mb->m_data, frag_info->frag_size,
-			     PCI_DMA_FROMDEVICE);
-	rx_desc->data[i].addr = cpu_to_be64(dma);
-	mb_list[i] = mb;
-	return 0;
-}
 
 static void mlx4_en_init_rx_desc(struct mlx4_en_priv *priv,
 				 struct mlx4_en_rx_ring *ring,
@@ -80,16 +56,37 @@ static void mlx4_en_init_rx_desc(struct mlx4_en_priv *priv,
 	rx_desc->data[0].lkey = cpu_to_be32(priv->mdev->mr.key);
 }
 
-static int mlx4_en_prepare_rx_desc(struct mlx4_en_priv *priv,
-				   struct mlx4_en_rx_ring *ring, int index)
+static int mlx4_en_alloc_frags(struct mlx4_en_priv *priv,
+			     struct mlx4_en_rx_desc *rx_desc,
+			     struct mbuf **mb_list)
 {
-	struct mlx4_en_rx_desc *rx_desc = ring->buf + (index * ring->stride);
-	struct mbuf **mb_list = ring->rx_info + (index << priv->log_rx_info);
+	struct mlx4_en_dev *mdev = priv->mdev;
+	struct mlx4_en_frag_info *frag_info;
+	struct mbuf *mb;
+	dma_addr_t dma;
 	int i;
-
-	for (i = 0; i < priv->num_frags; i++)
-		if (mlx4_en_alloc_buf(priv, rx_desc, mb_list, i))
+	/* 
+	 * priv->num_frags (calculated at calc_rx_buff) means the number of segments in one wqe.
+	 * every wqe has a fixed size and frags. 
+	 * the refill func(calling this func) is called every 'budget' times at the end of process_rx_cq.
+	*/
+	for (i = 0; i < priv->num_frags; i++) {
+		frag_info = &priv->frag_info[i];
+		if (i == 0) 
+			mb = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, frag_info->frag_size);
+		else
+			mb = m_getjcl(M_NOWAIT, MT_DATA, 0, frag_info->frag_size);
+		if (mb == NULL) {
+			priv->port_stats.rx_alloc_failed++;
 			goto err;
+		}
+		dma = pci_map_single(mdev->pdev, mb->m_data, frag_info->frag_size,
+				PCI_DMA_FROMDEVICE);
+		rx_desc->data[i].addr = cpu_to_be64(dma);
+		mb_list[i] = mb;
+
+
+	}
 
 	return 0;
 
@@ -97,6 +94,16 @@ err:
 	while (i--)
 		m_free(mb_list[i]);
 	return -ENOMEM;
+}
+
+static int mlx4_en_prepare_rx_desc(struct mlx4_en_priv *priv,
+				   struct mlx4_en_rx_ring *ring, int index)
+{
+	struct mlx4_en_rx_desc *rx_desc = ring->buf + (index * ring->stride);
+	struct mbuf **mb_list = ring->rx_info + (index << priv->log_rx_info);
+
+	return  mlx4_en_alloc_frags(priv, rx_desc, mb_list);
+
 }
 
 static inline void mlx4_en_update_rx_prod_db(struct mlx4_en_rx_ring *ring)
@@ -472,10 +479,6 @@ static int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
 		mb->m_len = frag_info[nr].frag_size;
 		dma = be64_to_cpu(rx_desc->data[nr].addr);
 
-		/* Allocate a replacement page */
-		if (mlx4_en_alloc_buf(priv, rx_desc, mb_list, nr))
-			goto fail;
-
 		/* Unmap buffer */
 		pci_unmap_single(mdev->pdev, dma, frag_info[nr].frag_size,
 				 PCI_DMA_FROMDEVICE);
@@ -485,14 +488,6 @@ static int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
 	mb->m_next = NULL;
 	return 0;
 
-fail:
-	/* Drop all accumulated fragments (which have already been replaced in
-	 * the descriptor) of this packet; remaining fragments are reused... */
-	while (nr > 0) {
-		nr--;
-		m_free(mb_list[nr]);
-	}
-	return -ENOMEM;
 }
 
 static struct mbuf *mlx4_en_rx_mb(struct mlx4_en_priv *priv,
@@ -509,6 +504,20 @@ static struct mbuf *mlx4_en_rx_mb(struct mlx4_en_priv *priv,
 
 	return mb;
 }
+
+static void mlx4_en_refill_rx_buffers(struct mlx4_en_priv *priv,
+		struct mlx4_en_rx_ring *ring)
+{
+	int index = ring->prod & ring->size_mask;
+
+	while ((u32) (ring->prod - ring->cons) < ring->actual_size) {
+		if (mlx4_en_prepare_rx_desc(priv, ring, index))
+			break;
+		ring->prod++;
+		index = ring->prod & ring->size_mask;
+	}
+}
+
 
 /* For cpu arch with cache line of 64B the performance is better when cqe size==64B
  * To enlarge cqe size from 32B to 64B --> 32B of garbage (i.e. 0xccccccc)
@@ -639,7 +648,7 @@ out:
 	mlx4_cq_set_ci(mcq);
 	wmb(); /* ensure HW sees CQ consumer before we post new buffers */
 	ring->cons = mcq->cons_index;
-	ring->prod += polled; /* Polled descriptors were realocated in place */
+	mlx4_en_refill_rx_buffers(priv, ring);
 	mlx4_en_update_rx_prod_db(ring);
 	return polled;
 
