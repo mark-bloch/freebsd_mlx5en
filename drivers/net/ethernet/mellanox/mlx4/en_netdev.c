@@ -2748,6 +2748,13 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 	dev->if_capenable = dev->if_capabilities;
 
+	dev->if_hwassist = 0;
+	if (dev->if_capenable & (IFCAP_TSO4 | IFCAP_TSO6))
+		dev->if_hwassist |= CSUM_TSO;
+	if (dev->if_capenable & IFCAP_TXCSUM)
+		dev->if_hwassist |= (CSUM_TCP | CSUM_UDP | CSUM_IP);
+
+
         /* Register for VLAN events */
 	priv->vlan_attach = EVENTHANDLER_REGISTER(vlan_config,
             mlx4_en_vlan_rx_add_vid, priv, EVENTHANDLER_PRI_FIRST);
