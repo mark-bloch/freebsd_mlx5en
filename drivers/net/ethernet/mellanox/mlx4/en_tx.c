@@ -984,7 +984,7 @@ retry:
 		wmb();
 		tx_desc->ctrl.owner_opcode = op_own;
 		wmb();
-		writel(ring->doorbell_qpn, ring->bf.uar->map + MLX4_SEND_DOORBELL);
+		writel(cpu_to_be32(ring->doorbell_qpn), ring->bf.uar->map + MLX4_SEND_DOORBELL);
 	}
 
 	return 0;
