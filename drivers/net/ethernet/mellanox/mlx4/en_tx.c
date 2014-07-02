@@ -584,27 +584,55 @@ static int inline_size(struct mbuf *mb)
 
 static int get_head_size(struct mbuf *mb)
 {
+	struct ether_vlan_header *eh;
         struct tcphdr *th;
         struct ip *ip;
         int ip_hlen, tcp_hlen;
-        int len;
+	struct ip6_hdr *ip6;
+	uint16_t eth_type;
+	int eth_hdr_len;
 
-        len = ETHER_HDR_LEN;
-        if (mb->m_len < len + sizeof(struct ip))
-                return (0);
-        ip = (struct ip *)(mtod(mb, char *) + len);
-        if (ip->ip_p != IPPROTO_TCP)
-                return (0);
-        ip_hlen = ip->ip_hl << 2;
-        len += ip_hlen;
-        if (mb->m_len < len + sizeof(struct tcphdr))
-                return (0);
-        th = (struct tcphdr *)(mtod(mb, char *) + len);
-        tcp_hlen = th->th_off << 2;
-        len += tcp_hlen;
-        if (mb->m_len < len)
-                return (0);
-        return (len);
+	eh = mtod(mb, struct ether_vlan_header *);
+	if (mb->m_len < ETHER_HDR_LEN)
+		return (0);
+	if (eh->evl_encap_proto == htons(ETHERTYPE_VLAN)) {
+		eth_type = ntohs(eh->evl_proto);
+		eth_hdr_len = ETHER_HDR_LEN + ETHER_VLAN_ENCAP_LEN;
+	} else {
+		eth_type = ntohs(eh->evl_encap_proto);
+		eth_hdr_len = ETHER_HDR_LEN;
+	}
+	if (mb->m_len < eth_hdr_len)
+		return (0);
+	switch (eth_type) {
+	case ETHERTYPE_IP:
+		ip = (struct ip *)(mb->m_data + eth_hdr_len);
+		if (mb->m_len < eth_hdr_len + sizeof(*ip))
+			return (0);
+		if (ip->ip_p != IPPROTO_TCP)
+			return (0);
+		ip_hlen = ip->ip_hl << 2;
+		eth_hdr_len += ip_hlen;
+		break;
+	case ETHERTYPE_IPV6:
+		ip6 = (struct ip6_hdr *)(mb->m_data + eth_hdr_len);
+		if (mb->m_len < eth_hdr_len + sizeof(*ip6))
+			return (0);
+		if (ip6->ip6_nxt != IPPROTO_TCP)
+			return (0);
+		eth_hdr_len += sizeof(*ip6);
+		break;
+	default:
+		return (0);
+	}
+	if (mb->m_len < eth_hdr_len + sizeof(*th))
+		return (0);
+	th = (struct tcphdr *)(mb->m_data + eth_hdr_len);
+	tcp_hlen = th->th_off << 2;
+	eth_hdr_len += tcp_hlen;
+	if (mb->m_len < eth_hdr_len)
+		return (0);
+	return (eth_hdr_len);
 }
 
 static int get_real_size(struct mbuf *mb, struct net_device *dev, int *p_n_segs,
@@ -874,13 +902,13 @@ retry:
 		!!vlan_tag;
 	tx_desc->ctrl.fence_size = (real_size / 16) & 0x3f;
 	tx_desc->ctrl.srcrb_flags = priv->ctrl_flags;
-	if (mb->m_pkthdr.csum_flags & (CSUM_IP|CSUM_TCP|CSUM_UDP)) {
-                if (mb->m_pkthdr.csum_flags & CSUM_IP)
-                        tx_desc->ctrl.srcrb_flags |=
-                            cpu_to_be32(MLX4_WQE_CTRL_IP_CSUM);
-                if (mb->m_pkthdr.csum_flags & (CSUM_TCP|CSUM_UDP))
-                        tx_desc->ctrl.srcrb_flags |=
-                            cpu_to_be32(MLX4_WQE_CTRL_TCP_UDP_CSUM);
+	if (mb->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TSO |
+		CSUM_TCP | CSUM_UDP | CSUM_TCP_IPV6 | CSUM_UDP_IPV6)) {
+		if (mb->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TSO))
+			tx_desc->ctrl.srcrb_flags |= cpu_to_be32(MLX4_WQE_CTRL_IP_CSUM);
+		if (mb->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_UDP |
+		    CSUM_UDP_IPV6 | CSUM_TCP_IPV6 | CSUM_TSO))
+			tx_desc->ctrl.srcrb_flags |= cpu_to_be32(MLX4_WQE_CTRL_TCP_UDP_CSUM);
 		priv->port_stats.tx_chksum_offload++;
                 ring->tx_csum++;
         }

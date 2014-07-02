@@ -2590,6 +2590,8 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 			dev->if_capenable ^= IFCAP_HWCSUM;
 		if (mask & IFCAP_TSO4)
 			dev->if_capenable ^= IFCAP_TSO4;
+		if (mask & IFCAP_TSO6)
+			dev->if_capenable ^= IFCAP_TSO6;
 		if (mask & IFCAP_LRO)
 			dev->if_capenable ^= IFCAP_LRO;
 		if (mask & IFCAP_VLAN_HWTAGGING)
@@ -2745,7 +2747,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	dev->if_capabilities |= IFCAP_LRO;
 
 	if (mdev->LSO_support)
-		dev->if_capabilities |= IFCAP_TSO4 | IFCAP_VLAN_HWTSO;
+		dev->if_capabilities |= IFCAP_TSO4 | IFCAP_TSO6 | IFCAP_VLAN_HWTSO;
 
 	dev->if_capenable = dev->if_capabilities;
 
