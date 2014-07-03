@@ -507,7 +507,8 @@ int mlx4_get_val(struct mlx4_dbdf2val *tbl, struct pci_dev *pdev, int idx,
 		return -EINVAL;
 
 	if (!pdev->bus) {
-		pr_debug("mlx4_core: pci_dev without valid bus number\n");
+		/* We get this message in FreeBSD all the time. since we don't support pr_debug currently, just comment it out */
+		/* pr_debug("mlx4_core: pci_dev without valid bus number\n"); */
 		return -EINVAL;
 	}
 
