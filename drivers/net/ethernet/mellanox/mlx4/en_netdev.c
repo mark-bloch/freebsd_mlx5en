@@ -1876,8 +1876,6 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 	if (priv->sysctl)
 		sysctl_ctx_free(&priv->stat_ctx);
 
-        if (priv->sysctl)
-                sysctl_ctx_free(&priv->conf_ctx);
 
 }
 
@@ -2144,6 +2142,10 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 
 
 	mlx4_en_free_resources(priv);
+
+	/* [SK] freeing the sysctl conf cannot be called from within mlx4_en_free_resources */
+	if (priv->sysctl)
+		sysctl_ctx_free(&priv->conf_ctx);
 
 	kfree(priv->tx_ring);
 	kfree(priv->tx_cq);
@@ -2718,7 +2720,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	priv->stride = roundup_pow_of_two(sizeof(struct mlx4_en_rx_desc) +
 					  DS_SIZE);
 
-        // replaces linux ethtool and init_param - need to handle this later
 	mlx4_en_sysctl_conf(priv);
 
 	err = mlx4_en_alloc_resources(priv);
@@ -2823,19 +2824,216 @@ out:
 	mlx4_en_destroy_netdev(dev);
 	return err;
 }
+static int mlx4_en_set_ring_size(struct net_device *dev,
+    int rx_size, int tx_size)
+{
+        struct mlx4_en_priv *priv = netdev_priv(dev);
+        struct mlx4_en_dev *mdev = priv->mdev;
+        int port_up = 0;
+        int err = 0;
+
+        rx_size = roundup_pow_of_two(rx_size);
+        rx_size = max_t(u32, rx_size, MLX4_EN_MIN_RX_SIZE);
+        rx_size = min_t(u32, rx_size, MLX4_EN_MAX_RX_SIZE);
+        tx_size = roundup_pow_of_two(tx_size);
+        tx_size = max_t(u32, tx_size, MLX4_EN_MIN_TX_SIZE);
+        tx_size = min_t(u32, tx_size, MLX4_EN_MAX_TX_SIZE);
+
+        if (rx_size == (priv->port_up ?
+            priv->rx_ring[0]->actual_size : priv->rx_ring[0]->size) &&
+            tx_size == priv->tx_ring[0]->size)
+                return 0;
+        mutex_lock(&mdev->state_lock);
+        if (priv->port_up) {
+                port_up = 1;
+                mlx4_en_stop_port(dev);
+        }
+        mlx4_en_free_resources(priv);
+        priv->prof->tx_ring_size = tx_size;
+        priv->prof->rx_ring_size = rx_size;
+        err = mlx4_en_alloc_resources(priv);
+        if (err) {
+                en_err(priv, "Failed reallocating port resources\n");
+                goto out;
+        }
+        if (port_up) {
+                err = mlx4_en_start_port(dev);
+                if (err)
+                        en_err(priv, "Failed starting port\n");
+        }
+out:
+        mutex_unlock(&mdev->state_lock);
+        return err;
+}
+static int mlx4_en_set_rx_ring_size(SYSCTL_HANDLER_ARGS)
+{
+        struct mlx4_en_priv *priv;
+        int size;
+        int error;
+
+        priv = arg1;
+        size = priv->prof->rx_ring_size;
+        error = sysctl_handle_int(oidp, &size, 0, req);
+        if (error || !req->newptr)
+                return (error);
+        error = -mlx4_en_set_ring_size(priv->dev, size,
+            priv->prof->tx_ring_size);
+        return (error);
+}
+
+static int mlx4_en_set_tx_ring_size(SYSCTL_HANDLER_ARGS)
+{
+        struct mlx4_en_priv *priv;
+        int size;
+        int error;
+
+        priv = arg1;
+        size = priv->prof->tx_ring_size;
+        error = sysctl_handle_int(oidp, &size, 0, req);
+        if (error || !req->newptr)
+                return (error);
+        error = -mlx4_en_set_ring_size(priv->dev, priv->prof->rx_ring_size,
+            size);
+
+        return (error);
+}
+
+static int mlx4_en_set_tx_ppp(SYSCTL_HANDLER_ARGS)
+{
+        struct mlx4_en_priv *priv;
+        int ppp;
+        int error;
+
+        priv = arg1;
+        ppp = priv->prof->tx_ppp;
+        error = sysctl_handle_int(oidp, &ppp, 0, req);
+        if (error || !req->newptr)
+                return (error);
+        if (ppp > 0xff || ppp < 0)
+                return (-EINVAL);
+        priv->prof->tx_ppp = ppp;
+        error = -mlx4_SET_PORT_general(priv->mdev->dev, priv->port,
+                                       priv->rx_mb_size + ETHER_CRC_LEN,
+                                       priv->prof->tx_pause,
+                                       priv->prof->tx_ppp,
+                                       priv->prof->rx_pause,
+                                       priv->prof->rx_ppp);
+
+        return (error);
+}
+
+static int mlx4_en_set_rx_ppp(SYSCTL_HANDLER_ARGS)
+{
+        struct mlx4_en_priv *priv;
+        struct mlx4_en_dev *mdev;
+        int ppp;
+        int error;
+        int port_up;
+
+        port_up = 0;
+        priv = arg1;
+        mdev = priv->mdev;
+        ppp = priv->prof->rx_ppp;
+        error = sysctl_handle_int(oidp, &ppp, 0, req);
+        if (error || !req->newptr)
+                return (error);
+        if (ppp > 0xff || ppp < 0)
+                return (-EINVAL);
+        /* See if we have to change the number of tx queues. */
+        if (!ppp != !priv->prof->rx_ppp) {
+                mutex_lock(&mdev->state_lock);
+                if (priv->port_up) {
+                        port_up = 1;
+                        mlx4_en_stop_port(priv->dev);
+                }
+                mlx4_en_free_resources(priv);
+                priv->prof->rx_ppp = ppp;
+                error = -mlx4_en_alloc_resources(priv);
+                if (error)
+                        en_err(priv, "Failed reallocating port resources\n");
+                if (error == 0 && port_up) {
+                        error = -mlx4_en_start_port(priv->dev);
+                        if (error)
+                                en_err(priv, "Failed starting port\n");
+                }
+                mutex_unlock(&mdev->state_lock);
+                return (error);
+
+        }
+        priv->prof->rx_ppp = ppp;
+        error = -mlx4_SET_PORT_general(priv->mdev->dev, priv->port,
+                                       priv->rx_mb_size + ETHER_CRC_LEN,
+                                       priv->prof->tx_pause,
+                                       priv->prof->tx_ppp,
+                                       priv->prof->rx_pause,
+                                       priv->prof->rx_ppp);
+
+        return (error);
+}
 
 static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
 {
-	struct net_device *dev;
-	struct sysctl_ctx_list *ctx;
+        struct net_device *dev;
+        struct sysctl_ctx_list *ctx;
+        struct sysctl_oid *node;
+        struct sysctl_oid_list *node_list;
+        struct sysctl_oid *coal;
+        struct sysctl_oid_list *coal_list;
 
-	dev = priv->dev;
-	ctx = &priv->conf_ctx;
+        dev = priv->dev;
+        ctx = &priv->conf_ctx;
 
-	sysctl_ctx_init(ctx);
-	priv->sysctl = SYSCTL_ADD_NODE(ctx, SYSCTL_STATIC_CHILDREN(_hw),
-			OID_AUTO, dev->if_xname, CTLFLAG_RD, 0, "mlx4 10gig ethernet");
+        sysctl_ctx_init(ctx);
+        priv->sysctl = SYSCTL_ADD_NODE(ctx, SYSCTL_STATIC_CHILDREN(_hw),
+            OID_AUTO, dev->if_xname, CTLFLAG_RD, 0, "mlx4 10gig ethernet");
+        node = SYSCTL_ADD_NODE(ctx, SYSCTL_CHILDREN(priv->sysctl), OID_AUTO,
+            "conf", CTLFLAG_RD, NULL, "Configuration");
+        node_list = SYSCTL_CHILDREN(node);
 
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "msg_enable",
+            CTLFLAG_RW, &priv->msg_enable, 0,
+            "Driver message enable bitfield");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rx_rings",
+            CTLTYPE_INT | CTLFLAG_RD, &priv->rx_ring_num, 0,
+            "Number of receive rings");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "tx_rings",
+            CTLTYPE_INT | CTLFLAG_RD, &priv->tx_ring_num, 0,
+            "Number of transmit rings");
+        SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_size",
+            CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+            mlx4_en_set_rx_ring_size, "I", "Receive ring size");
+        SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "tx_size",
+            CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+            mlx4_en_set_tx_ring_size, "I", "Transmit ring size");
+        SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "tx_ppp",
+            CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+            mlx4_en_set_tx_ppp, "I", "TX Per-priority pause");
+        SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_ppp",
+            CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+            mlx4_en_set_rx_ppp, "I", "RX Per-priority pause");
+
+        /* Add coalescer configuration. */
+        coal = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO,
+            "coalesce", CTLFLAG_RD, NULL, "Interrupt coalesce configuration");
+        coal_list = SYSCTL_CHILDREN(node);
+        SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "pkt_rate_low",
+            CTLFLAG_RW, &priv->pkt_rate_low, 0,
+            "Packets per-second for minimum delay");
+        SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "rx_usecs_low",
+            CTLFLAG_RW, &priv->rx_usecs_low, 0,
+            "Minimum RX delay in micro-seconds");
+        SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "pkt_rate_high",
+            CTLFLAG_RW, &priv->pkt_rate_high, 0,
+            "Packets per-second for maximum delay");
+        SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "rx_usecs_high",
+            CTLFLAG_RW, &priv->rx_usecs_high, 0,
+            "Maximum RX delay in micro-seconds");
+        SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "sample_interval",
+            CTLFLAG_RW, &priv->sample_interval, 0,
+            "adaptive frequency in units of HZ ticks");
+        SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "adaptive_rx_coal",
+            CTLFLAG_RW, &priv->adaptive_rx_coal, 0,
+            "Enable adaptive rx coalescing");
 }
 
 
