@@ -915,8 +915,7 @@ retry:
 
                 priv->port_stats.tso_packets++;
                 segsz = mb->m_pkthdr.tso_segsz;
-                i = ((mb->m_pkthdr.len - lso_header_size) / segsz) +
-                        !!((mb->m_pkthdr.len - lso_header_size) % segsz);
+                i = ((mb->m_pkthdr.len - lso_header_size + segsz - 1) / segsz);
                 tx_info->nr_bytes= mb->m_pkthdr.len + (i - 1) * lso_header_size;
                 ring->packets += i;
 	} else {
