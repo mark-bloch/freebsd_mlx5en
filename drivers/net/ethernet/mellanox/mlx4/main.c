@@ -203,7 +203,7 @@ static struct param_data port_type_array = {
 	.dbdf2val = {
 		.name		= "port_type_array param",
 		.num_vals	= 2,
-		.def_val	= {MLX4_PORT_TYPE_NONE, MLX4_PORT_TYPE_NONE},
+		.def_val	= {MLX4_PORT_TYPE_ETH, MLX4_PORT_TYPE_ETH},
 		.range		= {MLX4_PORT_TYPE_IB, MLX4_PORT_TYPE_NA}
 	}
 };
@@ -758,6 +758,9 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 			((dev->caps.supported_type[i] == MLX4_PORT_TYPE_AUTO) &&
 			 (dev->caps.flags & MLX4_DEV_CAP_FLAG_DPDP) &&
 			 (dev->caps.flags & MLX4_DEV_CAP_FLAG_SENSE_SUPPORT));
+
+		/* MY: disablling auto sense for default Eth ports support */
+		mlx4_priv(dev)->sense.sense_allowed[i] = 0;
 
 		/*
 		 * If "default_sense" bit is set, we move the port to "AUTO" mode
