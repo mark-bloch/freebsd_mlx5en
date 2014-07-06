@@ -679,8 +679,13 @@ linux_compat_init(void)
 	struct sysctl_oid *rootoid;
 	int i;
 
+#ifdef SYSCTL_ADD_ROOT_NODE
+        rootoid = SYSCTL_ADD_ROOT_NODE(NULL,
+            OID_AUTO, "sys", CTLFLAG_RD|CTLFLAG_MPSAFE, NULL, "sys");
+#else
 	rootoid = SYSCTL_ADD_NODE(NULL, SYSCTL_STATIC_CHILDREN(),
 	    OID_AUTO, "sys", CTLFLAG_RD|CTLFLAG_MPSAFE, NULL, "sys");
+#endif
 	kobject_init(&class_root, &class_ktype);
 	kobject_set_name(&class_root, "class");
 	class_root.oidp = SYSCTL_ADD_NODE(NULL, SYSCTL_CHILDREN(rootoid),
