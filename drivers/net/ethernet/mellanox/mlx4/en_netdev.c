@@ -1257,8 +1257,9 @@ static void mlx4_en_set_default_moderation(struct mlx4_en_priv *priv)
 	priv->rx_usecs = MLX4_EN_RX_COAL_TIME;
 	priv->tx_frames = MLX4_EN_TX_COAL_PKTS;
 	priv->tx_usecs = MLX4_EN_TX_COAL_TIME;
-	en_dbg(INTR, priv, "Default coalesing params for mtu:%ld - rx_frames:%d rx_usecs:%d\n",
-	       priv->dev->if_mtu, priv->rx_frames, priv->rx_usecs);
+	en_dbg(INTR, priv, "Default coalesing params for mtu: %u - "
+	       "rx_frames:%d rx_usecs:%d\n",
+	       (unsigned)priv->dev->if_mtu, priv->rx_frames, priv->rx_usecs);
 
 	/* Setup cq moderation params */
 	for (i = 0; i < priv->rx_ring_num; i++) {
@@ -2161,8 +2162,8 @@ static int mlx4_en_change_mtu(struct net_device *dev, int new_mtu)
 	struct mlx4_en_dev *mdev = priv->mdev;
 	int err = 0;
 
-	en_dbg(DRV, priv, "Change MTU called - current:%ld new:%d\n",
-			dev->if_mtu, new_mtu);
+	en_dbg(DRV, priv, "Change MTU called - current:%u new:%u\n",
+	       (unsigned)dev->if_mtu, (unsigned)new_mtu);
 
 	if ((new_mtu < MLX4_EN_MIN_MTU) || (new_mtu > priv->max_mtu)) {
 		en_err(priv, "Bad MTU size:%d.\n", new_mtu);
