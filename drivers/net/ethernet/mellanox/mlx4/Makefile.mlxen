@@ -9,7 +9,7 @@ KMOD    = mlxen
 SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
 SRCS+= utils.c en_main.c en_netdev.c en_rx.c en_cq.c en_tx.c en_port.c en_resources.c
 #SRC+= en_main.o en_tx.o en_rx.o en_ethtool.o en_port.o en_cq.o \
-                en_resources.o en_netdev.o en_selftest.o en_clock.o
+#                en_resources.o en_netdev.o en_selftest.o en_clock.o
 #SRCS+= alloc.c catas.c cmd.c cq.c eq.c fw.c icm.c intf.c main.c mcg.c mr.c linux_compat.c linux_radix.c	linux_idr.c
 #SRCS+=	pd.c port.c profile.c qp.c reset.c sense.c srq.c resource_tracker.c sys_tune.c
 
