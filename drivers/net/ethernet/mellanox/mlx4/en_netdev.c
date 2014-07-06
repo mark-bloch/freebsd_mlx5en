@@ -54,7 +54,7 @@
 
 static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv);
 static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv);
-
+static int mlx4_en_unit;
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
 /* must be called with local_bh_disable()d */
@@ -2111,6 +2111,7 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 
 	en_dbg(DRV, priv, "Destroying netdev on port:%d\n", priv->port);
 
+	atomic_fetchadd_int(&mlx4_en_unit, -1);
 
         if (priv->vlan_attach != NULL)
                 EVENTHANDLER_DEREGISTER(vlan_config, priv->vlan_attach);
@@ -2617,7 +2618,6 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			struct mlx4_en_port_profile *prof)
 {
-	static volatile int mlx4_en_unit;
 	struct net_device *dev;
 	struct mlx4_en_priv *priv;
 	uint8_t dev_addr[ETHER_ADDR_LEN];
