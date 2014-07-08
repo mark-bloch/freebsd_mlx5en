@@ -360,16 +360,30 @@ struct mlx4_en_rx_ring {
 
 static inline int mlx4_en_can_lro(__be16 status)
 {
-	return (status & cpu_to_be16(MLX4_CQE_STATUS_IPV4       |
-				MLX4_CQE_STATUS_IPV4F      |
-				MLX4_CQE_STATUS_IPV6       |
-				MLX4_CQE_STATUS_IPV4OPT    |
-				MLX4_CQE_STATUS_TCP        |
-				MLX4_CQE_STATUS_UDP        |
-				MLX4_CQE_STATUS_IPOK)) ==
-		cpu_to_be16(MLX4_CQE_STATUS_IPV4 |
-				MLX4_CQE_STATUS_IPOK |
-				MLX4_CQE_STATUS_TCP);
+	static __be16 status_all;
+	static __be16 status_ipv4_ipok_tcp;
+	static __be16 status_ipv6_ipok_tcp;
+
+	status_all                         = cpu_to_be16(
+			MLX4_CQE_STATUS_IPV4    |
+			MLX4_CQE_STATUS_IPV4F   |
+			MLX4_CQE_STATUS_IPV6    |
+			MLX4_CQE_STATUS_IPV4OPT |
+			MLX4_CQE_STATUS_TCP     |
+			MLX4_CQE_STATUS_UDP     |
+			MLX4_CQE_STATUS_IPOK);
+	status_ipv4_ipok_tcp               = cpu_to_be16(
+			MLX4_CQE_STATUS_IPV4    |
+			MLX4_CQE_STATUS_IPOK    |
+			MLX4_CQE_STATUS_TCP);
+	status_ipv6_ipok_tcp               = cpu_to_be16(
+			MLX4_CQE_STATUS_IPV6    |
+			MLX4_CQE_STATUS_IPOK    |
+			MLX4_CQE_STATUS_TCP);
+
+	status &= status_all;
+	return (status == status_ipv4_ipok_tcp ||
+			status == status_ipv6_ipok_tcp);
 }
 
 
