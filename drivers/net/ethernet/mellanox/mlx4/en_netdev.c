@@ -399,12 +399,15 @@ static void mlx4_en_filter_rfs_expire(struct mlx4_en_priv *priv)
 }
 #endif
 
-static int mlx4_en_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
+static void mlx4_en_vlan_rx_add_vid(void *arg, struct net_device *dev, u16 vid)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct mlx4_en_dev *mdev = priv->mdev;
 	int err;
 	int idx;
+
+	if (arg != priv)
+		return;
 
 	en_dbg(HW, priv, "adding VLAN:%d\n", vid);
 
@@ -421,14 +424,16 @@ static int mlx4_en_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
 		en_dbg(HW, priv, "failed adding vlan %d\n", vid);
 	mutex_unlock(&mdev->state_lock);
 
-	return 0;
 }
 
-static int mlx4_en_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
+static void mlx4_en_vlan_rx_kill_vid(void *arg, struct net_device *dev, u16 vid)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct mlx4_en_dev *mdev = priv->mdev;
 	int err;
+
+	if (arg != priv)
+		return;
 
 	en_dbg(HW, priv, "Killing VID:%d\n", vid);
 
@@ -445,7 +450,6 @@ static int mlx4_en_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
 	}
 	mutex_unlock(&mdev->state_lock);
 
-	return 0;
 }
 #if 0
 static void mlx4_en_u64_to_mac(unsigned char dst_mac[ETH_ALEN + 2], u64 src_mac)
