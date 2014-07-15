@@ -757,7 +757,6 @@ static void mlx4_en_cache_mclist(struct net_device *dev)
 			LLADDR((struct sockaddr_dl *)ifma->ifma_addr), ETH_ALEN);
 		list_add_tail(&tmp->list, &priv->mc_list);
         }
-        if_maddr_runlock(dev);
 }
 
 static void update_mclist_flags(struct mlx4_en_priv *priv,
