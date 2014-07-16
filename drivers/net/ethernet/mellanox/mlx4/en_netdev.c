@@ -2522,6 +2522,7 @@ static int mlx4_en_media_change(struct ifnet *dev)
 	case IFM_10G_SR:
 	case IFM_10G_CX4:
 	case IFM_1000_T:
+	case IFM_40G_CR4:
 		if (IFM_SUBTYPE(ifm->ifm_media) ==
 		    IFM_SUBTYPE(mlx4_en_calc_media(priv)) &&
 		    (ifm->ifm_media & IFM_FDX))
@@ -2786,6 +2787,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_1000_T, 0, NULL);
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_10G_SR, 0, NULL);
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_10G_CX4, 0, NULL);
+	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_40G_CR4, 0, NULL);
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_AUTO, 0, NULL);
 	ifmedia_set(&priv->media, IFM_ETHER | IFM_AUTO);
 
