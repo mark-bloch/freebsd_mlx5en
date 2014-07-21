@@ -169,61 +169,6 @@ err_vm_insert:
 }
 EXPORT_SYMBOL(ib_umem_map_to_vma);
 
-static void ib_cmem_release(struct kref *ref)
-{
-
-	struct ib_cmem *cmem;
-	struct ib_cmem_block *cmem_block, *tmp;
-	unsigned long ntotal_pages;
-
-	cmem = container_of(ref, struct ib_cmem, refcount);
-
-	list_for_each_entry_safe(cmem_block, tmp, &cmem->ib_cmem_block, list) {
-		__free_pages(cmem_block->page, cmem->block_order);
-		list_del(&cmem_block->list);
-		kfree(cmem_block);
-	}
-	/* no locking is needed:
-	ib_cmem_release is called from vm_close which is always called
-	with mm->mmap_sem held for writing.
-	The only exception is when the process shutting down but in that case
-	counter not relevant any more.*/
-	if (current->mm) {
-		ntotal_pages = PAGE_ALIGN(cmem->length) >> PAGE_SHIFT;
-		current->mm->pinned_vm -= ntotal_pages;
-	}
-	kfree(cmem);
-
-}
-
-static void cmem_vma_open(struct vm_area_struct *area)
-{
-	struct ib_cmem *ib_cmem;
-	ib_cmem = (struct ib_cmem *)(area->vm_private_data);
-	
-	/* vm_open and vm_close are always called with mm->mmap_sem held for
-	writing. The only exception is when the process is shutting down, at
-	which point vm_close is called with no locks held, but since it is
-	after the VMAs have been detached, it is impossible that vm_open will
-	be called. Therefore, there is no need to synchronize the kref_get and
-	kref_put calls.*/
-	kref_get(&ib_cmem->refcount);
-}
-
-static void cmem_vma_close(struct vm_area_struct *area)
-{
-	struct ib_cmem *cmem;
-	cmem = (struct ib_cmem *)(area->vm_private_data);
-
-	ib_cmem_release_contiguous_pages(cmem);
-
-}
-
-static const struct vm_operations_struct cmem_contig_pages_vm_ops = {
-	.open = cmem_vma_open,
-	.close = cmem_vma_close
-};
-
 static struct ib_umem *peer_umem_get(struct ib_peer_memory_client *ib_peer_mem,
 				       struct ib_umem *umem, unsigned long addr,
 				       int dmasync, int invalidation_supported)
