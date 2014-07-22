@@ -87,6 +87,5 @@ void  ib_umem_activate_invalidation_notifier(struct ib_umem *umem,
 					       void *cookie);
 void ib_umem_release(struct ib_umem *umem);
 int ib_umem_page_count(struct ib_umem *umem);
-int ib_umem_map_to_vma(struct ib_umem *umem,
-				struct vm_area_struct *vma);
+
 #endif /* IB_UMEM_H */
