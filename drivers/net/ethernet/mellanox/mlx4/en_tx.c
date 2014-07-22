@@ -835,6 +835,7 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	struct mlx4_en_tx_desc *tx_desc;
 	struct mlx4_wqe_data_seg *data;
 	struct mlx4_en_tx_info *tx_info;
+        struct mlx4_en_cq *cq;
 	struct mbuf *m;
 	int nr_txbb;
 	int nr_segs;
@@ -886,6 +887,28 @@ retry:
 	if (mb->m_flags & M_VLANTAG) {
 		vlan_tag = mb->m_pkthdr.ether_vtag;
 	}
+
+	/* Check available TXBBs and 2K spare for prefetch
+	 * Even if netif_tx_stop_queue() will be called
+	 * driver will send current packet to ensure
+	 * that at least one completion will be issued after
+	 * stopping the queue
+	 */
+	if (unlikely((int)(ring->prod - ring->cons) > ring->full_size)) {
+		/* every full Tx ring stops queue */
+		if (ring->blocked == 0)
+                        atomic_add_int(&priv->blocked, 1);
+		/* Set HW-queue-is-full flag */
+		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
+		ring->blocked = 1;
+		priv->port_stats.queue_stopped++;
+		ring->queue_stopped++;
+
+		/* Use interrupts to find out when queue opened */
+		cq = priv->tx_cq[tx_ind];
+		mlx4_en_arm_cq(priv, cq);
+		return EBUSY;
+        }
 
 	/* Track current inflight packets for performance analysis */
 	AVG_PERF_COUNTER(priv->pstats.inflight_avg,
@@ -1035,22 +1058,6 @@ retry:
 
 	ring->prod += nr_txbb;
 
-	/* Check available TXBBs and 2K spare for prefetch
-	 * Even if netif_tx_stop_queue() will be called
-	 * driver will send current packet to ensure
-	 * that at least one completion will be issued after
-	 * stopping the queue
-	 */
-	if (unlikely((int)(ring->prod - ring->cons) > ring->full_size)) {
-		/* every full Tx ring stops queue */
-		if (ring->blocked == 0)
-                        atomic_add_int(&priv->blocked, 1);
-		/* Set HW-queue-is-full flag */
-		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
-		ring->blocked = 1;
-		priv->port_stats.queue_stopped++;
-		ring->queue_stopped++;
-	}
 
 	/* If we used a bounce buffer then copy descriptor back into place */
 	if (unlikely(bounce))
