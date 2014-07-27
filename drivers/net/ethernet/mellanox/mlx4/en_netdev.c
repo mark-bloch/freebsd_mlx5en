@@ -1373,6 +1373,7 @@ static void mlx4_en_do_get_stats(struct work_struct *work)
 
 		queue_delayed_work(mdev->workqueue, &priv->stats_task, STATS_DELAY);
 	}
+	mlx4_en_QUERY_PORT(priv->mdev, priv->port);
 	mutex_unlock(&mdev->state_lock);
 }
 
@@ -2523,9 +2524,9 @@ static int mlx4_en_media_change(struct ifnet *dev)
 	case IFM_10G_CX4:
 	case IFM_1000_T:
 	case IFM_40G_CR4:
-		if (IFM_SUBTYPE(ifm->ifm_media) ==
-		    IFM_SUBTYPE(mlx4_en_calc_media(priv)) &&
-		    (ifm->ifm_media & IFM_FDX))
+		if ((IFM_SUBTYPE(ifm->ifm_media)
+			== IFM_SUBTYPE(mlx4_en_calc_media(priv)))
+			&& (ifm->ifm_media & IFM_FDX))
 			break;
 		/* Fallthrough */
 	default:

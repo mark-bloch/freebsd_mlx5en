@@ -71,7 +71,6 @@ int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv)
 	mlx4_free_cmd_mailbox(dev, mailbox);
 	return err;
 }
-#if 0
 
 int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port)
 {
@@ -123,7 +122,6 @@ out:
 	mlx4_free_cmd_mailbox(mdev->dev, mailbox);
 	return err;
 }
-#endif
 
 int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 {
