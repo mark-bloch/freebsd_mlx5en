@@ -344,6 +344,8 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 			}
 		}
 	}
+	/* Send a copy of the frame to the BPF listener */
+        ETHER_BPF_MTAP(priv->dev, mb);
         m_freem(mb);
 	return tx_info->nr_txbb;
 }
@@ -1145,8 +1147,6 @@ mlx4_en_transmit_locked(struct ifnet *dev, int tx_ind, struct mbuf *m)
 		dev->if_obytes += next->m_pkthdr.len;
 		if (next->m_flags & M_MCAST)
 			dev->if_omcasts++;
-		/* Send a copy of the frame to the BPF listener */
-		ETHER_BPF_MTAP(dev, next);
 		if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
 			break;
 	}
