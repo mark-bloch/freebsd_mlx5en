@@ -587,6 +587,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 		 * Packet is OK - process it.
 		 */
 		length = be32_to_cpu(cqe->byte_cnt);
+		length -= ring->fcs_del;
 		mb = mlx4_en_rx_mb(priv, rx_desc, mb_list, length);
 		if (!mb) {
 			ring->errors++;
