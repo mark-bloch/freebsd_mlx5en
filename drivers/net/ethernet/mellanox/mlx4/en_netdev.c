@@ -2149,7 +2149,7 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 
 	mlx4_en_free_resources(priv);
 
-	/* [SK] freeing the sysctl conf cannot be called from within mlx4_en_free_resources */
+	/* freeing the sysctl conf cannot be called from within mlx4_en_free_resources */
 	if (priv->sysctl)
 		sysctl_ctx_free(&priv->conf_ctx);
 
@@ -2782,7 +2782,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 
 	ether_ifattach(dev, dev_addr);
-        // part of the ethtool/ioctl -SK
 	ifmedia_init(&priv->media, IFM_IMASK | IFM_ETH_FMASK,
 	    mlx4_en_media_change, mlx4_en_media_status);
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_1000_T, 0, NULL);
