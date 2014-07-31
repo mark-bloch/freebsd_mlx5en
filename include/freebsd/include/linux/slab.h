@@ -47,7 +47,6 @@ MALLOC_DECLARE(M_KMALLOC);
 #define	krealloc(ptr, size, flags)	realloc((ptr), (size), M_KMALLOC, (flags))
 #define	kcalloc(n, size, flags)	        kmalloc((n) * (size), flags | M_ZERO)
 #define	vzalloc(size)			kzalloc(size, GFP_KERNEL | __GFP_NOWARN)
-#define	is_vmalloc_addr(arg)		0
 #define	vfree(arg)			kfree(arg)
 #define vmalloc(size)                   kmalloc(size, GFP_KERNEL)
 #define vmalloc_node(size, node)        kmalloc(size, GFP_KERNEL)
