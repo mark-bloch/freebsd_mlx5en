@@ -1181,17 +1181,14 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 		en_dbg(HW, priv, "Port is down, ignoring rx mode change.\n");
 		goto out;
 	}
-#if 0
-	if (!netif_carrier_ok(dev)) {
-		if (!mlx4_en_QUERY_PORT(mdev, priv->port)) {
-			if (priv->port_state.link_state) {
-				priv->last_link_state = MLX4_DEV_EVENT_PORT_UP;
-				netif_carrier_on(dev);
-				en_dbg(LINK, priv, "Link Up\n");
-			}
+	if (!mlx4_en_QUERY_PORT(mdev, priv->port)) {
+		if (priv->port_state.link_state) {
+			priv->last_link_state = MLX4_DEV_EVENT_PORT_UP;
+			if_link_state_change(priv->dev, LINK_STATE_UP);
+			en_dbg(HW, priv, "Link Up\n");
 		}
 	}
-
+#if 0
 	if (dev->priv_flags & IFF_UNICAST_FLT)
 		mlx4_en_do_uc_filter(priv, dev, mdev);
 
@@ -1373,7 +1370,6 @@ static void mlx4_en_do_get_stats(struct work_struct *work)
 
 		queue_delayed_work(mdev->workqueue, &priv->stats_task, STATS_DELAY);
 	}
-	mlx4_en_QUERY_PORT(priv->mdev, priv->port);
 	mutex_unlock(&mdev->state_lock);
 }
 
