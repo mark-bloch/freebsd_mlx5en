@@ -161,8 +161,15 @@ kobject_release(struct kref *kref)
 static void
 kobject_kfree(struct kobject *kobj)
 {
-
 	kfree(kobj);
+}
+
+static void
+kobject_kfree_name(struct kobject *kobj)
+{
+	if (kobj) {
+		kfree(kobj->name);
+	}
 }
 
 struct kobj_type kfree_type = { .release = kobject_kfree };
@@ -707,3 +714,12 @@ linux_compat_init(void)
 }
 
 SYSINIT(linux_compat, SI_SUB_DRIVERS, SI_ORDER_SECOND, linux_compat_init, NULL);
+
+static void
+linux_compat_uninit(void)
+{
+	kobject_kfree_name(&class_root);
+	kobject_kfree_name(&linux_rootdev.kobj);
+	kobject_kfree_name(&miscclass.kobj);
+}
+SYSUNINIT(linux_compat, SI_SUB_DRIVERS, SI_ORDER_SECOND, linux_compat_uninit, NULL);
