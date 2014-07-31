@@ -61,7 +61,7 @@ static inline u64 div_u64_rem(u64 dividend, u32 divisor, u32 *remainder)
 
 #elif BITS_PER_LONG == 32
 
-static uint32_t __attribute__((weak)) __div64_32(uint64_t *n, uint32_t base)
+static uint32_t __div64_32(uint64_t *n, uint32_t base)
 {
 	uint64_t rem = *n;
 	uint64_t b = base;

@@ -2713,8 +2713,13 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	priv->max_mtu = mdev->dev->caps.eth_mtu_cap[priv->port];
         priv->mac = mdev->dev->caps.def_mac[priv->port];
         if (ILLEGAL_MAC(priv->mac)) {
+#if BITS_PER_LONG == 64
                 en_err(priv, "Port: %d, invalid mac burned: 0x%lx, quiting\n",
                                 priv->port, priv->mac);
+#elif BITS_PER_LONG == 32
+                en_err(priv, "Port: %d, invalid mac burned: 0x%llx, quiting\n",
+                                priv->port, priv->mac);
+#endif
                 err = -EINVAL;
                 goto out;
         }
