@@ -1584,7 +1584,7 @@ int mlx4_en_start_port(struct net_device *dev)
 	priv->flags &= ~(MLX4_EN_FLAG_PROMISC | MLX4_EN_FLAG_MC_PROMISC);
 
 	/* Schedule multicast task to populate multicast list */
-	//queue_work(mdev->workqueue, &priv->rx_mode_task);
+	queue_work(mdev->workqueue, &priv->rx_mode_task);
 
 	mlx4_set_stats_bitmap(mdev->dev, priv->stats_bitmap);
 
