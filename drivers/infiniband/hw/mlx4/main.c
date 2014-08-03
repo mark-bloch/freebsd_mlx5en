@@ -794,7 +794,6 @@ full_search:
 static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
 {
 	struct mlx4_ib_dev *dev = to_mdev(context->device);
-	int err;
 
 	/* Last 8 bits hold the  command others are data per that command */
 	unsigned long  command = vma->vm_pgoff & MLX4_IB_MMAP_CMD_MASK;
@@ -820,25 +819,6 @@ static int mlx4_ib_mmap(struct ib_ucontext *context, struct vm_area_struct *vma)
 				       dev->dev->caps.num_uars,
 				       PAGE_SIZE, vma->vm_page_prot))
 			return -EAGAIN;
-	} else if (command == MLX4_IB_MMAP_GET_CONTIGUOUS_PAGES) {
-		/* Getting contiguous physical pages */
-		unsigned long total_size = vma->vm_end - vma->vm_start;
-		unsigned long page_size_order = (vma->vm_pgoff) >>
-						MLX4_IB_MMAP_CMD_BITS;
-		struct ib_cmem *ib_cmem;
-		ib_cmem = ib_cmem_alloc_contiguous_pages(context, total_size,
-							page_size_order);
-		if (IS_ERR(ib_cmem)) {
-			err = PTR_ERR(ib_cmem);
-			return err;
-		}
-
-		err = ib_cmem_map_contiguous_pages_to_vma(ib_cmem, vma);
-		if (err) {
-			ib_cmem_release_contiguous_pages(ib_cmem);
-			return err;
-		}
-		return 0;
 	} else if (command == MLX4_IB_MMAP_GET_HW_CLOCK) {
 		struct mlx4_clock_params params;
 		int ret;
