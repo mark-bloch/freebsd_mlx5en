@@ -1251,8 +1251,6 @@ static void destroy_qp_common(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp,
 			__mlx4_ib_cq_clean(send_cq, qp->mqp.qpn, NULL);
 	}
 
-	mlx4_qp_remove(dev->dev, &qp->mqp);
-
 	mlx4_ib_unlock_cqs(send_cq, recv_cq);
 
 	mlx4_qp_free(dev->dev, &qp->mqp);
