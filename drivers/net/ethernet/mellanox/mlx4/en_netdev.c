@@ -1409,7 +1409,13 @@ static void mlx4_en_linkstate(struct work_struct *work)
 		if (linkstate == MLX4_DEV_EVENT_PORT_DOWN) {
 			en_info(priv, "Link Down\n");
 			if_link_state_change(priv->dev, LINK_STATE_DOWN);
-		} else {
+		/* make sure the port is up before notifying the OS. 
+		 * This is tricky since we get here on INIT_PORT and 
+		 * in such case we can't tell the OS the port is up.
+		 * To solve this there is a call to if_link_state_change
+		 * in set_rx_mode.
+		 * */
+		} else if (priv->port_up && (linkstate == MLX4_DEV_EVENT_PORT_UP)){
 			en_info(priv, "Link Up\n");
 			if_link_state_change(priv->dev, LINK_STATE_UP);
 		}
