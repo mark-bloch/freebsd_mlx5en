@@ -375,6 +375,8 @@ static void mlx4_qp_free_icm(struct mlx4_dev *dev, int qpn)
 
 int mlx4_qp_alloc(struct mlx4_dev *dev, int qpn, struct mlx4_qp *qp)
 {
+	struct mlx4_priv *priv = mlx4_priv(dev);
+	struct mlx4_qp_table *qp_table = &priv->qp_table;
 	int err;
 
 	if (!qpn)
@@ -386,6 +388,10 @@ int mlx4_qp_alloc(struct mlx4_dev *dev, int qpn, struct mlx4_qp *qp)
 	if (err)
 		return err;
 
+	spin_lock_irq(&qp_table->lock);
+	err = radix_tree_insert(&dev->qp_table_tree, qp->qpn &
+				(dev->caps.num_qps - 1), qp);
+	spin_unlock_irq(&qp_table->lock);
 	if (err)
 		goto err_icm;
 
@@ -400,6 +406,17 @@ err_icm:
 }
 
 EXPORT_SYMBOL_GPL(mlx4_qp_alloc);
+
+void mlx4_qp_remove(struct mlx4_dev *dev, struct mlx4_qp *qp)
+{
+	struct mlx4_qp_table *qp_table = &mlx4_priv(dev)->qp_table;
+	unsigned long flags;
+
+	spin_lock_irqsave(&qp_table->lock, flags);
+	radix_tree_delete(&dev->qp_table_tree, qp->qpn & (dev->caps.num_qps - 1));
+	spin_unlock_irqrestore(&qp_table->lock, flags);
+}
+EXPORT_SYMBOL_GPL(mlx4_qp_remove);
 
 void mlx4_qp_free(struct mlx4_dev *dev, struct mlx4_qp *qp)
 {

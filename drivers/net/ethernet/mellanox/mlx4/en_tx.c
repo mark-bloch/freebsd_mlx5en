@@ -197,6 +197,7 @@ void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 	buf_ring_free(ring->br, M_DEVBUF);
 	if (ring->bf_enabled)
 		mlx4_bf_free(mdev->dev, &ring->bf);
+	mlx4_qp_remove(mdev->dev, &ring->qp);
 	mlx4_qp_free(mdev->dev, &ring->qp);
 	mlx4_qp_release_range(priv->mdev->dev, ring->qpn, 1);
 	mlx4_en_unmap_buffer(&ring->wqres.buf);

@@ -762,6 +762,7 @@ static int mlx4_en_config_rss_qp(struct mlx4_en_priv *priv, int qpn,
 
 	err = mlx4_qp_to_ready(mdev->dev, &ring->wqres.mtt, context, qp, state);
 	if (err) {
+		mlx4_qp_remove(mdev->dev, qp);
 		mlx4_qp_free(mdev->dev, qp);
 	}
 	mlx4_en_update_rx_prod_db(ring);
@@ -795,6 +796,7 @@ void mlx4_en_destroy_drop_qp(struct mlx4_en_priv *priv)
 	u32 qpn;
 
 	qpn = priv->drop_qp.qpn;
+	mlx4_qp_remove(priv->mdev->dev, &priv->drop_qp);
 	mlx4_qp_free(priv->mdev->dev, &priv->drop_qp);
 	mlx4_qp_release_range(priv->mdev->dev, qpn, 1);
 }
@@ -878,11 +880,13 @@ int mlx4_en_config_rss_steer(struct mlx4_en_priv *priv)
 indir_err:
 	mlx4_qp_modify(mdev->dev, NULL, rss_map->indir_state,
 		       MLX4_QP_STATE_RST, NULL, 0, 0, &rss_map->indir_qp);
+	mlx4_qp_remove(mdev->dev, &rss_map->indir_qp);
 	mlx4_qp_free(mdev->dev, &rss_map->indir_qp);
 rss_err:
 	for (i = 0; i < good_qps; i++) {
 		mlx4_qp_modify(mdev->dev, NULL, rss_map->state[i],
 			       MLX4_QP_STATE_RST, NULL, 0, 0, &rss_map->qps[i]);
+		mlx4_qp_remove(mdev->dev, &rss_map->qps[i]);
 		mlx4_qp_free(mdev->dev, &rss_map->qps[i]);
 	}
 	mlx4_qp_release_range(mdev->dev, rss_map->base_qpn, priv->rx_ring_num);
@@ -897,11 +901,13 @@ void mlx4_en_release_rss_steer(struct mlx4_en_priv *priv)
 
 	mlx4_qp_modify(mdev->dev, NULL, rss_map->indir_state,
 		       MLX4_QP_STATE_RST, NULL, 0, 0, &rss_map->indir_qp);
+	mlx4_qp_remove(mdev->dev, &rss_map->indir_qp);
 	mlx4_qp_free(mdev->dev, &rss_map->indir_qp);
 
 	for (i = 0; i < priv->rx_ring_num; i++) {
 		mlx4_qp_modify(mdev->dev, NULL, rss_map->state[i],
 			       MLX4_QP_STATE_RST, NULL, 0, 0, &rss_map->qps[i]);
+		mlx4_qp_remove(mdev->dev, &rss_map->qps[i]);
 		mlx4_qp_free(mdev->dev, &rss_map->qps[i]);
 	}
 	mlx4_qp_release_range(mdev->dev, rss_map->base_qpn, priv->rx_ring_num);
