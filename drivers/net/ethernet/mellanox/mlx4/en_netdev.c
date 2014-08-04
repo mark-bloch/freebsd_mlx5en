@@ -1184,6 +1184,9 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 	if (!mlx4_en_QUERY_PORT(mdev, priv->port)) {
 		if (priv->port_state.link_state) {
 			priv->last_link_state = MLX4_DEV_EVENT_PORT_UP;
+			/* Important note: the following call for if_link_state_change
+			 * is needed for interface up scenario (start port, link state
+			 * change) */
 			if_link_state_change(priv->dev, LINK_STATE_UP);
 			en_dbg(HW, priv, "Link Up\n");
 		}
