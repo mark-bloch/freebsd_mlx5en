@@ -634,7 +634,7 @@ static void mlx4_en_put_qp(struct mlx4_en_priv *priv)
 
 				mlx4_unregister_mac(dev, priv->port, mac);
 				hlist_del(&entry->hlist);
-				//kfree_rcu(entry, rcu);
+				kfree(entry);
 			}
 		}
 
