@@ -109,7 +109,7 @@ struct file_operations {
 	int (*release)(struct inode *, struct file *);
 	int (*fasync)(int, struct file *, int);
 
-/* MY: Although not supported in FreeBSD, to align with Linux code
+/* Although not supported in FreeBSD, to align with Linux code
  * we are adding llseek() only when it is mapped to no_llseek which returns 
  * an illegal seek error
  */

@@ -756,7 +756,7 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 			 (dev->caps.flags & MLX4_DEV_CAP_FLAG_DPDP) &&
 			 (dev->caps.flags & MLX4_DEV_CAP_FLAG_SENSE_SUPPORT));
 
-		/* MY: disablling auto sense for default Eth ports support */
+		/* Disablling auto sense for default Eth ports support */
 		mlx4_priv(dev)->sense.sense_allowed[i] = 0;
 
 		/*

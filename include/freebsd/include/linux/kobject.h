@@ -154,9 +154,9 @@ int	kobject_set_name(struct kobject *kobj, const char *fmt, ...);
 int	kobject_init_and_add(struct kobject *kobj, struct kobj_type *ktype,
 	    struct kobject *parent, const char *fmt, ...);
 
-/* MY - sysfs.h calles for 'kobject' which is defined here, 
+/* sysfs.h calles for 'kobject' which is defined here, 
  * so we need to add the include only after the 'kobject' def.
- * */
+ */
 #include <linux/sysfs.h>
 
 struct kobj_attribute {

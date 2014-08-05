@@ -940,7 +940,7 @@ retry:
 		memcpy(tx_desc->lso.header, mb->m_data, lso_header_size);
 		data = ((void *)&tx_desc->lso + ALIGN(lso_header_size + 4,
 						      DS_SIZE));
-		/* MY: lso header is part of m_data.
+		/* lso header is part of m_data.
 		 * need to omit when mapping DMA */
 		mb->m_data += lso_header_size;
 		mb->m_len -= lso_header_size;
@@ -961,7 +961,7 @@ retry:
                         }
                         dma = pci_map_single(mdev->dev->pdev, m->m_data,
                                              m->m_len, PCI_DMA_TODEVICE);
-#if 0	/* MY: pci_dma_mapping_error not implemented yet */ 
+#if 0	/* pci_dma_mapping_error not implemented yet */ 
 			if (unlikely(pci_dma_mapping_error(mdev->dev->pdev, dma)))
 				goto tx_drop_unmap;
 #endif
@@ -1094,7 +1094,7 @@ retry:
 	}
 
 	return 0;
-#if 0 /* MY: uncomment after pci_dma_mapping_error is implemented */
+#if 0 /* uncomment after pci_dma_mapping_error is implemented */
 tx_drop_unmap:
 	en_err(priv, "DMA mapping error\n");
 
