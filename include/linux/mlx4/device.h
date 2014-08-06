@@ -1250,11 +1250,6 @@ int mlx4_wol_write(struct mlx4_dev *dev, u64 config, int port);
 int mlx4_counter_alloc(struct mlx4_dev *dev, u8 port, u32 *idx);
 void mlx4_counter_free(struct mlx4_dev *dev, u8 port, u32 idx);
 
-/* XXX Meny - Virtualization related. commented out till we map FreeBSD virtualization support
-int mlx4_get_vport_statistics(struct mlx4_dev *dev, int port,
-			      struct net_device_stats *stats, int reset);
-*/
-
 int mlx4_flow_attach(struct mlx4_dev *dev,
 		     struct mlx4_net_trans_rule *rule, u64 *reg_id);
 int mlx4_flow_detach(struct mlx4_dev *dev, u64 reg_id);
