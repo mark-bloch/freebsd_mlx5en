@@ -31,8 +31,6 @@
 #define	_FBSD_COMPLETION_H_
 
 #include <linux/errno.h>
-//#include <linux/sched.h> /* XXX delete or prove needed */
-//#include <linux/wait.h>  /* XXX delete or prove needed */      
 
 #include <sys/param.h>
 #include <sys/systm.h>

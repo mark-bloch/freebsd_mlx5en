@@ -29,6 +29,6 @@
 #ifndef _ASM_PGTABLE_H_
 #define	_ASM_PGTABLE_H_
 
-typedef int	pgprot_t; //untill proven needed
+typedef int	pgprot_t;
 
 #endif	/* _ASM_PGTABLE_H_ */

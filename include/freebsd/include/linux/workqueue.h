@@ -95,7 +95,8 @@ do {									\
 inline int queue_work (struct workqueue_struct *q, struct work_struct *work)
 {
 	(work)->taskqueue = (q)->taskqueue;
-        return !taskqueue_enqueue((q)->taskqueue, &(work)->work_task); // Return opposite val to align with Linux logic 
+	/* Return opposite val to align with Linux logic */
+        return !taskqueue_enqueue((q)->taskqueue, &(work)->work_task);
 }
 
 static inline void

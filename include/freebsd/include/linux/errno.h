@@ -38,7 +38,7 @@
 #define ERESTARTSYS     ERESTART		/* XXX this is negative */
 #define ENOTSUPP        EOPNOTSUPP
 
-// Taken from Linux kernel: include/uapi/asm-generic/errno.h
+/* Taken from Linux kernel: include/uapi/asm-generic/errno.h */
 #define ENONET          64 /* Machine is not on the network */
 
 #endif	/* _FBSD_ERRNO_H_ */

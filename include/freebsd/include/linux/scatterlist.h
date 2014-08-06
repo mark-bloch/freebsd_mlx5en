@@ -30,7 +30,6 @@
 #ifndef	_LINUX_SCATTERLIST_H_
 #define	_LINUX_SCATTERLIST_H_
 
-//#include <linux/string.h> /* XXX delete or prove needed */
 #include <linux/page.h>
 
 struct scatterlist {
