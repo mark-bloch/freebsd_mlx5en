@@ -345,7 +345,8 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 		}
 	}
 	/* Send a copy of the frame to the BPF listener */
-        ETHER_BPF_MTAP(priv->dev, mb);
+        if (priv->dev && priv->dev->if_bpf)
+                ETHER_BPF_MTAP(priv->dev, mb);
         m_freem(mb);
 	return tx_info->nr_txbb;
 }
