@@ -312,9 +312,6 @@ int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
 		goto err_hwq;
 	}
 	ring->buf = ring->wqres.buf.direct.buf;
-#if 0
-	ring->hwtstamp_rx_filter = priv->hwtstamp_config.rx_filter;
-#endif
 	*pring = ring;
 	return 0;
 
@@ -691,8 +688,8 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 	struct mlx4_en_priv *priv = netdev_priv(cq->dev);
         int done;
 
-        // shoot one within the irq context 
-        // I guess it is because there is no NAPI in freeBSD
+        // Shoot one within the irq context 
+        // Because there is no NAPI in freeBSD
         done = mlx4_en_poll_rx_cq(cq, MLX4_EN_RX_BUDGET);
 	if (priv->port_up  && (done == MLX4_EN_RX_BUDGET) ) {
 		taskqueue_enqueue(cq->tq, &cq->cq_task);
@@ -701,12 +698,6 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 		mlx4_en_arm_cq(priv, cq);
 	}
 }
-#if 0
-void mlx4_en_rx_irq(struct mlx4_cq *mcq)
-{
-        return;
-}
-#endif
 
 void mlx4_en_rx_que(void *context, int pending)
 {
@@ -729,12 +720,7 @@ static int mlx4_en_config_rss_qp(struct mlx4_en_priv *priv, int qpn,
 	struct mlx4_en_dev *mdev = priv->mdev;
 	struct mlx4_qp_context *context;
 	int err = 0;
-#if 0
-        int disable_vstrip = 0;
 
-        if (priv->hwtstamp_config.rx_filter)
-                disable_vstrip = 1;
-#endif
 	context = kmalloc(sizeof *context , GFP_KERNEL);
 	if (!context) {
 		en_err(priv, "Failed to allocate qp context\n");

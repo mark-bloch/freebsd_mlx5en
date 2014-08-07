@@ -161,9 +161,6 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 		ring->bf_enabled = false;
 	} else
 		ring->bf_enabled = true;
-#if 0
-        ring->hwtstamp_tx_type = priv->hwtstamp_config.tx_type;
-#endif
 	ring->queue_index = queue_idx;
 	if (queue_idx < priv->num_tx_rings_p_up )
 		CPU_SET(queue_idx, &ring->affinity_mask);
@@ -236,10 +233,6 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 
 	err = mlx4_qp_to_ready(mdev->dev, &ring->wqres.mtt, &ring->context,
 			       &ring->qp, &ring->qp_state);
-#if 0
-        if (!user_prio && cpu_online(ring->queue_index))
-                netif_set_xps_queue(priv->dev, &ring->affinity_mask,ring->queue_index);
-#endif
 	return err;
 }
 
@@ -294,14 +287,7 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 	void *end = ring->buf + ring->buf_size;
 	int frags = tx_info->nr_segs;;
 	int i;
-#if 0
-        struct skb_shared_hwtstamps hwts;
 
-        if (timestamp) {                
-                mlx4_en_fill_hwtstamps(mdev, &hwts, timestamp);         
-                skb_tstamp_tx(skb, &hwts);              
-        }
-#endif
 	/* Optimize the common case when there are no wraparounds */
 	if (likely((void *) tx_desc + tx_info->nr_txbb * TXBB_SIZE <= end)) {
 		if (!tx_info->inl) {
@@ -433,10 +419,6 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 		do {
 			txbbs_skipped += ring->last_nr_txbb;
 			ring_index = (ring_index + ring->last_nr_txbb) & size_mask;
-#if 0 /* TIME STAMPING */
-			if (ring->tx_info[ring_index].ts_requested)
-				timestamp = mlx4_en_get_cqe_ts(cqe);
-#endif
 			/* free next descriptor */
 			ring->last_nr_txbb = mlx4_en_free_tx_desc(
 					priv, ring, ring_index,
@@ -961,10 +943,6 @@ retry:
                         }
                         dma = pci_map_single(mdev->dev->pdev, m->m_data,
                                              m->m_len, PCI_DMA_TODEVICE);
-#if 0	/* pci_dma_mapping_error not implemented yet */ 
-			if (unlikely(pci_dma_mapping_error(mdev->dev->pdev, dma)))
-				goto tx_drop_unmap;
-#endif
                         data->addr = cpu_to_be64(dma);
                         data->lkey = cpu_to_be32(mdev->mr.key);
                         wmb();
@@ -978,17 +956,6 @@ retry:
                 tx_info->inl = 0;
 	}
 
-#if 0 /* TIME STAMPING */
-	/*
-	 * For timestamping add flag to skb_shinfo and
-	 * set flag for further reference
-	 */
-	if (ring->hwtstamp_tx_type == HWTSTAMP_TX_ON &&
-	    skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) {
-		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
-		tx_info->ts_requested = 1;
-	}
-#endif
 
 	/* Prepare ctrl segement apart opcode+ownership, which depends on
 	 * whether LSO is used */
@@ -1065,9 +1032,6 @@ retry:
 	/* If we used a bounce buffer then copy descriptor back into place */
 	if (unlikely(bounce))
 		tx_desc = mlx4_en_bounce_to_desc(priv, ring, index, desc_size);
-#if 0 /* TIME STAMPING */
-	skb_tx_timestamp(skb);
-#endif
 	if (ring->bf_enabled && desc_size <= MAX_BF && !bounce && !vlan_tag) {
 		*(__be32 *) (&tx_desc->ctrl.vlan_tag) |= cpu_to_be32(ring->doorbell_qpn);
 		op_own |= htonl((bf_index & 0xffff) << 8);
@@ -1094,21 +1058,9 @@ retry:
 	}
 
 	return 0;
-#if 0 /* uncomment after pci_dma_mapping_error is implemented */
-tx_drop_unmap:
-	en_err(priv, "DMA mapping error\n");
-
-	for (; i > 0 ; i--) {
-		data--;
-		pci_unmap_single(mdev->pdev, dma,
-					m->m_len, PCI_DMA_TODEVICE);
-	}
-#endif
 tx_drop:
 	*mbp = NULL;
         m_freem(mb);
-        //priv->stats.tx_dropped++;
-        //ring->errors++;
         return EINVAL;
 }
 

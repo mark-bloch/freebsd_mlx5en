@@ -267,7 +267,7 @@ struct mlx4_en_tx_desc {
 
 #define MLX4_EN_USE_SRQ		0x01000000
 
-#define MLX4_EN_TX_BUDGET 64*4 //Shahar I've multiply the linux val(64) by 4 to compensate for no NAPI in freeBSD - not sure it's the acurate thing to do.
+#define MLX4_EN_TX_BUDGET 64*4 //Compensate for no NAPI in freeBSD - might need some fine tunning in the future.
 #define MLX4_EN_RX_BUDGET 64
 
 #define MLX4_EN_CX3_LOW_ID	0x1000
@@ -846,11 +846,6 @@ int mlx4_SET_VLAN_FLTR(struct mlx4_dev *dev, struct mlx4_en_priv *priv);
 int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset);
 int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port);
 int mlx4_en_get_vport_stats(struct mlx4_en_dev *mdev, u8 port);
-/* XXX Meny - This decleration has moved to mlx4_stats.h to be visible for both mlx4_core and mlx4_en
-int mlx4_get_vport_ethtool_stats(struct mlx4_dev *dev, int port,
-                         struct mlx4_en_vport_stats *vport_stats,
-                         int reset);
-*/
 void mlx4_en_create_debug_files(struct mlx4_en_priv *priv);
 void mlx4_en_delete_debug_files(struct mlx4_en_priv *priv);
 int mlx4_en_register_debugfs(void);

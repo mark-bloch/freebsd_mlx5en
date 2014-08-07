@@ -451,18 +451,6 @@ static void mlx4_en_vlan_rx_kill_vid(void *arg, struct net_device *dev, u16 vid)
 	mutex_unlock(&mdev->state_lock);
 
 }
-#if 0
-static void mlx4_en_u64_to_mac(unsigned char dst_mac[ETH_ALEN + 2], u64 src_mac)
-{
-	int i;
-
-	for (i = ETH_ALEN; i; i--) {
-		dst_mac[i - 1] = src_mac & 0xff;
-		src_mac >>= 8;
-	}
-	memset(&dst_mac[ETH_ALEN], 0, 2);
-}
-#endif
 
 static int mlx4_en_uc_steer_add(struct mlx4_en_priv *priv,
 				unsigned char *mac, int *qpn, u64 *reg_id)
@@ -644,89 +632,6 @@ static void mlx4_en_put_qp(struct mlx4_en_priv *priv)
 		priv->flags &= ~MLX4_EN_FLAG_FORCE_PROMISC;
 	}
 }
-#if 0
-static int mlx4_en_replace_mac(struct mlx4_en_priv *priv, int qpn,
-			       unsigned char *new_mac, unsigned char *prev_mac)
-{
-	struct mlx4_en_dev *mdev = priv->mdev;
-	struct mlx4_dev *dev = mdev->dev;
-	int err = 0;
-	u64 new_mac_u64 = mlx4_mac_to_u64(new_mac);
-
-	if (dev->caps.steering_mode != MLX4_STEERING_MODE_A0) {
-		struct hlist_head *bucket;
-		unsigned int mac_hash;
-		struct mlx4_mac_entry *entry;
-		struct hlist_node *n, *tmp;
-		u64 prev_mac_u64 = mlx4_mac_to_u64(prev_mac);
-
-		bucket = &priv->mac_hash[prev_mac[MLX4_EN_MAC_HASH_IDX]];
-		hlist_for_each_entry_safe(entry, n, tmp, bucket, hlist) {
-			if (!memcmp(entry->mac, prev_mac, ETH_ALEN)) {
-				mlx4_en_uc_steer_release(priv, entry->mac,
-							 qpn, entry->reg_id);
-				mlx4_unregister_mac(dev, priv->port,
-						    prev_mac_u64);
-				hlist_del(&entry->hlist);
-				memcpy(entry->mac, new_mac, ETH_ALEN);
-				entry->reg_id = 0;
-				mac_hash = new_mac[MLX4_EN_MAC_HASH_IDX];
-				hlist_add_head(&entry->hlist,
-						   &priv->mac_hash[mac_hash]);
-				mlx4_register_mac(dev, priv->port, new_mac_u64);
-				err = mlx4_en_uc_steer_add(priv, new_mac,
-							   &qpn,
-							   &entry->reg_id);
-				return err;
-			}
-		}
-		return -EINVAL;
-	}
-
-	return __mlx4_replace_mac(dev, priv->port, qpn, new_mac_u64);
-}
-
-static int mlx4_en_do_set_mac(struct mlx4_en_priv *priv,
-				unsigned char new_mac[ETH_ALEN + 2])
-{
-	int err = 0;
-
-	if (priv->port_up) {
-		/* Remove old MAC and insert the new one */
-		err = mlx4_en_replace_mac(priv, priv->base_qpn,
-					  new_mac, priv->current_mac);
-		if (err)
-			en_err(priv, "Failed changing HW MAC address\n");
-	} else
-		en_dbg(HW, priv, "Port is down while registering mac, exiting...\n");
-
-	if (!err)
-		memcpy(priv->current_mac, new_mac, sizeof(priv->current_mac));
-
-	return err;
-}
-
-static int mlx4_en_set_mac(struct net_device *dev, void *addr)
-{
-	struct mlx4_en_priv *priv = netdev_priv(dev);
-	struct mlx4_en_dev *mdev = priv->mdev;
-	struct sockaddr *saddr = addr;
-	unsigned char new_mac[ETH_ALEN + 2];
-	int err;
-
-	if (!is_valid_ether_addr(saddr->sa_data))
-		return -EADDRNOTAVAIL;
-
-	mutex_lock(&mdev->state_lock);
-	memcpy(new_mac, saddr->sa_data, ETH_ALEN);
-	err = mlx4_en_do_set_mac(priv, new_mac);
-	if (!err)
-		memcpy(dev->dev_addr, saddr->sa_data, ETH_ALEN);
-	mutex_unlock(&mdev->state_lock);
-
-	return err;
-}
-#endif
 
 static void mlx4_en_clear_list(struct net_device *dev)
 {
@@ -1041,128 +946,6 @@ static void mlx4_en_do_multicast(struct mlx4_en_priv *priv,
 		}
 	}
 }
-#if 0
-static void mlx4_en_do_uc_filter(struct mlx4_en_priv *priv,
-				 struct net_device *dev,
-				 struct mlx4_en_dev *mdev)
-{
-	struct netdev_hw_addr *ha;
-	struct mlx4_mac_entry *entry;
-	struct hlist_node *n, *tmp;
-	bool found;
-	u64 mac;
-	int err = 0;
-	struct hlist_head *bucket;
-	unsigned int i;
-	int removed = 0;
-	u32 prev_flags;
-
-	/* Note that we do not need to protect our mac_hash traversal with rcu,
-	 * since all modification code is protected by mdev->state_lock
-	 */
-
-	/* find what to remove */
-	for (i = 0; i < MLX4_EN_MAC_HASH_SIZE; ++i) {
-		bucket = &priv->mac_hash[i];
-		hlist_for_each_entry_safe(entry, n, tmp, bucket, hlist) {
-			found = false;
-			netdev_for_each_uc_addr(ha, dev) {
-				if (ether_addr_equal_64bits(entry->mac,
-							    ha->addr)) {
-					found = true;
-					break;
-				}
-			}
-
-			/* MAC address of the port is not in uc list */
-			if (ether_addr_equal_64bits(entry->mac,
-						    priv->current_mac))
-				found = true;
-
-			if (!found) {
-				mac = mlx4_mac_to_u64(entry->mac);
-				mlx4_en_uc_steer_release(priv, entry->mac,
-							 priv->base_qpn,
-							 entry->reg_id);
-				mlx4_unregister_mac(mdev->dev, priv->port, mac);
-
-				hlist_del_rcu(&entry->hlist);
-				kfree_rcu(entry, rcu);
-				en_dbg(DRV, priv, "Removed MAC %pM on port:%d\n",
-				       entry->mac, priv->port);
-				++removed;
-			}
-		}
-	}
-
-	/* if we didn't remove anything, there is no use in trying to add
-	 * again once we are in a forced promisc mode state
-	 */
-	if ((priv->flags & MLX4_EN_FLAG_FORCE_PROMISC) && 0 == removed)
-		return;
-
-	prev_flags = priv->flags;
-	priv->flags &= ~MLX4_EN_FLAG_FORCE_PROMISC;
-
-	/* find what to add */
-	netdev_for_each_uc_addr(ha, dev) {
-		found = false;
-		bucket = &priv->mac_hash[ha->addr[MLX4_EN_MAC_HASH_IDX]];
-		hlist_for_each_entry(entry, n, bucket, hlist) {
-			if (ether_addr_equal_64bits(entry->mac, ha->addr)) {
-				found = true;
-				break;
-			}
-		}
-
-		if (!found) {
-			entry = kmalloc(sizeof(*entry), GFP_KERNEL);
-			if (!entry) {
-				en_err(priv, "Failed adding MAC %pM on port:%d (out of memory)\n",
-				       ha->addr, priv->port);
-				priv->flags |= MLX4_EN_FLAG_FORCE_PROMISC;
-				break;
-			}
-			mac = mlx4_mac_to_u64(ha->addr);
-			memcpy(entry->mac, ha->addr, ETH_ALEN);
-			err = mlx4_register_mac(mdev->dev, priv->port, mac);
-			if (err < 0) {
-				en_err(priv, "Failed registering MAC %pM on port %d: %d\n",
-				       ha->addr, priv->port, err);
-				kfree(entry);
-				priv->flags |= MLX4_EN_FLAG_FORCE_PROMISC;
-				break;
-			}
-			err = mlx4_en_uc_steer_add(priv, ha->addr,
-						   &priv->base_qpn,
-						   &entry->reg_id);
-			if (err) {
-				en_err(priv, "Failed adding MAC %pM on port %d: %d\n",
-				       ha->addr, priv->port, err);
-				mlx4_unregister_mac(mdev->dev, priv->port, mac);
-				kfree(entry);
-				priv->flags |= MLX4_EN_FLAG_FORCE_PROMISC;
-				break;
-			} else {
-				unsigned int mac_hash;
-				en_dbg(DRV, priv, "Added MAC %pM on port:%d\n",
-				       ha->addr, priv->port);
-				mac_hash = ha->addr[MLX4_EN_MAC_HASH_IDX];
-				bucket = &priv->mac_hash[mac_hash];
-				hlist_add_head_rcu(&entry->hlist, bucket);
-			}
-		}
-	}
-
-	if (priv->flags & MLX4_EN_FLAG_FORCE_PROMISC) {
-		en_warn(priv, "Forcing promiscuous mode on port:%d\n",
-			priv->port);
-	} else if (prev_flags & MLX4_EN_FLAG_FORCE_PROMISC) {
-		en_warn(priv, "Stop forcing promiscuous mode on port:%d\n",
-			priv->port);
-	}
-}
-#endif
 
 static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 {
@@ -1191,11 +974,6 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 			en_dbg(HW, priv, "Link Up\n");
 		}
 	}
-#if 0
-	if (dev->priv_flags & IFF_UNICAST_FLT)
-		mlx4_en_do_uc_filter(priv, dev, mdev);
-
-#endif
 
 	/* Promsicuous mode: disable all filters */
 	if ((dev->if_flags & IFF_PROMISC) ||
@@ -1388,10 +1166,6 @@ static void mlx4_en_service_task(struct work_struct *work)
 
 	mutex_lock(&mdev->state_lock);
 	if (mdev->device_up) {
-#if 0
-		if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_TS)
-			mlx4_en_ptp_overflow_check(mdev);
-#endif
 		queue_delayed_work(mdev->workqueue, &priv->service_task,
 				   SERVICE_TASK_DELAY);
 	}
@@ -1543,7 +1317,6 @@ int mlx4_en_start_port(struct net_device *dev)
 			mlx4_en_deactivate_cq(priv, cq);
 			goto tx_err;
 		}
-                //tx_ring->tx_queue = netdev_get_tx_queue(dev, i);
 
 		/* Arm CQ for TX completions */
 		mlx4_en_arm_cq(priv, cq);
@@ -1703,17 +1476,6 @@ void mlx4_en_stop_port(struct net_device *dev)
 
 	/* Flush multicast filter */
 	mlx4_SET_MCAST_FLTR(mdev->dev, priv->port, 0, 1, MLX4_MCAST_CONFIG);
-#if 0   
-        //Need to port flow steering (ethtool_list)
-        /* Remove flow steering rules for the port*/            
-        if (mdev->dev->caps.steering_mode == MLX4_STEERING_MODE_DEVICE_MANAGED) {                
-                list_for_each_entry_safe(flow, tmp_flow,                
-                                &priv->ethtool_list, list) {           
-                        mlx4_flow_detach(mdev->dev, flow->id);          
-                        list_del(&flow->list);          
-                }               
-        }
-#endif
 	mlx4_en_destroy_drop_qp(priv);
 
 	/* Free TX Rings */
@@ -3210,40 +2972,6 @@ struct mlx4_en_pkt_stats {
 	    "TX Greater Then 1548 Bytes Packets");
 
 
-#if 0
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio0", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[0], "TX Priority 0 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio1", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[1], "TX Priority 1 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio2", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[2], "TX Priority 2 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio3", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[3], "TX Priority 3 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio4", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[4], "TX Priority 4 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio5", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[5], "TX Priority 5 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio6", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[6], "TX Priority 6 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_prio7", CTLFLAG_RD,
-	    &priv->pkstats.tx_prio[7], "TX Priority 7 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio0", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[0], "RX Priority 0 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio1", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[1], "RX Priority 1 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio2", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[2], "RX Priority 2 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio3", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[3], "RX Priority 3 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio4", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[4], "RX Priority 4 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio5", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[5], "RX Priority 5 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio6", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[6], "RX Priority 6 packets");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_prio7", CTLFLAG_RD,
-	    &priv->pkstats.rx_prio[7], "RX Priority 7 packets");
-#endif
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
 		tx_ring = priv->tx_ring[i];

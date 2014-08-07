@@ -150,11 +150,6 @@ int mlx4_en_activate_cq(struct mlx4_en_priv *priv, struct mlx4_en_cq *cq,
 
 	if (!cq->is_tx)
 		cq->size = priv->rx_ring[cq->ring]->actual_size;
-#if 0
-        if ((cq->is_tx && priv->hwtstamp_config.tx_type) ||
-                (!cq->is_tx && priv->hwtstamp_config.rx_filter))
-                        timestamp_en = 1;
-#endif
 	err = mlx4_cq_alloc(mdev->dev, cq->size, &cq->wqres.mtt,
 			    &mdev->priv_uar, cq->wqres.db.dma, &cq->mcq,
 			    cq->vector, 0, timestamp_en);
