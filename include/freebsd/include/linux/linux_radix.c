@@ -118,8 +118,9 @@ radix_tree_delete(struct radix_tree_root *root, unsigned long index)
 			if (node->slots[0]) {
                                 /* One leaf-node left */
                                 free(node->slots[0], M_RADIX);
+				node->slots[0] = NULL;
                                 node->count--;
-                        }
+                       }
 
 		}
 out:
