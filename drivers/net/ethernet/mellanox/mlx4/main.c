@@ -61,7 +61,6 @@
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("Mellanox ConnectX HCA low-level driver");
 MODULE_LICENSE("Dual BSD/GPL");
-//MODULE_VERSION(DRV_VERSION); /* This Linux macro collides with the FBSD one we use later */
 
 struct workqueue_struct *mlx4_wq;
 
@@ -507,8 +506,6 @@ int mlx4_get_val(struct mlx4_dbdf2val *tbl, struct pci_dev *pdev, int idx,
 		return -EINVAL;
 
 	if (!pdev->bus) {
-		/* We get this message in FreeBSD all the time. since we don't support pr_debug currently, just comment it out */
-		/* pr_debug("mlx4_core: pci_dev without valid bus number\n"); */
 		return -EINVAL;
 	}
 
@@ -2672,77 +2669,6 @@ if_stat_out:
 	return err;
 }
 EXPORT_SYMBOL_GPL(mlx4_get_vport_ethtool_stats);
-
- /* XXX Meny - Virtualization related. commented out till we map FreeBSD virtualization support
- * 
-int mlx4_get_vport_statistics(struct mlx4_dev *dev, int port,
-			      struct net_device_stats *stats, int reset)
-{
-	struct mlx4_priv *priv = mlx4_priv(dev);
-	struct mlx4_cmd_mailbox *if_stat_mailbox = NULL;
-	union  mlx4_counter *counter;
-	int err;
-	u32 if_stat_in_mod;
-	struct counter_index *vport, *tmp_vport;
-
-	if (!stats)
-		return -EINVAL;
-
-	if_stat_mailbox = mlx4_alloc_cmd_mailbox(dev);
-	if (IS_ERR(if_stat_mailbox)) {
-		err = PTR_ERR(if_stat_mailbox);
-		return err;
-	}
-
-	mutex_lock(&priv->counters_table.mutex);
-	list_for_each_entry_safe(vport, tmp_vport,
-				 &priv->counters_table.global_port_list[port - 1],
-				 list) {
-		if (vport->index == MLX4_SINK_COUNTER_INDEX)
-			continue;
-
-		memset(if_stat_mailbox->buf, 0, sizeof(union  mlx4_counter));
-		if_stat_in_mod = (vport->index & 0xff) | ((reset & 1) << 31);
-		err = mlx4_cmd_box(dev, 0, if_stat_mailbox->dma,
-				   if_stat_in_mod, 0,
-				   MLX4_CMD_QUERY_IF_STAT,
-				   MLX4_CMD_TIME_CLASS_C,
-				   MLX4_CMD_NATIVE);
-		if (err) {
-			mlx4_dbg(dev, "%s: failed to read statistics for counter index %d\n",
-				 __func__, vport->index);
-			goto if_stat_out;
-		}
-		counter = (union mlx4_counter *)if_stat_mailbox->buf;
-		if ((counter->control.cnt_mode & 0xf) == 1) {
-			stats->rx_packets += be64_to_cpu(counter->ext.counters[0].IfRxBroadcastFrames) +
-				be64_to_cpu(counter->ext.counters[0].IfRxUnicastFrames) +
-				be64_to_cpu(counter->ext.counters[0].IfRxMulticastFrames);
-			stats->tx_packets += be64_to_cpu(counter->ext.counters[0].IfTxBroadcastFrames) +
-				be64_to_cpu(counter->ext.counters[0].IfTxUnicastFrames) +
-				be64_to_cpu(counter->ext.counters[0].IfTxMulticastFrames);
-			stats->rx_bytes += be64_to_cpu(counter->ext.counters[0].IfRxBroadcastOctets) +
-				be64_to_cpu(counter->ext.counters[0].IfRxUnicastOctets) +
-				be64_to_cpu(counter->ext.counters[0].IfRxMulticastOctets);
-			stats->tx_bytes += be64_to_cpu(counter->ext.counters[0].IfTxBroadcastOctets) +
-				be64_to_cpu(counter->ext.counters[0].IfTxUnicastOctets) +
-				be64_to_cpu(counter->ext.counters[0].IfTxMulticastOctets);
-			stats->rx_errors += be64_to_cpu(counter->ext.counters[0].IfRxErrorFrames);
-			stats->rx_dropped += be64_to_cpu(counter->ext.counters[0].IfRxNoBufferFrames);
-			stats->tx_dropped += be64_to_cpu(counter->ext.counters[0].IfTxDroppedFrames);
-			stats->multicast += be64_to_cpu(counter->ext.counters[0].IfTxMulticastFrames) +
-				be64_to_cpu(counter->ext.counters[0].IfRxMulticastFrames);
-		}
-	}
-
-if_stat_out:
-	mutex_unlock(&priv->counters_table.mutex);
-	mlx4_free_cmd_mailbox(dev, if_stat_mailbox);
-
-	return err;
-}
-EXPORT_SYMBOL_GPL(mlx4_get_vport_statistics);
-*/
 
 static int mlx4_setup_hca(struct mlx4_dev *dev)
 {
