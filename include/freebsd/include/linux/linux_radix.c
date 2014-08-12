@@ -115,13 +115,6 @@ radix_tree_delete(struct radix_tree_root *root, unsigned long index)
 			height++;
 			node = stack[height];
 			idx = radix_pos(index, height);
-			if (node->slots[0]) {
-                                /* One leaf-node left */
-                                free(node->slots[0], M_RADIX);
-				node->slots[0] = NULL;
-                                node->count--;
-                       }
-
 		}
 out:
 	return (item);
