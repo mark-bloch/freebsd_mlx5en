@@ -66,6 +66,7 @@ struct ib_umem {
 	int                     hugetlb;
 	struct work_struct	work;
 	unsigned long		diff;
+	unsigned long           start;
 	struct sg_table sg_head;
 	int             nmap;
 	int             npages;

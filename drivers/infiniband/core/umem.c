@@ -40,7 +40,13 @@
 #include <linux/dma-attrs.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <sys/priv.h>
+#include <sys/resourcevar.h>
+#include <vm/vm_pageout.h>
+#include <vm/vm_map.h>
 #include "uverbs.h"
+
+#define IB_UMEM_MAX_PAGE_CHUNK		(PAGE_SIZE / sizeof (struct page *))
 
 static int allow_weak_ordering;
 module_param_named(weak_ordering, allow_weak_ordering, int, 0444);
@@ -180,25 +186,32 @@ static void peer_umem_release(struct ib_umem *umem)
 
 static void __ib_umem_release(struct ib_device *dev, struct ib_umem *umem, int dirty)
 {
+
+	vm_object_t object;
 	struct scatterlist *sg;
 	struct page *page;
 	int i;
 
+	object = NULL;
 	if (umem->nmap > 0)
 		ib_dma_unmap_sg(dev, umem->sg_head.sgl,
-				    umem->nmap,
-				    DMA_BIDIRECTIONAL);
-
+			umem->nmap,
+			DMA_BIDIRECTIONAL);
 	for_each_sg(umem->sg_head.sgl, sg, umem->npages, i) {
-
 		page = sg_page(sg);
-		if (umem->writable && dirty)
-			set_page_dirty_lock(page);
-		put_page(page);
+		if (umem->writable && dirty) {
+			if (object && object != page->object)
+				VM_OBJECT_WUNLOCK(object);
+			if (object != page->object) {
+				object = page->object;
+				VM_OBJECT_WLOCK(object);
+			}
+			vm_page_dirty(page);
+		}
 	}
-
 	sg_free_table(&umem->sg_head);
-	return;
+	if (object)
+		VM_OBJECT_WUNLOCK(object);
 
 }
 
@@ -228,36 +241,62 @@ struct ib_umem *ib_umem_get_ex(struct ib_ucontext *context, unsigned long addr,
 			    size_t size, int access, int dmasync,
 			    int invalidation_supported)
 {
+
 	struct ib_umem *umem;
-	struct page **page_list;
-	struct vm_area_struct **vma_list;
-	unsigned long locked;
-	unsigned long lock_limit;
-	unsigned long cur_base;
-	unsigned long npages;
+	struct proc *proc;
+	pmap_t pmap;
+	vm_offset_t end, last, start;
+	vm_size_t npages;
+	int error;
 	int ret;
+	int ents;
 	int i;
 	DEFINE_DMA_ATTRS(attrs);
 	struct scatterlist *sg, *sg_list_start;
 	int need_release = 0;
 
-	if (dmasync)
-		dma_set_attr(DMA_ATTR_WRITE_BARRIER, &attrs);
-	else if (allow_weak_ordering)
-		dma_set_attr(DMA_ATTR_WEAK_ORDERING, &attrs);
+	error = priv_check(curthread, PRIV_VM_MLOCK);
+	if (error)
+		return ERR_PTR(-error);
 
-
-	if (!can_do_mlock())
-		return ERR_PTR(-EPERM);
-
+	last = addr + size;
+	start = addr & PAGE_MASK; /* Use the linux PAGE_MASK definition. */
+	end = roundup2(last, PAGE_SIZE); /* Use PAGE_MASK safe operation. */
+	if (last < addr || end < addr)
+		return ERR_PTR(-EINVAL);
+	npages = atop(end - start);
+	if (npages > vm_page_max_wired)
+		return ERR_PTR(-ENOMEM);
 	umem = kzalloc(sizeof *umem, GFP_KERNEL);
 	if (!umem)
 		return ERR_PTR(-ENOMEM);
+	proc = curthread->td_proc;
+	PROC_LOCK(proc);
+	if (ptoa(npages +
+		pmap_wired_count(vm_map_pmap(&proc->p_vmspace->vm_map))) >
+		lim_cur(proc, RLIMIT_MEMLOCK)) {
+			PROC_UNLOCK(proc);
+			kfree(umem);
+			return ERR_PTR(-ENOMEM);
+	}
+	PROC_UNLOCK(proc);
+	if (npages + cnt.v_wire_count > vm_page_max_wired) {
+		kfree(umem);
+		return ERR_PTR(-EAGAIN);
+	}
+	error = vm_map_wire(&proc->p_vmspace->vm_map, start, end,
+		VM_MAP_WIRE_USER | VM_MAP_WIRE_NOHOLES |
+			(umem->writable ? VM_MAP_WIRE_WRITE : 0));
+	if (error != KERN_SUCCESS) {
+		kfree(umem);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	umem->context   = context;
 	umem->length    = size;
 	umem->offset    = addr & ~PAGE_MASK;
 	umem->page_size = PAGE_SIZE;
+	umem->start     = addr;
 	/*
 	 * We ask for writable memory if any access flags other than
 	 * "remote read" are set.  "Local write" and "remote write"
@@ -266,48 +305,22 @@ struct ib_umem *ib_umem_get_ex(struct ib_ucontext *context, unsigned long addr,
 	 * "MW bind" can change permissions by binding a window.
 	 */
 	umem->writable  = !!(access & ~IB_ACCESS_REMOTE_READ);
+
 	if (invalidation_supported || context->peer_mem_private_data) {
 
 		struct ib_peer_memory_client *peer_mem_client;
 
 		peer_mem_client =  ib_get_peer_client(context, addr, size,
-					&umem->peer_mem_client_context,
-					&umem->peer_mem_srcu_key);
+			&umem->peer_mem_client_context,
+				&umem->peer_mem_srcu_key);
 		if (peer_mem_client)
 			return peer_umem_get(peer_mem_client, umem, addr,
-					dmasync, invalidation_supported);
+				dmasync, invalidation_supported);
 	}
 
-	/* We assume the memory is from hugetlb until proved otherwise */
-	umem->hugetlb   = 1;
+	umem->hugetlb = 0;
 
-	page_list = (struct page **) __get_free_page(GFP_KERNEL);
-	if (!page_list) {
-		kfree(umem);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	/*
-	 * if we can't alloc the vma_list, it's not so bad;
-	 * just assume the memory is not hugetlb memory
-	 */
-	vma_list = (struct vm_area_struct **) __get_free_page(GFP_KERNEL);
-	if (!vma_list)
-		umem->hugetlb = 0;
-
-	npages = PAGE_ALIGN(size + umem->offset) >> PAGE_SHIFT;
-
-	down_write(&current->mm->mmap_sem);
-
-	locked     = npages + current->mm->pinned_vm;
-	lock_limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;
-
-	if ((locked > lock_limit) && !capable(CAP_IPC_LOCK)) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	cur_base = addr & PAGE_MASK;
+	pmap = vm_map_pmap(&proc->p_vmspace->vm_map);
 
 	if (npages == 0) {
 		ret = -EINVAL;
@@ -322,23 +335,22 @@ struct ib_umem *ib_umem_get_ex(struct ib_ucontext *context, unsigned long addr,
 	sg_list_start = umem->sg_head.sgl;
 
 	while (npages) {
-		ret = get_user_pages(current, current->mm, cur_base,
-				     min_t(unsigned long, npages,
-					   PAGE_SIZE / sizeof (struct page *)),
-				     1, !umem->writable, page_list, vma_list);
-		if (ret < 0)
-			goto out;
 
-		umem->npages += ret;
-		cur_base += ret * PAGE_SIZE;
-		npages	 -= ret;
+		ents = min_t(int, npages, IB_UMEM_MAX_PAGE_CHUNK);
+		umem->npages += ents;
 
-		for_each_sg(sg_list_start, sg, ret, i) {
+		for_each_sg(sg_list_start, sg, ents, i) {
+			vm_paddr_t pa;
 
-			if (vma_list && !is_vm_hugetlb_page(vma_list[i]))
-				umem->hugetlb = 0;
-
-			sg_set_page(sg, page_list[i], PAGE_SIZE, 0);
+			pa = pmap_extract(pmap, start);
+			if (pa == 0) {
+				ret = -ENOMEM;
+				goto out;
+			}
+			sg_set_page(sg, PHYS_TO_VM_PAGE(pa),
+				PAGE_SIZE, 0);
+			npages--;
+			start += PAGE_SIZE;
 		}
 
 		/* preparing for next loop */
@@ -346,34 +358,26 @@ struct ib_umem *ib_umem_get_ex(struct ib_ucontext *context, unsigned long addr,
 	}
 
 	umem->nmap = ib_dma_map_sg_attrs(context->device,
-				  umem->sg_head.sgl,
-				  umem->npages,
-				  DMA_BIDIRECTIONAL,
-				  &attrs);
-
-	if (umem->nmap <= 0) {
+					umem->sg_head.sgl,
+					umem->npages,
+					DMA_BIDIRECTIONAL,
+					&attrs);
+	if (umem->nmap != umem->npages) {
 		ret = -ENOMEM;
 		goto out;
 	}
-
-	ret = 0;
 
 out:
 	if (ret < 0) {
 		if (need_release)
 			__ib_umem_release(context->device, umem, 0);
 		kfree(umem);
-	} else
-		current->mm->pinned_vm = locked;
-
-	up_write(&current->mm->mmap_sem);
-	if (vma_list)
-		free_page((unsigned long) vma_list);
-	free_page((unsigned long) page_list);
+	}
 
 	return ret < 0 ? ERR_PTR(ret) : umem;
 }
 EXPORT_SYMBOL(ib_umem_get_ex);
+
 struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 			    size_t size, int access, int dmasync)
 {
@@ -382,26 +386,17 @@ struct ib_umem *ib_umem_get(struct ib_ucontext *context, unsigned long addr,
 }
 EXPORT_SYMBOL(ib_umem_get);
 
-static void ib_umem_account(struct work_struct *work)
-{
-	struct ib_umem *umem = container_of(work, struct ib_umem, work);
-
-	down_write(&umem->mm->mmap_sem);
-	umem->mm->pinned_vm -= umem->diff;
-	up_write(&umem->mm->mmap_sem);
-	mmput(umem->mm);
-	kfree(umem);
-}
-
 /**
  * ib_umem_release - release memory pinned with ib_umem_get
  * @umem: umem struct to release
  */
 void ib_umem_release(struct ib_umem *umem)
 {
-	struct ib_ucontext *context = umem->context;
-	struct mm_struct *mm;
-	unsigned long diff;
+
+	vm_offset_t addr, end, last, start;
+	vm_size_t size;
+	int error;
+
 	if (umem->ib_peer_mem) {
 		peer_umem_release(umem);
 		return;
@@ -409,38 +404,25 @@ void ib_umem_release(struct ib_umem *umem)
 
 	__ib_umem_release(umem->context->device, umem, 1);
 
-	mm = get_task_mm(current);
-	if (!mm) {
+	if (umem->context->closing) {
 		kfree(umem);
 		return;
 	}
 
-	diff = PAGE_ALIGN(umem->length + umem->offset) >> PAGE_SHIFT;
+	error = priv_check(curthread, PRIV_VM_MUNLOCK);
 
-	/*
-	 * We may be called with the mm's mmap_sem already held.  This
-	 * can happen when a userspace munmap() is the call that drops
-	 * the last reference to our file and calls our release
-	 * method.  If there are memory regions to destroy, we'll end
-	 * up here and not be able to take the mmap_sem.  In that case
-	 * we defer the vm_locked accounting to the system workqueue.
-	 */
-	if (context->closing) {
-		if (!down_write_trylock(&mm->mmap_sem)) {
-			INIT_WORK(&umem->work, ib_umem_account);
-			umem->mm   = mm;
-			umem->diff = diff;
+	if (error)
+		return;
 
-			queue_work(ib_wq, &umem->work);
-			return;
-		}
-	} else
-		down_write(&mm->mmap_sem);
-
-	current->mm->pinned_vm -= diff;
-	up_write(&mm->mmap_sem);
-	mmput(mm);
+	addr = umem->start;
+	size = umem->length;
+	last = addr + size;
+	start = addr & PAGE_MASK; /* Use the linux PAGE_MASK definition. */
+	end = roundup2(last, PAGE_SIZE); /* Use PAGE_MASK safe operation. */
+	vm_map_unwire(&curthread->td_proc->p_vmspace->vm_map, start, end,
+		VM_MAP_WIRE_USER | VM_MAP_WIRE_NOHOLES);
 	kfree(umem);
+
 }
 EXPORT_SYMBOL(ib_umem_release);
 
