@@ -6,7 +6,7 @@
 .include <bsd.own.mk>
 
 KMOD    = mlxen
-SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
+SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h opt_inet.h opt_inet6.h
 SRCS+= utils.c en_main.c en_netdev.c en_rx.c en_cq.c en_tx.c en_port.c en_resources.c
 
 CFLAGS+= -I${.CURDIR}/../../../../../drivers/net/ethernet/mellanox/mlx4/ 
