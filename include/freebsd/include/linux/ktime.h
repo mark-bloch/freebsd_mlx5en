@@ -3,6 +3,8 @@
  *
  *  ktime_t - nanosecond-resolution time format.
  *
+ * Copyright (c) 20014 Mellanox Technologies, Ltd. All rights reserved.
+ *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
  * General Public License (GPL) Version 2, available from the file
