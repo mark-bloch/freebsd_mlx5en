@@ -31,6 +31,7 @@
 #define	_LINUX_SCATTERLIST_H_
 
 #include <linux/page.h>
+#include <linux/slab.h>
 
 /*
  * SG table design.
