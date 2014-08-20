@@ -38,8 +38,12 @@ static DEFINE_MUTEX(peer_memory_mutex);
 static LIST_HEAD(peer_memory_list);
 
 static int num_registered_peers;
-static struct kobject *peers_kobj;
 
+/* This code uses the sysfs which is not supporeted by the FreeBSD.
+ *  * Will be added in future to the sysctl */
+
+#if 0
+static struct kobject *peers_kobj;
 static struct ib_peer_memory_client *get_peer_by_kobj(void *kobj);
 static ssize_t version_show(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buf)
@@ -112,7 +116,6 @@ static struct kobj_attribute num_reg_pages = __ATTR_RO(num_reg_pages);
 static struct kobj_attribute num_dereg_pages = __ATTR_RO(num_dereg_pages);
 static struct kobj_attribute num_free_callbacks = __ATTR_RO(num_free_callbacks);
 
-
 static struct attribute *peer_mem_attrs[] = {
 			&version_attr.attr,
 			&num_alloc_mrs.attr,
@@ -121,8 +124,9 @@ static struct attribute *peer_mem_attrs[] = {
 			&num_free_callbacks.attr,
 			NULL,
 };
+#endif
 
-
+#if 0
 static void destroy_peer_sysfs(struct ib_peer_memory_client *ib_peer_client)
 {
 	kobject_put(ib_peer_client->kobj);
@@ -131,6 +135,9 @@ static void destroy_peer_sysfs(struct ib_peer_memory_client *ib_peer_client)
 
 	return;
 }
+
+/* This code uses the sysfs which is not supporeted by the FreeBSD.
+ * Will be added in future to the sysctl */
 
 static int create_peer_sysfs(struct ib_peer_memory_client *ib_peer_client)
 {
@@ -171,6 +178,7 @@ free:
 
 	return ret;
 }
+#endif
 
 static int ib_invalidate_peer_memory(void *reg_handle,
 					  void *core_context)
@@ -322,16 +330,19 @@ void *ib_register_peer_memory_client(struct peer_memory_client *peer_client,
 	if (ret)
 		goto free;
 #endif
+#if 0
 	if (create_peer_sysfs(ib_peer_client))
 		goto free;
+#endif
 	*invalidate_callback = ib_invalidate_peer_memory;
 	list_add_tail(&ib_peer_client->core_peer_list, &peer_memory_list);
 	num_registered_peers++;
 	goto out;
-
+#if 0
 free:
 	kfree(ib_peer_client);
 	ib_peer_client = NULL;
+#endif
 out:
 	mutex_unlock(&peer_memory_mutex);
 	return ib_peer_client;
@@ -360,13 +371,21 @@ void ib_unregister_peer_memory_client(void *reg_handle)
 	mutex_lock(&peer_memory_mutex);
 #endif
 	num_registered_peers--;
+/* This code uses the sysfs which is not supporeted by the FreeBSD.
+ * Will be added in future to the sysctl */
+#if 0
 	destroy_peer_sysfs(ib_peer_client);
+#endif
 	mutex_unlock(&peer_memory_mutex);
 
 	kfree(ib_peer_client);
 }
 EXPORT_SYMBOL(ib_unregister_peer_memory_client);
 
+/* This code uses the sysfs which is not supporeted by the FreeBSD.
+ * Will be added in future to the sysctl */
+
+#if 0
 static struct ib_peer_memory_client *get_peer_by_kobj(void *kobj)
 {
 	struct ib_peer_memory_client *ib_peer_client;
@@ -384,6 +403,7 @@ found:
 	mutex_unlock(&peer_memory_mutex);
 	return ib_peer_client;
 }
+#endif
 
 struct ib_peer_memory_client *ib_get_peer_client(struct ib_ucontext *context, unsigned long addr,
 						size_t size, void **peer_client_context,
