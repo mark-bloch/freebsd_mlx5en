@@ -7,7 +7,7 @@
 
 KMOD    = mlx4ib
 SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
-SRCS+=	alias_GUID.c mcg.c sysfs.c ah.c cq.c doorbell.c mad.c main.c mr.c qp.c srq.c wc.c cm.c
+SRCS+=	alias_GUID.c mcg.c sysfs.c ah.c cq.c doorbell.c mad.c main.c mr.c qp.c srq.c wc.c cm.c mlx4_exp.c
 SRCS+= linux_compat.c linux_radix.c linux_idr.c 
 SRCS+=	opt_inet.h opt_inet6.h
 
