@@ -66,6 +66,8 @@ struct addr_req {
 	int status;
 };
 
+static void process_req(struct work_struct *work);
+
 static DEFINE_MUTEX(lock);
 static LIST_HEAD(req_list);
 static struct delayed_work work;
@@ -343,6 +345,43 @@ mcast:
         return -error;
 }
 
+static void process_req(struct work_struct *work)
+{
+        struct addr_req *req, *temp_req;
+        struct sockaddr *src_in, *dst_in;
+        struct list_head done_list;
+
+        INIT_LIST_HEAD(&done_list);
+
+        mutex_lock(&lock);
+        list_for_each_entry_safe(req, temp_req, &req_list, list) {
+                if (req->status == -ENODATA) {
+                        src_in = (struct sockaddr *) &req->src_addr;
+                        dst_in = (struct sockaddr *) &req->dst_addr;
+                        req->status = addr_resolve(src_in, dst_in, req->addr);
+                        if (req->status && time_after_eq(jiffies, req->timeout))
+                                req->status = -ETIMEDOUT;
+                        else if (req->status == -ENODATA)
+                                continue;
+                }
+                list_move_tail(&req->list, &done_list);
+        }
+
+        if (!list_empty(&req_list)) {
+                req = list_entry(req_list.next, struct addr_req, list);
+                set_timeout(req->timeout);
+        }
+        mutex_unlock(&lock);
+
+        list_for_each_entry_safe(req, temp_req, &done_list, list) {
+                list_del(&req->list);
+                req->callback(req->status, (struct sockaddr *) &req->src_addr,
+                        req->addr, req->context);
+                put_client(req->client);
+                kfree(req);
+        }
+}
+
 int rdma_resolve_ip(struct rdma_addr_client *client,
 		    struct sockaddr *src_addr, struct sockaddr *dst_addr,
 		    struct rdma_dev_addr *addr, int timeout_ms,
@@ -500,6 +539,7 @@ int rdma_addr_find_smac_by_sgid(union ib_gid *sgid, u8 *smac, u16 *vlan_id)
 	return ret;
 }
 EXPORT_SYMBOL(rdma_addr_find_smac_by_sgid);
+
 static int netevent_callback(struct notifier_block *self, unsigned long event,
 	void *ctx)
 {
@@ -515,6 +555,7 @@ static struct notifier_block nb = {
 
 static int __init addr_init(void)
 {
+	INIT_DELAYED_WORK(&work, process_req);
 	addr_wq = create_singlethread_workqueue("ib_addr");
 	if (!addr_wq)
 		return -ENOMEM;
