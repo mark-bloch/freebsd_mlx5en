@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_SLAB_H_
-#define	_FBSD_SLAB_H_
+#ifndef	_LINUX_SLAB_H_
+#define	_LINUX_SLAB_H_
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -48,10 +47,8 @@ MALLOC_DECLARE(M_KMALLOC);
 #define	kcalloc(n, size, flags)	        kmalloc((n) * (size), flags | M_ZERO)
 #define	vzalloc(size)			kzalloc(size, GFP_KERNEL | __GFP_NOWARN)
 #define	vfree(arg)			kfree(arg)
-#define vmalloc(size)                   kmalloc(size, GFP_KERNEL)
-#define vmalloc_node(size, node)        kmalloc(size, GFP_KERNEL)
-
-
+#define	vmalloc(size)                   kmalloc(size, GFP_KERNEL)
+#define	vmalloc_node(size, node)        kmalloc(size, GFP_KERNEL)
 
 struct kmem_cache {
 	uma_zone_t	cache_zone;
@@ -108,4 +105,4 @@ kmem_cache_destroy(struct kmem_cache *c)
 	free(c, M_KMALLOC);
 }
 
-#endif	/* _FBSD_SLAB_H_ */
+#endif	/* _LINUX_SLAB_H_ */

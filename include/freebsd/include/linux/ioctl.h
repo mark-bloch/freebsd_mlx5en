@@ -27,9 +27,9 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_IOCTL_H_
-#define	_FBSD_IOCTL_H_
+#ifndef	_LINUX_IOCTL_H_
+#define	_LINUX_IOCTL_H_
 
 #include <sys/ioccom.h>
 
-#endif	/* _FBSD_IOCTL_H_ */
+#endif	/* _LINUX_IOCTL_H_ */

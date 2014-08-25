@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,18 +27,16 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_ERRNO_H_
-#define	_FBSD_ERRNO_H_
+#ifndef	_LINUX_ERRNO_H_
+#define	_LINUX_ERRNO_H_
 
 #include <sys/errno.h>
 
-#define ECOMM           ESTALE
-#define ENODATA         ECONNREFUSED
-#define ENOIOCTLCMD     ENOIOCTL                /* XXX this is negative */
-#define ERESTARTSYS     ERESTART		/* XXX this is negative */
-#define ENOTSUPP        EOPNOTSUPP
+#define	ECOMM           ESTALE
+#define	ENODATA         ECONNREFUSED
+#define	ENOIOCTLCMD     ENOIOCTL
+#define	ERESTARTSYS     ERESTART
+#define	ENOTSUPP        EOPNOTSUPP
+#define	ENONET          EHOSTDOWN
 
-/* Taken from Linux kernel: include/uapi/asm-generic/errno.h */
-#define ENONET          64 /* Machine is not on the network */
-
-#endif	/* _FBSD_ERRNO_H_ */
+#endif					/* _LINUX_ERRNO_H_ */

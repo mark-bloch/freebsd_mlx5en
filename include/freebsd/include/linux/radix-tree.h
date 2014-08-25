@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,10 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_RADIX_TREE_H_
-#define	_FBSD_RADIX_TREE_H_
-
-#include <linux/types.h>
+#ifndef	_LINUX_RADIX_TREE_H_
+#define	_LINUX_RADIX_TREE_H_
 
 #define	RADIX_TREE_MAP_SHIFT	6
 #define	RADIX_TREE_MAP_SIZE	(1 << RADIX_TREE_MAP_SHIFT)
@@ -58,6 +56,6 @@ struct radix_tree_root {
 
 void	*radix_tree_lookup(struct radix_tree_root *, unsigned long);
 void	*radix_tree_delete(struct radix_tree_root *, unsigned long);
-int	 radix_tree_insert(struct radix_tree_root *, unsigned long, void *);
+int	radix_tree_insert(struct radix_tree_root *, unsigned long, void *);
 
-#endif	/* _FBSD_RADIX_TREE_H_ */
+#endif	/* _LINUX_RADIX_TREE_H_ */

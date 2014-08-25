@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_IO_H_
-#define	_FBSD_IO_H_
+#ifndef	_LINUX_IO_H_
+#define	_LINUX_IO_H_
 
 #include <machine/vm.h>
 
@@ -123,4 +123,4 @@ __iowrite64_copy(void *to, void *from, size_t count)
 }
 
 
-#endif	/* _FBSD_IO_H_ */
+#endif	/* _LINUX_IO_H_ */

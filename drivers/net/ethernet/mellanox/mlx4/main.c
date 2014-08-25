@@ -39,7 +39,6 @@
  * To use the FBSD macro sys/module.h should define MODULE_VERSION before linux/module does.
 */
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/errno.h>
 #include <linux/pci.h>
 #include <linux/dma-mapping.h>

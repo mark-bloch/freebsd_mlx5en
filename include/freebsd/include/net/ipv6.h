@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _NET_IPV6_H_
-#define	_NET_IPV6_H_
+#ifndef _LINUX_NET_IPV6_H_
+#define	_LINUX_NET_IPV6_H_
 
 #include "opt_inet6.h"
 
@@ -107,4 +107,4 @@ static inline int ipv6_addr_cmp(const struct in6_addr *a1, const struct in6_addr
 }
 
 
-#endif	/* _NET_IPV6_H_ */
+#endif	/* _LINUX_NET_IPV6_H_ */

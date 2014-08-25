@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_IF_VLAN_H_
-#define	_FBSD_IF_VLAN_H_
+#ifndef	_LINUX_IF_VLAN_H_
+#define	_LINUX_IF_VLAN_H_
 
 #include <sys/socket.h>
 #include <net/if.h>
@@ -37,4 +37,4 @@
 
 #define VLAN_N_VID              4096
 
-#endif	/* _FBSD_IF_VLAN_H_ */
+#endif	/* _LINUX_IF_VLAN_H_ */

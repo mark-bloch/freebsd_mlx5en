@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_MISCDEVICE_H_
-#define	_FBSD_MISCDEVICE_H_
+#ifndef	_LINUX_MISCDEVICE_H_
+#define	_LINUX_MISCDEVICE_H_
 
 #define	MISC_DYNAMIC_MINOR	-1
 
@@ -72,4 +72,4 @@ misc_deregister(struct miscdevice *misc)
 	return (0);
 }
 
-#endif	/* _FBSD_MISCDEVICE_H_ */
+#endif	/* _LINUX_MISCDEVICE_H_ */

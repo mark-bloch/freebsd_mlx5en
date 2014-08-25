@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_IF_ETHER_H_
-#define	_FBSD_IF_ETHER_H_
+#ifndef	_LINUX_IF_ETHER_H_
+#define	_LINUX_IF_ETHER_H_
 
 #include <linux/types.h>
 
@@ -43,10 +42,9 @@
 #define ETH_FCS_LEN     4               /* Octets in the FCS                                    */
 #define VLAN_HLEN       4               /* The additional bytes (on top of the Ethernet header)
                                          * that VLAN requires.                                  */
-
 /*
  * defined Ethernet Protocol ID's.
  */
 #define ETH_P_IP        0x0800          /* Internet Protocol packet                             */
 
-#endif	/* _FBSD_IF_ETHER_H_ */
+#endif	/* _LINUX_IF_ETHER_H_ */

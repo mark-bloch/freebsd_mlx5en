@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_WORKQUEUE_H_
-#define	_FBSD_WORKQUEUE_H_
+#ifndef	_LINUX_WORKQUEUE_H_
+#define	_LINUX_WORKQUEUE_H_
 
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -92,7 +91,7 @@ do {									\
 
 #define	flush_scheduled_work()	flush_taskqueue(taskqueue_thread)
 
-inline int queue_work (struct workqueue_struct *q, struct work_struct *work)
+static inline int queue_work (struct workqueue_struct *q, struct work_struct *work)
 {
 	(work)->taskqueue = (q)->taskqueue;
 	/* Return opposite val to align with Linux logic */
@@ -221,4 +220,4 @@ mod_delayed_work(struct workqueue_struct *wq, struct delayed_work *dwork,
 	return false;
 }
 
-#endif	/* _FBSD_WORKQUEUE_H_ */
+#endif	/* _LINUX_WORKQUEUE_H_ */

@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,19 +26,17 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_TYPES_H_
-#define	_FBSD_TYPES_H_
+#ifndef	_LINUX_TYPES_H_
+#define	_LINUX_TYPES_H_
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <linux/compiler.h>
-
 #include <asm/types.h>
 
-#define __read_mostly
+#define	__read_mostly __attribute__((__section__(".data.read_mostly")))
 
 #ifndef __bitwise__
 #ifdef __CHECKER__
@@ -55,13 +53,14 @@ typedef uint32_t __be32;
 typedef uint64_t __le64;
 typedef uint64_t __be64;
 
+typedef unsigned int    uint;
 typedef unsigned gfp_t;
+typedef uint64_t loff_t;
 typedef vm_paddr_t resource_size_t;
 
 typedef u64 phys_addr_t;
-typedef uint64_t loff_t;
 
 #define	DECLARE_BITMAP(n, bits)						\
 	unsigned long n[howmany(bits, sizeof(long) * 8)]
 
-#endif	/* _FBSD_TYPES_H_ */
+#endif	/* _LINUX_TYPES_H_ */

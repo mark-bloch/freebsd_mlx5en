@@ -237,12 +237,12 @@ static inline enum ib_mtu iboe_get_mtu(int mtu)
 
 static inline int iboe_get_rate(struct net_device *dev)
 {
-	uintmax_t baudrate;
+	uint64_t baudrate = dev->if_baudrate;
+#ifdef if_baudrate_pf
 	int exp;
-
-	baudrate = dev->if_baudrate;
 	for (exp = dev->if_baudrate_pf; exp > 0; exp--)
 		baudrate *= 10;
+#endif
 	if (baudrate >= IF_Gbps(40))
 		return IB_RATE_40_GBPS;
 	else if (baudrate >= IF_Gbps(30))

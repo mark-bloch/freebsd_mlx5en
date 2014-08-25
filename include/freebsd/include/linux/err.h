@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_ERR_H_
-#define	_FBSD_ERR_H_
+#ifndef	_LINUX_ERR_H_
+#define	_LINUX_ERR_H_
 
 #define MAX_ERRNO	4095
 
@@ -69,4 +69,4 @@ PTR_ERR_OR_ZERO(const void *ptr)
 
 #define PTR_RET(p) PTR_ERR_OR_ZERO(p)
 
-#endif	/* _FBSD_ERR_H_ */
+#endif	/* _LINUX_ERR_H_ */

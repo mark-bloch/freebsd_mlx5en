@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_RANDOM_H_
-#define	_FBSD_RANDOM_H_
+#ifndef	_LINUX_RANDOM_H_
+#define	_LINUX_RANDOM_H_
 
 #include <sys/random.h>
 
@@ -38,4 +38,4 @@ get_random_bytes(void *buf, int nbytes)
 	read_random(buf, nbytes);
 }
 
-#endif	/* _FBSD_RANDOM_H_ */
+#endif	/* _LINUX_RANDOM_H_ */

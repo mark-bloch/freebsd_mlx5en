@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FBSD_CDEV_H_
-#define _FBSD_CDEV_H_
+#ifndef	_LINUX_CDEV_H_
+#define	_LINUX_CDEV_H_
 
 #include <linux/kobject.h>
 #include <linux/kdev_t.h>
@@ -127,4 +127,4 @@ cdev_del(struct linux_cdev *cdev)
 
 #define	cdev	linux_cdev
 
-#endif /* _FBSD_CDEV_H_ */
+#endif	/* _LINUX_CDEV_H_ */

@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_POLL_H_
-#define	_FBSD_POLL_H_
+#ifndef	_LINUX_POLL_H_
+#define	_LINUX_POLL_H_
 
 #include <sys/poll.h>
 #include <sys/fcntl.h>
@@ -42,4 +42,4 @@ poll_wait(struct file *filp, wait_queue_head_t *wait_address, poll_table *p)
 	selrecord(curthread, &filp->f_selinfo);
 }
 
-#endif	/* _FBSD_POLL_H_ */
+#endif	/* _LINUX_POLL_H_ */

@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_COMPILER_H_
-#define	_FBSD_COMPILER_H_
+#ifndef	_LINUX_COMPILER_H_
+#define	_LINUX_COMPILER_H_
 
 #include <sys/cdefs.h>
 
@@ -63,4 +63,4 @@
 
 #define	uninitialized_var(x)		x = x
 
-#endif	/* _FBSD_COMPILER_H_ */
+#endif	/* _LINUX_COMPILER_H_ */

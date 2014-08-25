@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _LINUX_LOCKDEP_H_
-#define _LINUX_LOCKDEP_H_
+#ifndef	_LINUX_LOCKDEP_H_
+#define	_LINUX_LOCKDEP_H_
 
 struct lock_class_key {
 };

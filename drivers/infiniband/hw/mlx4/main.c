@@ -32,16 +32,13 @@
  */
 
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
-#include <linux/rtnetlink.h>
 #include <linux/if_vlan.h>
 #include <linux/fs.h>
 #include <net/ipv6.h>
-#include <net/addrconf.h>
 
 #include <rdma/ib_smi.h>
 #include <rdma/ib_user_verbs.h>
@@ -1410,8 +1407,7 @@ static int mlx4_ib_mcg_attach(struct ib_qp *ibqp, union ib_gid *gid, u16 lid)
 	    MLX4_STEERING_MODE_DEVICE_MANAGED) {
 		bitmap_fill(ports, mdev->dev->caps.num_ports);
 	} else {
-		if ((mqp->port >= 0) &&
-		    (mqp->port <= mdev->dev->caps.num_ports)) {
+		if (mqp->port <= mdev->dev->caps.num_ports) {
 			bitmap_zero(ports, mdev->dev->caps.num_ports);
 			set_bit(0, ports);
 		} else {

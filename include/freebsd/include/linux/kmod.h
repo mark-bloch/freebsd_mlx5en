@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_KMOD_H_
-#define	_FBSD_KMOD_H_
+#ifndef	_LINUX_KMOD_H_
+#define	_LINUX_KMOD_H_
 
 #include <sys/types.h>
 #include <sys/syscallsubr.h>
@@ -37,23 +37,15 @@
 #include <machine/stdarg.h>
 #include <sys/proc.h>
 
-
-static inline int request_module(const char *fmt, ...)
-{
-        va_list ap;
-        char modname[128];
-        int fileid;
-
-        va_start(ap, fmt);
-        vsnprintf(modname, sizeof(modname), fmt, ap);
-        va_end(ap);
-
-        return kern_kldload(curthread, modname, &fileid);
-}
+#define	request_module(...) \
+({\
+	char modname[128]; \
+        int fileid; \
+	snprintf(modname, sizeof(modname), __VA_ARGS__); \
+	kern_kldload(curthread, modname, &fileid); \
+})
 
 #define request_module_nowait request_module
 
 
-
-
-#endif /* _FBSD_KMOD_H_ */
+#endif /* _LINUX_KMOD_H_ */

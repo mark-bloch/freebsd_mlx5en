@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,17 +27,16 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _FBSD_VMALLOC_H_
-#define	_FBSD_VMALLOC_H_
+#ifndef _LINUX_VMALLOC_H_
+#define	_LINUX_VMALLOC_H_
 
 #include <asm/page.h>
 
-#define VM_MAP          0x0000
-#define PAGE_KERNEL     0x0000
+#define	VM_MAP		0x0000
+#define	PAGE_KERNEL	0x0000
 
 void *vmap(struct page **pages, unsigned int count, unsigned long flags,
     int prot);
 void vunmap(void *addr);
 
-
-#endif	/* _FBSD_VMALLOC_H_ */
+#endif	/* _LINUX_VMALLOC_H_ */

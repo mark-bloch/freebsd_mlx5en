@@ -37,7 +37,6 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
-#include <linux/export.h>
 #include <linux/scatterlist.h>
 #include <linux/mutex.h>
 

@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_IDR_H_
-#define	_FBSD_IDR_H_
+#ifndef	_LINUX_IDR_H_
+#define	_LINUX_IDR_H_
 
 #include <sys/kernel.h>
 
@@ -72,4 +72,4 @@ void	idr_remove_all(struct idr *idp);
 void	idr_destroy(struct idr *idp);
 void	idr_init(struct idr *idp);
 
-#endif	/* _FBSD_IDR_H_ */
+#endif	/* _LINUX_IDR_H_ */

@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_DMA_MAPPING_H_
-#define _FBSD_DMA_MAPPING_H_
+#ifndef	_LINUX_DMA_MAPPING_H_
+#define _LINUX_DMA_MAPPING_H_
 
 #include <linux/types.h>
 #include <linux/device.h>
@@ -269,4 +268,4 @@ static inline unsigned int dma_set_max_seg_size(struct device *dev,
 extern int uma_align_cache;
 #define	dma_get_cache_alignment()	uma_align_cache
 
-#endif	/* _FBSD_DMA_MAPPING_H_ */
+#endif	/* _LINUX_DMA_MAPPING_H_ */

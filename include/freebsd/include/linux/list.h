@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef _FBSD_LIST_H_
-#define _FBSD_LIST_H_
+#ifndef _LINUX_LIST_H_
+#define _LINUX_LIST_H_
 
 /*
  * Since LIST_HEAD conflicts with the linux definition we must include any
@@ -51,9 +50,9 @@
 
 #include <net/bpf.h>
 #include <net/if.h>
+#include <net/if_var.h>
 #include <net/if_types.h>
 #include <net/if_media.h>
-#include <net/if_var.h>
 
 #include <netinet/in.h>
 #include <netinet/in_pcb.h>
@@ -392,8 +391,8 @@ static inline int list_is_last(const struct list_head *list,
 
 #define hlist_for_each_entry_safe(tpos, pos, n, head, member) 		 \
 	for (pos = (head)->first;					 \
-	     pos && ({ n = pos->next; 1; }) && 				 \
-		({ tpos = hlist_entry(pos, typeof(*tpos), member); 1;}); \
-	     pos = n)
+	     (pos) != 0 && ({ n = (pos)->next; \
+		 tpos = hlist_entry((pos), typeof(*(tpos)), member); 1;}); \
+	     pos = (n))
 
-#endif /* _FBSD_LIST_H_ */
+#endif /* _LINUX_LIST_H_ */

@@ -39,12 +39,8 @@
 #include <linux/workqueue.h>
 #include <linux/module.h>
 #include <linux/notifier.h>
-#include <net/arp.h>
-#include <net/neighbour.h>
 #include <net/route.h>
 #include <net/netevent.h>
-#include <net/addrconf.h>
-#include <net/ip6_route.h>
 #include <rdma/ib_addr.h>
 #include <netinet/if_ether.h>
 

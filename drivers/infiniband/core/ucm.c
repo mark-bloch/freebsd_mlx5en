@@ -32,7 +32,6 @@
  */
 
 #include <linux/completion.h>
-#include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/device.h>
@@ -40,7 +39,6 @@
 #include <linux/poll.h>
 #include <linux/sched.h>
 #include <linux/file.h>
-#include <linux/mount.h>
 #include <linux/cdev.h>
 #include <linux/idr.h>
 #include <linux/mutex.h>

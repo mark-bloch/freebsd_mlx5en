@@ -1,5 +1,5 @@
-#ifndef	_FBSD_JHASH_H_
-#define	_FBSD_JHASH_H_
+#ifndef	_LINUX_JHASH_H_
+#define	_LINUX_JHASH_H_
 
 /* jhash.h: Jenkins hash support.
  *
@@ -140,4 +140,4 @@ static inline u32 jhash_1word(u32 a, u32 initval)
 	return jhash_3words(a, 0, 0, initval);
 }
 
-#endif	/* _FBSD_JHASH_H_ */
+#endif	/* _LINUX_JHASH_H_ */

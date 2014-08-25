@@ -32,7 +32,7 @@
  */
 
 #include <linux/slab.h>
-#include <linux/export.h>
+#include <linux/module.h>
 
 #include "mlx4.h"
 

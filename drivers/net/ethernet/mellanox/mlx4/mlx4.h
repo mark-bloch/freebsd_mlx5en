@@ -963,6 +963,7 @@ int __mlx4_write_mtt(struct mlx4_dev *dev, struct mlx4_mtt *mtt,
 		     int start_index, int npages, u64 *page_list);
 int __mlx4_counter_alloc(struct mlx4_dev *dev, int slave, int port, u32 *idx);
 void __mlx4_counter_free(struct mlx4_dev *dev, int slave, int port, u32 idx);
+
 int __mlx4_slave_counters_free(struct mlx4_dev *dev, int slave);
 int __mlx4_clear_if_stat(struct mlx4_dev *dev,
 			 u8 counter_index);

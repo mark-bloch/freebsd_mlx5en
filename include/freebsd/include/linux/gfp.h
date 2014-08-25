@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_GFP_H_
-#define	_FBSD_GFP_H_
+#ifndef	_LINUX_GFP_H_
+#define	_LINUX_GFP_H_
 
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -126,4 +126,4 @@ alloc_pages(gfp_t gfp_mask, unsigned int order)
 
 #define kmalloc_node(chunk, mask, node)         kmalloc(chunk, mask)
 
-#endif	/* _FBSD_GFP_H_ */
+#endif	/* _LINUX_GFP_H_ */

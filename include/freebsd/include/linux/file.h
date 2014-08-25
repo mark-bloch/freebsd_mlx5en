@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef _FBSD_FILE_H_
-#define _FBSD_FILE_H_
+#ifndef	_LINUX_FILE_H_
+#define	_LINUX_FILE_H_
 
 #include <sys/param.h>
 #include <sys/file.h>
@@ -139,4 +138,4 @@ static inline struct fd fdget(unsigned int fd)
 #define	file	linux_file
 #define	fget	linux_fget
 
-#endif /* _FBSD_FILE_H_ */
+#endif	/* _LINUX_FILE_H_ */

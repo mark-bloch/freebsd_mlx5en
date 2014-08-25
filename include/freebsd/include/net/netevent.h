@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_NET_NETEVENT_H_
-#define	_NET_NETEVENT_H_
+#ifndef	_LINUX_NET_NETEVENT_H_
+#define	_LINUX_NET_NETEVENT_H_
 
 #include <netinet/if_ether.h>
 
@@ -68,4 +68,4 @@ unregister_netevent_notifier(struct notifier_block *nb)
 	return (0);
 }
 
-#endif /* _NET_NETEVENT_H_ */
+#endif /* _LINUX_NET_NETEVENT_H_ */

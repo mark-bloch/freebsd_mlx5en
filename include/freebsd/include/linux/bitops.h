@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_BITOPS_H_
-#define	_FBSD_BITOPS_H_
+#ifndef	_LINUX_BITOPS_H_
+#define	_LINUX_BITOPS_H_
 
 #ifdef __LP64__
 #define	BITS_PER_LONG		64
@@ -290,14 +289,14 @@ bitmap_empty(unsigned long *addr, int size)
 #define	NBLONG	(NBBY * sizeof(long))
 
 #define	set_bit(i, a)							\
-    atomic_set_long(&((volatile long *)(a))[(i)/NBLONG], 1UL << (i) % NBLONG)
+    atomic_set_long(&((volatile long *)(a))[(i)/NBLONG], 1UL << ((i) % NBLONG))
 
 #define	clear_bit(i, a)							\
-    atomic_clear_long(&((volatile long *)(a))[(i)/NBLONG], 1UL << (i) % NBLONG)
+    atomic_clear_long(&((volatile long *)(a))[(i)/NBLONG], 1UL << ((i) % NBLONG))
 
 #define	test_bit(i, a)							\
     !!(atomic_load_acq_long(&((volatile long *)(a))[(i)/NBLONG]) &	\
-    1UL << ((i) % NBLONG))
+    (1UL << ((i) % NBLONG)))
 
 static inline long
 test_and_clear_bit(long bit, long *var)
@@ -306,7 +305,7 @@ test_and_clear_bit(long bit, long *var)
 
 	var += bit / (sizeof(long) * NBBY);
 	bit %= sizeof(long) * NBBY;
-	bit = 1 << bit;
+	bit = (1UL << bit);
 	do {
 		val = *(volatile long *)var;
 	} while (atomic_cmpset_long(var, val, val & ~bit) == 0);
@@ -321,7 +320,7 @@ test_and_set_bit(long bit, long *var)
 
 	var += bit / (sizeof(long) * NBBY);
 	bit %= sizeof(long) * NBBY;
-	bit = 1 << bit;
+	bit = (1UL << bit);
 	do {
 		val = *(volatile long *)var;
 	} while (atomic_cmpset_long(var, val, val | bit) == 0);
@@ -510,4 +509,4 @@ bitmap_release_region(unsigned long *bitmap, int pos, int order)
 	     (bit) < (size);					\
 	     (bit) = find_next_bit((addr), (size), (bit) + 1))
 
-#endif	/* FBSD_BITOPS_H_ */
+#endif	/* _LINUX_BITOPS_H_ */

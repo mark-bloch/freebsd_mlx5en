@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_MM_H_
-#define	_FBSD_MM_H_
+#ifndef	_LINUX_MM_H_
+#define	_LINUX_MM_H_
 
 #include <linux/spinlock.h>
 #include <linux/gfp.h>
@@ -37,50 +36,50 @@
 #define	PAGE_ALIGN(x)	ALIGN(x, PAGE_SIZE)
 
 struct vm_area_struct {
-        vm_offset_t     vm_start;
-        vm_offset_t     vm_end;
-        vm_offset_t     vm_pgoff;
-        vm_paddr_t      vm_pfn;         /* PFN For mmap. */
-        vm_memattr_t    vm_page_prot;
+	vm_offset_t	vm_start;
+	vm_offset_t	vm_end;
+	vm_offset_t	vm_pgoff;
+	vm_paddr_t	vm_pfn;		/* PFN For mmap. */
+	vm_memattr_t	vm_page_prot;
 };
 
 /*
- *  * Compute log2 of the power of two rounded up count of pages
- *   * needed for size bytes.
- *    */
+ * Compute log2 of the power of two rounded up count of pages
+ * needed for size bytes.
+ */
 static inline int
 get_order(unsigned long size)
 {
-        int order;
+	int order;
 
-        size = (size - 1) >> PAGE_SHIFT;
-        order = 0;
-        while (size) {
-                order++;
-                size >>= 1;
-        }
-        return (order);
+	size = (size - 1) >> PAGE_SHIFT;
+	order = 0;
+	while (size) {
+		order++;
+		size >>= 1;
+	}
+	return (order);
 }
 
 static inline void *
 lowmem_page_address(struct page *page)
 {
 
-        return page_address(page);
+	return page_address(page);
 }
 
 /*
  * This only works via mmap ops.
-*/
+ */
 static inline int
 io_remap_pfn_range(struct vm_area_struct *vma,
     unsigned long addr, unsigned long pfn, unsigned long size,
     vm_memattr_t prot)
 {
-        vma->vm_page_prot = prot;
-        vma->vm_pfn = pfn;
+	vma->vm_page_prot = prot;
+	vma->vm_pfn = pfn;
 
-        return (0);
+	return (0);
 }
 
-#endif	/* _FBSD_MM_H_ */
+#endif	/* _LINUX_MM_H_ */

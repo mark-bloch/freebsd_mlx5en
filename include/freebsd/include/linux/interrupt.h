@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_INTERRUPT_H_
-#define	_FBSD_INTERRUPT_H_
+#ifndef	_LINUX_INTERRUPT_H_
+#define	_LINUX_INTERRUPT_H_
 
 #include <linux/device.h>
 #include <linux/pci.h>
@@ -137,4 +137,4 @@ free_irq(unsigned int irq, void *device)
 	kfree(irqe);
 }
 
-#endif	/* _FBSD_INTERRUPT_H_ */
+#endif	/* _LINUX_INTERRUPT_H_ */

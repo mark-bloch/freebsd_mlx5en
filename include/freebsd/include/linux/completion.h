@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_COMPLETION_H_
-#define	_FBSD_COMPLETION_H_
+#ifndef	_LINUX_COMPLETION_H_
+#define	_LINUX_COMPLETION_H_
 
 #include <linux/errno.h>
 
@@ -151,4 +151,5 @@ completion_done(struct completion *c)
 	sleepq_release(c);
 	return (isdone);
 }
-#endif	/* _FBSD_COMPLETION_H_ */
+
+#endif	/* _LINUX_COMPLETION_H_ */

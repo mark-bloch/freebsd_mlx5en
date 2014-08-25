@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_PCI_H_
-#define	_FBSD_PCI_H_
+#ifndef	_LINUX_PCI_H_
+#define	_LINUX_PCI_H_
 
 #define	CONFIG_PCI_MSI
 
@@ -44,7 +44,6 @@
 
 #include <machine/resource.h>
 
-#include <linux/init.h>
 #include <linux/list.h>
 #include <linux/dmapool.h>
 #include <linux/dma-mapping.h>
@@ -86,34 +85,34 @@ struct pci_device_id {
 
 #define	to_pci_dev(n)	container_of(n, struct pci_dev, dev)
 
-#define	PCI_VENDOR_ID	        PCIR_DEVVENDOR
-#define	PCI_COMMAND	        PCIR_COMMAND
-#define	PCI_EXP_DEVCTL	        PCIER_DEVICE_CTL                /* Device Control */
-#define	PCI_EXP_LNKCTL	        PCIER_LINK_CTL                  /* Link Control */
-#define PCI_EXP_FLAGS_TYPE      PCIEM_FLAGS_TYPE                /* Device/Port type */
-#define PCI_EXP_DEVCAP          PCIER_DEVICE_CAP                /* Device capabilities */
-#define PCI_EXP_DEVSTA          PCIER_DEVICE_STA                /* Device Status */
-#define PCI_EXP_LNKCAP          PCIER_LINK_CAP                  /* Link Capabilities */
-#define PCI_EXP_LNKSTA          PCIER_LINK_STA                  /* Link Status */
-#define PCI_EXP_SLTCAP          PCIER_SLOT_CAP                  /* Slot Capabilities */
-#define PCI_EXP_SLTCTL          PCIER_SLOT_CTL                  /* Slot Control */
-#define PCI_EXP_SLTSTA          PCIER_SLOT_STA                  /* Slot Status */
-#define PCI_EXP_RTCTL           PCIER_ROOT_CTL                  /* Root Control */
-#define PCI_EXP_RTCAP           PCIER_ROOT_CAP                  /* Root Capabilities */
-#define PCI_EXP_RTSTA           PCIER_ROOT_STA                  /* Root Status */
-#define PCI_EXP_DEVCAP2         PCIER_DEVICE_CAP2               /* Device Capabilities 2 */
-#define PCI_EXP_DEVCTL2         PCIER_DEVICE_CTL2               /* Device Control 2 */
-#define PCI_EXP_LNKCAP2         PCIER_LINK_CAP2                 /* Link Capabilities 2 */
-#define PCI_EXP_LNKCTL2         PCIER_LINK_CTL2                 /* Link Control 2 */
-#define PCI_EXP_LNKSTA2         PCIER_LINK_STA2                 /* Link Status 2 */
-#define PCI_EXP_FLAGS           PCIER_FLAGS                     /* Capabilities register */
-#define PCI_EXP_FLAGS_VERS      PCIEM_FLAGS_VERSION             /* Capability version */
-#define PCI_EXP_TYPE_ROOT_PORT  PCIEM_TYPE_ROOT_PORT            /* Root Port */
-#define PCI_EXP_TYPE_ENDPOINT   PCIEM_TYPE_ENDPOINT             /* Express Endpoint */
-#define PCI_EXP_TYPE_LEG_END    PCIEM_TYPE_LEGACY_ENDPOINT      /* Legacy Endpoint */
-#define PCI_EXP_TYPE_DOWNSTREAM PCIEM_TYPE_DOWNSTREAM_PORT      /* Downstream Port */
-#define PCI_EXP_FLAGS_SLOT      PCIEM_FLAGS_SLOT                /* Slot implemented */
-#define PCI_EXP_TYPE_RC_EC      PCIEM_TYPE_ROOT_EC              /* Root Complex Event Collector */
+#define	PCI_VENDOR_ID		PCIR_DEVVENDOR
+#define	PCI_COMMAND		PCIR_COMMAND
+#define	PCI_EXP_DEVCTL		PCIER_DEVICE_CTL		/* Device Control */
+#define	PCI_EXP_LNKCTL		PCIER_LINK_CTL			/* Link Control */
+#define	PCI_EXP_FLAGS_TYPE	PCIEM_FLAGS_TYPE		/* Device/Port type */
+#define	PCI_EXP_DEVCAP		PCIER_DEVICE_CAP		/* Device capabilities */
+#define	PCI_EXP_DEVSTA		PCIER_DEVICE_STA		/* Device Status */
+#define	PCI_EXP_LNKCAP		PCIER_LINK_CAP			/* Link Capabilities */
+#define	PCI_EXP_LNKSTA		PCIER_LINK_STA			/* Link Status */
+#define	PCI_EXP_SLTCAP		PCIER_SLOT_CAP			/* Slot Capabilities */
+#define	PCI_EXP_SLTCTL		PCIER_SLOT_CTL			/* Slot Control */
+#define	PCI_EXP_SLTSTA		PCIER_SLOT_STA			/* Slot Status */
+#define	PCI_EXP_RTCTL		PCIER_ROOT_CTL			/* Root Control */
+#define	PCI_EXP_RTCAP		PCIER_ROOT_CAP			/* Root Capabilities */
+#define	PCI_EXP_RTSTA		PCIER_ROOT_STA			/* Root Status */
+#define	PCI_EXP_DEVCAP2		PCIER_DEVICE_CAP2		/* Device Capabilities 2 */
+#define	PCI_EXP_DEVCTL2		PCIER_DEVICE_CTL2		/* Device Control 2 */
+#define	PCI_EXP_LNKCAP2		PCIER_LINK_CAP2			/* Link Capabilities 2 */
+#define	PCI_EXP_LNKCTL2		PCIER_LINK_CTL2			/* Link Control 2 */
+#define	PCI_EXP_LNKSTA2		PCIER_LINK_STA2			/* Link Status 2 */
+#define	PCI_EXP_FLAGS		PCIER_FLAGS			/* Capabilities register */
+#define	PCI_EXP_FLAGS_VERS	PCIEM_FLAGS_VERSION		/* Capability version */
+#define	PCI_EXP_TYPE_ROOT_PORT	PCIEM_TYPE_ROOT_PORT		/* Root Port */
+#define	PCI_EXP_TYPE_ENDPOINT	PCIEM_TYPE_ENDPOINT		/* Express Endpoint */
+#define	PCI_EXP_TYPE_LEG_END	PCIEM_TYPE_LEGACY_ENDPOINT	/* Legacy Endpoint */
+#define	PCI_EXP_TYPE_DOWNSTREAM PCIEM_TYPE_DOWNSTREAM_PORT	/* Downstream Port */
+#define	PCI_EXP_FLAGS_SLOT	PCIEM_FLAGS_SLOT		/* Slot implemented */
+#define	PCI_EXP_TYPE_RC_EC	PCIEM_TYPE_ROOT_EC		/* Root Complex Event Collector */
 
 
 #define	IORESOURCE_MEM	SYS_RES_MEMORY
@@ -121,6 +120,7 @@ struct pci_device_id {
 #define	IORESOURCE_IRQ	SYS_RES_IRQ
 
 struct pci_dev;
+
 
 struct pci_driver {
 	struct list_head		links;
@@ -559,7 +559,11 @@ struct msix_entry {
 /*
  * Enable msix, positive errors indicate actual number of available
  * vectors.  Negative errors are failures.
+ *
+ * NB: define added to prevent this definition of pci_enable_msix from
+ * clashing with the native FreeBSD version.
  */
+#define	pci_enable_msix		linux_pci_enable_msix
 static inline int
 pci_enable_msix(struct pci_dev *pdev, struct msix_entry *entries, int nreq)
 {
@@ -827,4 +831,4 @@ static inline int pcie_capability_write_word(struct pci_dev *dev, int pos, u16 v
 }
 
 
-#endif	/* _FBSD_PCI_H_ */
+#endif	/* _LINUX_PCI_H_ */

@@ -35,8 +35,7 @@
 
 #include <linux/types.h>
 #include <linux/gfp.h>
-#include <linux/export.h>
-#include <linux/init.h>
+#include <linux/module.h>
 
 #include <linux/mlx4/cmd.h>
 #include <linux/mlx4/qp.h>

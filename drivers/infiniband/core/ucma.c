@@ -40,7 +40,6 @@
 #include <linux/in6.h>
 #include <linux/miscdevice.h>
 #include <linux/slab.h>
-#include <linux/sysctl.h>
 #include <linux/module.h>
 
 #include <rdma/rdma_user_cm.h>

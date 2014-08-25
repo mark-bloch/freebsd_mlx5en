@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _NET_TCP_H_
-#define	_NET_TCP_H_
+#ifndef _LINUX_NET_TCP_H_
+#define	_LINUX_NET_TCP_H_
 
 #include <linux/list.h>
 #include <linux/slab.h>
@@ -36,4 +36,4 @@
 
 #include <net/ip.h>
 
-#endif	/* _NET_TCP_H_ */
+#endif	/* _LINUX_NET_TCP_H_ */

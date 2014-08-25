@@ -50,8 +50,8 @@ struct notifier_block {
 #define	NETDEV_DOWN		0x0002
 #define	NETDEV_REGISTER		0x0003
 #define	NETDEV_UNREGISTER	0x0004
-#define NETDEV_CHANGEADDR       0x0005
-#define NETDEV_CHANGEIFADDR     0x0006
+#define	NETDEV_CHANGEADDR       0x0005
+#define	NETDEV_CHANGEIFADDR     0x0006
 
 
 #endif	/* _LINUX_NOTIFIER_H_ */

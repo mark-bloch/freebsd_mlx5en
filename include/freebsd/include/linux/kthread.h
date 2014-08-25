@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_KTHREAD_H_
-#define	_FBSD_KTHREAD_H_
+#ifndef	_LINUX_KTHREAD_H_
+#define	_LINUX_KTHREAD_H_
 
 #include <sys/param.h>
 #include <sys/lock.h>
@@ -103,4 +102,4 @@ kthread_stop(struct task_struct *task)
 	return task->task_ret;
 }
 
-#endif	/* _FBSD_KTHREAD_H_ */
+#endif	/* _LINUX_KTHREAD_H_ */

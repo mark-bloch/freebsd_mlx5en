@@ -26,8 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef _FBSD_HARDIRQ_H_
-#define	_FBSD_HARDIRQ_H_
+#ifndef _LINUX_HARDIRQ_H_
+#define	_LINUX_HARDIRQ_H_
 
 #include <linux/types.h>
 
@@ -37,4 +37,4 @@
 
 #define	synchronize_irq(irq)	_intr_drain((irq))
 
-#endif	/* _FBSD_HARDIRQ_H_ */
+#endif	/* _LINUX_HARDIRQ_H_ */

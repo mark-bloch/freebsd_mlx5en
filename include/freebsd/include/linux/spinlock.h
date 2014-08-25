@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_SPINLOCK_H_
-#define	_FBSD_SPINLOCK_H_
+#ifndef	_LINUX_SPINLOCK_H_
+#define	_LINUX_SPINLOCK_H_
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -66,4 +65,4 @@ spin_lock_init(spinlock_t *lock)
 	spinlock_t lock;						\
 	MTX_SYSINIT(lock, &(lock).m, "lnxspin", MTX_DEF)
 
-#endif	/* _LINUX_FBSD_H_ */
+#endif	/* _LINUX_SPINLOCK_H_ */

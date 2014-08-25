@@ -47,7 +47,7 @@
 #include <linux/mlx4/cq.h>
 
 #include <sys/sockio.h>
-
+#include <sys/sysctl.h>
 
 #include "mlx4_en.h"
 #include "en_port.h"

@@ -817,10 +817,10 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	struct mlx4_en_dev *mdev = priv->mdev;
 	struct mlx4_en_tx_ring *ring;
+	struct mlx4_en_cq *cq;
 	struct mlx4_en_tx_desc *tx_desc;
 	struct mlx4_wqe_data_seg *data;
 	struct mlx4_en_tx_info *tx_info;
-        struct mlx4_en_cq *cq;
 	struct mbuf *m;
 	int nr_txbb;
 	int nr_segs;
@@ -1060,8 +1060,8 @@ retry:
 	return 0;
 tx_drop:
 	*mbp = NULL;
-        m_freem(mb);
-        return EINVAL;
+	m_freem(mb);
+	return EINVAL;
 }
 
 static int

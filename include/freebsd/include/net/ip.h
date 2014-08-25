@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _NET_IP_H_
-#define	_NET_IP_H_
+#ifndef _LINUX_NET_IP_H_
+#define	_LINUX_NET_IP_H_
 
 #include "opt_inet.h"
 
@@ -79,4 +79,4 @@ ip_ib_mc_map(uint32_t addr, const unsigned char *bcast, char *buf)
 }
 #endif
 
-#endif	/* _NET_IP_H_ */
+#endif	/* _LINUX_NET_IP_H_ */

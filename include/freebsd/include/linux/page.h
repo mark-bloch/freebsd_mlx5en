@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_PAGE_H_
-#define _FBSD_PAGE_H_
+#ifndef	_LINUX_PAGE_H_
+#define _LINUX_PAGE_H_
 
 #include <linux/types.h>
 
@@ -49,4 +48,4 @@
 #undef	PAGE_MASK
 #define	PAGE_MASK	(~(PAGE_SIZE-1))
 
-#endif	/* _FBSD_PAGE_H_ */
+#endif	/* _LINUX_PAGE_H_ */

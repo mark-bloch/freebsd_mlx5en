@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_DEVICE_H_
-#define	_FBSD_DEVICE_H_
+#ifndef	_LINUX_DEVICE_H_
+#define	_LINUX_DEVICE_H_
 
 #include <linux/types.h>
 #include <linux/kobject.h>
@@ -53,7 +52,7 @@ struct class {
 	devclass_t	bsdclass;
 	void		(*class_release)(struct class *class);
 	void		(*dev_release)(struct device *dev);
-	char *(*devnode)(struct device *dev, umode_t *mode);
+	char *		(*devnode)(struct device *dev, umode_t *mode);
 };
 
 struct device {
@@ -74,15 +73,11 @@ struct device {
 extern struct device linux_rootdev;
 extern struct kobject class_root;
 
-
 struct class_attribute {
         struct attribute attr;
-        ssize_t (*show)(struct class *class, struct class_attribute *attr,
-                        char *buf);
-        ssize_t (*store)(struct class *class, struct class_attribute *attr,
-                        const char *buf, size_t count);
-        const void *(*namespace)(struct class *class,
-                                 const struct class_attribute *attr);
+        ssize_t (*show)(struct class *, struct class_attribute *, char *);
+        ssize_t (*store)(struct class *, struct class_attribute *, const char *, size_t);
+        const void *(*namespace)(struct class *, const struct class_attribute *);
 };
 
 #define	CLASS_ATTR(_name, _mode, _show, _store)				\
@@ -449,4 +444,4 @@ static inline char *kasprintf(gfp_t gfp, const char *fmt, ...)
 }
 
 
-#endif	/* _FBSD_DEVICE_H_ */
+#endif	/* _LINUX_DEVICE_H_ */

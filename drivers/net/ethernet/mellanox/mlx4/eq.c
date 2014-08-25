@@ -31,15 +31,13 @@
  * SOFTWARE.
  */
 
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/slab.h>
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
 
 #include <linux/mlx4/cmd.h>
-#include <linux/cpu_rmap.h>
 
 #include "mlx4.h"
 #include "fw.h"

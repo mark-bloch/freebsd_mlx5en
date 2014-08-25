@@ -35,7 +35,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/fs.h>
@@ -43,7 +42,6 @@
 #include <linux/sched.h>
 #include <linux/file.h>
 #include <linux/cdev.h>
-#include <linux/anon_inodes.h>
 #include <linux/slab.h>
 #include <linux/ktime.h>
 #include <linux/rbtree.h>

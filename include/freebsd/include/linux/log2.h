@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -27,8 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef	_FBSD_LOG2_H_
-#define	_FBSD_LOG2_H_
+#ifndef	_LINUX_LOG2_H_
+#define	_LINUX_LOG2_H_
 
 #include <linux/types.h>
 
@@ -167,4 +167,4 @@ int __ilog2_u64(u64 n)
 	__ilog2_u64(n)				\
  )
 
-#endif	/* _FBSD_LOG2_H_ */
+#endif	/* _LINUX_LOG2_H_ */

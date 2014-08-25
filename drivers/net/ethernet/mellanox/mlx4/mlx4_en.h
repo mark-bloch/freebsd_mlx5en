@@ -45,7 +45,6 @@
 #ifdef CONFIG_MLX4_EN_DCB
 #include <linux/dcbnl.h>
 #endif
-#include <linux/cpu_rmap.h>
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/qp.h>
@@ -53,7 +52,6 @@
 #include <linux/mlx4/srq.h>
 #include <linux/mlx4/doorbell.h>
 #include <linux/mlx4/cmd.h>
-#include <linux/bitmap.h>
 
 #include <netinet/tcp_lro.h>
 

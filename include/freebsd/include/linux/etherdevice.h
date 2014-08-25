@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2007 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014 Mellanox Technologies, Ltd. All rights reserved.
  *
@@ -32,8 +32,8 @@
  */
 
 
-#ifndef _FBSD_ETHERDEVICE
-#define _FBSD_ETHERDEVICE
+#ifndef _LINUX_ETHERDEVICE
+#define _LINUX_ETHERDEVICE
 
 #include <linux/types.h>
 
@@ -91,4 +91,4 @@ static inline bool is_valid_ether_addr(const u8 *addr)
 
 
 
-#endif /* _FBSD_ETHERDEVICE */
+#endif /* _LINUX_ETHERDEVICE */

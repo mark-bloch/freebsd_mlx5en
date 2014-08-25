@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,9 +26,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef _FBSD_TIMER_H_
-#define _FBSD_TIMER_H_
+#ifndef _LINUX_TIMER_H_
+#define _LINUX_TIMER_H_
 
 #include <linux/types.h>
 
@@ -90,4 +89,4 @@ round_jiffies(unsigned long j)
 
 #define round_jiffies_relative(j) round_jiffies(j)
 
-#endif /* _FBSD_TIMER_H_ */
+#endif /* _LINUX_TIMER_H_ */

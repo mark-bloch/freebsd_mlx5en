@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
@@ -26,12 +26,13 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef	_FBSD_NETDEVICE_H_
-#define	_FBSD_NETDEVICE_H_
+#ifndef	_LINUX_NETDEVICE_H_
+#define	_LINUX_NETDEVICE_H_
 
 #include <linux/types.h>
+
 #include <sys/socket.h>
+
 #include <net/if_types.h>
 #include <net/if.h>
 #include <net/if_var.h>
@@ -39,7 +40,6 @@
 
 #include <linux/completion.h>
 #include <linux/device.h>
-#include <linux/ethtool.h>
 #include <linux/workqueue.h>
 #include <linux/net.h>
 #include <linux/notifier.h>
@@ -100,19 +100,19 @@ _handle_ifnet_departure_event(void *arg, struct ifnet *ifp)
 static inline void
 _handle_iflladdr_event(void *arg, struct ifnet *ifp)
 {
-        struct notifier_block *nb;
+	struct notifier_block *nb;
 
-        nb = arg;
-        nb->notifier_call(nb, NETDEV_CHANGEADDR, ifp);
+	nb = arg;
+	nb->notifier_call(nb, NETDEV_CHANGEADDR, ifp);
 }
 
 static inline void
 _handle_ifaddr_event(void *arg, struct ifnet *ifp)
 {
-        struct notifier_block *nb;
+	struct notifier_block *nb;
 
-        nb = arg;
-        nb->notifier_call(nb, NETDEV_CHANGEIFADDR, ifp);
+	nb = arg;
+	nb->notifier_call(nb, NETDEV_CHANGEIFADDR, ifp);
 }
 
 static inline int
@@ -125,8 +125,8 @@ register_netdevice_notifier(struct notifier_block *nb)
 	    ifnet_arrival_event, _handle_ifnet_arrival_event, nb, 0);
 	nb->tags[NETDEV_UNREGISTER] = EVENTHANDLER_REGISTER(
 	    ifnet_departure_event, _handle_ifnet_departure_event, nb, 0);
-        nb->tags[NETDEV_CHANGEADDR] = EVENTHANDLER_REGISTER(
-            iflladdr_event, _handle_iflladdr_event, nb, 0);
+	nb->tags[NETDEV_CHANGEADDR] = EVENTHANDLER_REGISTER(
+	    iflladdr_event, _handle_iflladdr_event, nb, 0);
 
 	return (0);
 }
@@ -200,4 +200,4 @@ dev_mc_add(struct net_device *dev, void *addr, int alen, int newonly)
 	return -if_addmulti(dev, (struct sockaddr *)&sdl, NULL);
 }
 
-#endif	/* _FBSD_NETDEVICE_H_ */
+#endif	/* _LINUX_NETDEVICE_H_ */

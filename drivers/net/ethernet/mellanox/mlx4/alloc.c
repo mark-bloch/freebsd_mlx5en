@@ -34,8 +34,7 @@
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
-#include <linux/export.h>
-#include <linux/bitmap.h>
+#include <linux/module.h>
 #include <linux/dma-mapping.h>
 #include <linux/vmalloc.h>
 

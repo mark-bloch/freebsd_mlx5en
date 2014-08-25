@@ -34,7 +34,6 @@
 #include <linux/log2.h>
 #include <linux/slab.h>
 #include <linux/netdevice.h>
-#include <linux/bitmap.h>
 #include <linux/bitops.h>
 
 #include <rdma/ib_cache.h>
@@ -1730,7 +1729,7 @@ static void update_mcg_macs(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp)
 	}
 }
 
-static int handle_eth_ud_smac_index(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, u8 *smac,
+static int handle_eth_ud_smac_index(struct mlx4_ib_dev *dev, struct mlx4_ib_qp *qp, const u8 *smac,
 				    struct mlx4_qp_context *context)
 {
 	struct net_device *ndev;
@@ -2048,7 +2047,7 @@ static int __mlx4_ib_modify_qp(struct ib_qp *ibqp,
 			if (qp->mlx4_ib_qp_type == MLX4_IB_QPT_UD ||
 			    qp->mlx4_ib_qp_type == MLX4_IB_QPT_PROXY_GSI ||
 			    qp->mlx4_ib_qp_type == MLX4_IB_QPT_TUN_GSI) {
-				err = handle_eth_ud_smac_index(dev, qp, (u8 *)attr->smac, context);
+				err = handle_eth_ud_smac_index(dev, qp, (const u8 *)attr->smac, context);
 				if (err)
 					return -EINVAL;
 			}
