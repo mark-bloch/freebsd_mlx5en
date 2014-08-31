@@ -2423,7 +2423,6 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 				ibdev->counters[i].status = 0;
 			}
 
-
 			dev_info(&dev->pdev->dev,
 				 "%s: allocated counter index %d for port %d\n",
 				 __func__, ibdev->counters[i].counter_index, i+1);
@@ -2514,6 +2513,11 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	return ibdev;
 
 err_notify:
+	for (j = 0; j < ARRAY_SIZE(mlx4_class_attributes); ++j) {
+                device_remove_file(&ibdev->ib_dev.dev,
+                        mlx4_class_attributes[j]);
+        }
+
 	if (ibdev->iboe.nb.notifier_call) {
 		if (unregister_netdevice_notifier(&ibdev->iboe.nb))
 			pr_warn("failure unregistering notifier\n");
@@ -2632,7 +2636,7 @@ int mlx4_ib_steer_qp_reg(struct mlx4_ib_dev *mdev, struct mlx4_ib_qp *mqp,
 static void mlx4_ib_remove(struct mlx4_dev *dev, void *ibdev_ptr)
 {
 	struct mlx4_ib_dev *ibdev = ibdev_ptr;
-	int p;
+	int p, j;
 	int dev_idx, ret;
 
 	if (ibdev->iboe.nb_inet.notifier_call) {
@@ -2644,6 +2648,13 @@ static void mlx4_ib_remove(struct mlx4_dev *dev, void *ibdev_ptr)
 	mlx4_ib_close_sriov(ibdev);
 	sysfs_remove_group(&ibdev->ib_dev.dev.kobj, &diag_counters_group);
 	mlx4_ib_mad_cleanup(ibdev);
+
+	for (j = 0; j < ARRAY_SIZE(mlx4_class_attributes); ++j) {
+		device_remove_file(&ibdev->ib_dev.dev,
+			mlx4_class_attributes[j]);
+	}
+
+
 	dev_idx = -1;
 	if (dr_active && !(ibdev->dev->flags & MLX4_FLAG_DEV_NUM_STR)) {
 		ret = sscanf(ibdev->ib_dev.name, "mlx4_%d", &dev_idx);
