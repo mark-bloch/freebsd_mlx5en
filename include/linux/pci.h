@@ -151,7 +151,6 @@ struct pci_dev {
 	unsigned int		irq;
         unsigned int            devfn;
         u8                      revision;
-        struct pci_devinfo      *bus; /* bus this device is on, equivalent to linux struct pci_bus */
 };
 
 static inline struct resource_list_entry *
