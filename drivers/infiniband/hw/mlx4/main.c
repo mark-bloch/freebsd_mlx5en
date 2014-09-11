@@ -1397,8 +1397,6 @@ static int mlx4_ib_mcg_attach(struct ib_qp *ibqp, union ib_gid *gid, u16 lid)
 	DECLARE_BITMAP(ports, MLX4_MAX_PORTS);
 	int i = 0;
 
-
-
 	if (mdev->dev->caps.steering_mode == MLX4_STEERING_MODE_B0 &&
 	    ibqp->qp_type == IB_QPT_RAW_PACKET)
 		gid->raw[5] = mqp->port;

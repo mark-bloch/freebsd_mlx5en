@@ -1180,8 +1180,12 @@ static ssize_t show_dev_abi_version(struct device *device,
 }
 static DEVICE_ATTR(abi_version, S_IRUGO, show_dev_abi_version, NULL);
 
-static CLASS_ATTR_STRING(abi_version, S_IRUGO,
-			 __stringify(IB_USER_VERBS_ABI_VERSION));
+static ssize_t show_abi_version(struct class *class, struct class_attribute *attr, char *buf)
+{
+        return sprintf(buf, "%d\n", IB_USER_VERBS_ABI_VERSION);
+}
+
+static CLASS_ATTR(abi_version, S_IRUGO, show_abi_version, NULL);
 
 static dev_t overflow_maj;
 static DECLARE_BITMAP(overflow_map, IB_UVERBS_MAX_DEVICES);
@@ -1340,7 +1344,7 @@ static int __init ib_uverbs_init(void)
 
 	uverbs_class->devnode = uverbs_devnode;
 
-	ret = class_create_file(uverbs_class, &class_attr_abi_version.attr);
+	ret = class_create_file(uverbs_class, &class_attr_abi_version);
 	if (ret) {
 		printk(KERN_ERR "user_verbs: couldn't create abi_version attribute\n");
 		goto out_class;

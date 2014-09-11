@@ -177,7 +177,7 @@ class_show(struct kobject *kobj, struct attribute *attr, char *buf)
 	error = -EIO;
 	if (dattr->show)
 		error = dattr->show(container_of(kobj, struct class, kobj),
-		    dattr, buf);
+			dattr, buf);
 	return (error);
 }
 
@@ -192,7 +192,7 @@ class_store(struct kobject *kobj, struct attribute *attr, const char *buf,
 	error = -EIO;
 	if (dattr->store)
 		error = dattr->store(container_of(kobj, struct class, kobj),
-		    dattr, buf, count);
+			dattr, buf, count);
 	return (error);
 }
 

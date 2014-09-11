@@ -1034,8 +1034,11 @@ static ssize_t show_port(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(port, S_IRUGO, show_port, NULL);
 
-static CLASS_ATTR_STRING(abi_version, S_IRUGO,
-			 __stringify(IB_USER_MAD_ABI_VERSION));
+static ssize_t show_abi_version(struct class *class, struct class_attribute *attr, char *buf)
+{
+	        return sprintf(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
+}
+static CLASS_ATTR(abi_version, S_IRUGO, show_abi_version, NULL);
 
 static dev_t overflow_maj;
 static int find_overflow_devnum(void)
@@ -1270,7 +1273,7 @@ static int __init ib_umad_init(void)
 
 	umad_class->devnode = umad_devnode;
 
-	ret = class_create_file(umad_class, &class_attr_abi_version.attr);
+	ret = class_create_file(umad_class, &class_attr_abi_version);
 	if (ret) {
 		printk(KERN_ERR "user_mad: couldn't create abi_version attribute\n");
 		goto out_class;
