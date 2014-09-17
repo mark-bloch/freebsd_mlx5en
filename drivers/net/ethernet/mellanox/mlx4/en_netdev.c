@@ -2366,6 +2366,9 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_ppp",
             CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
             mlx4_en_set_rx_ppp, "I", "RX Per-priority pause");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "port_num",
+            CTLTYPE_INT | CTLFLAG_RD, &priv->port, 0,
+            "Port Number");
 
         /* Add coalescer configuration. */
         coal = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO,
