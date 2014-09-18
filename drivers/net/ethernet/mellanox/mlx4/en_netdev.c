@@ -2337,6 +2337,9 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
 
         dev = priv->dev;
         ctx = &priv->conf_ctx;
+        static char device_name[20];
+
+
 
         sysctl_ctx_init(ctx);
         priv->sysctl = SYSCTL_ADD_NODE(ctx, SYSCTL_STATIC_CHILDREN(_hw),
@@ -2369,6 +2372,10 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "port_num",
             CTLTYPE_INT | CTLFLAG_RD, &priv->port, 0,
             "Port Number");
+        sprintf(device_name, "%s", device_get_nameunit(priv->mdev->pdev->dev.bsddev));
+        SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "device_name",
+			CTLFLAG_RD, device_name, 0,
+			"pci device name");
 
         /* Add coalescer configuration. */
         coal = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO,
