@@ -37,7 +37,7 @@
 struct file_operations;
 
 #include <linux/debugfs.h>
-#include <linux/export.h>
+#include <linux/module.h>
 
 #include "ipoib.h"
 

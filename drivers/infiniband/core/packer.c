@@ -31,7 +31,7 @@
  * SOFTWARE.
  */
 
-#include <linux/export.h>
+#include <linux/module.h>
 #include <linux/string.h>
 
 #include <rdma/ib_pack.h>

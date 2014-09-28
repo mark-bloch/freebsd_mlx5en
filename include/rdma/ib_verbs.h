@@ -53,7 +53,7 @@
 
 #include <linux/mlx4/driver.h>
 
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 #include <asm/uaccess.h>
 
 extern struct workqueue_struct *ib_wq;

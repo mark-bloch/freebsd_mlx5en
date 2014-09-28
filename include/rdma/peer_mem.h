@@ -34,7 +34,6 @@
 #define PEER_MEM_H
 
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
 #include <linux/scatterlist.h>

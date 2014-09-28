@@ -5,7 +5,6 @@
 
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
-#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/io.h>           /* For ioremap_nocache, ioremap, iounmap */
 #include <linux/random.h>

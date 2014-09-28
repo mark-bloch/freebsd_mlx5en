@@ -1,8 +1,6 @@
 #ifndef _COMPAT_LINUX_PRINTK_H
 #define _COMPAT_LINUX_PRINTK_H 1
 
-#include <linux/version.h>
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
 #include_next <linux/printk.h>
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) */

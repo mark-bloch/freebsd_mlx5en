@@ -96,7 +96,6 @@
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/vmalloc.h>
-#include <linux/version.h>
 #include <linux/mm.h>
 #include <asm/uaccess.h>
 #include <linux/proc_fs.h>

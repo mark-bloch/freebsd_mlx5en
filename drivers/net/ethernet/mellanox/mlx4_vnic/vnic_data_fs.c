@@ -33,7 +33,6 @@
 #include <linux/err.h>
 #include <linux/seq_file.h>
 #include <linux/debugfs.h>
-#include <linux/version.h>
 
 #include "vnic.h"
 #include "vnic_data.h"
