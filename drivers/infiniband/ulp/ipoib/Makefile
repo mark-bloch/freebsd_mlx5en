@@ -1,7 +1,6 @@
 # $FreeBSD$
 .PATH:  ${.CURDIR}/../../../../drivers/infiniband/ulp/ipoib
 .PATH:  ${.CURDIR}/../../../../include/linux
-.PATH:  ${.CURDIR}/../../../../include/freebsd/include/linux
 
 .include <bsd.own.mk>
 

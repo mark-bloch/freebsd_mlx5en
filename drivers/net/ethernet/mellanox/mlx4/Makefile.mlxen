@@ -1,7 +1,6 @@
 # $FreeBSD$
 .PATH:  ${.CURDIR}/../../../../../drivers/net/ethernet/mellanox/mlx4/ 
 .PATH:  ${.CURDIR}/../../../../../include/linux
-.PATH:  ${.CURDIR}/../../../../../include/freebsd/include/linux
 
 .include <bsd.own.mk>
 
@@ -11,7 +10,6 @@ SRCS+= utils.c en_main.c en_netdev.c en_rx.c en_cq.c en_tx.c en_port.c en_resour
 
 CFLAGS+= -I${.CURDIR}/../../../../../drivers/net/ethernet/mellanox/mlx4/ 
 CFLAGS+= -I${.CURDIR}/../../../../../include/
-CFLAGS+= -I${.CURDIR}/../../../../../include/freebsd/include
 
 .if !defined(KERNBUILDDIR)
 .if ${MK_INET_SUPPORT} != "no"

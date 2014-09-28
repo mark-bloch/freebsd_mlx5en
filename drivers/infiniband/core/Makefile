@@ -1,7 +1,6 @@
 # $FreeBSD$
 .PATH:  ${.CURDIR}/../../../drivers/infiniband/core
 .PATH:  ${.CURDIR}/../../../include/linux
-.PATH:  ${.CURDIR}/../../../include/freebsd/include/linux
 
 .include <bsd.own.mk>
 
@@ -17,7 +16,6 @@ SRCS+= vnode_if.h device_if.h bus_if.h pci_if.h opt_inet.h opt_inet6.h
 
 CFLAGS+= -I${.CURDIR}/../../../drivers/infiniband/core
 CFLAGS+= -I${.CURDIR}/../../../include/
-CFLAGS+= -I${.CURDIR}/../../../include/freebsd/include
 CFLAGS+= -DINET6 -DINET -DOFED
 
 .include <bsd.kmod.mk>

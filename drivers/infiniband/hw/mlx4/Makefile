@@ -1,7 +1,6 @@
 # $FreeBSD$
 .PATH:  ${.CURDIR}/../../../../drivers/infiniband/hw/mlx4
 .PATH:  ${.CURDIR}/../../../../include/linux
-.PATH:  ${.CURDIR}/../../../../include/freebsd/include/linux
 
 .include <bsd.own.mk>
 
@@ -13,7 +12,6 @@ SRCS+=	opt_inet.h opt_inet6.h
 
 CFLAGS+= -I${.CURDIR}/../../../../drivers/infiniband/hw/mlx4
 CFLAGS+= -I${.CURDIR}/../../../../include/
-CFLAGS+= -I${.CURDIR}/../../../../include/freebsd/include
 CFLAGS+= -DCONFIG_INFINIBAND_USER_MEM
 CFLAGS+= -DINET6 -DINET -DOFED
 
