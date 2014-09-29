@@ -743,75 +743,6 @@ static u64 mlx4_en_mac_to_u64(u8 *addr)
         return mac;
 }
 
-static struct mbuf *
-m_dup2(struct mbuf *m, int how)
-{
-	struct mbuf **p, *top = NULL;
-	int remain, moff, nsize;
-
-	MBUF_CHECKSLEEP(how);
-	/* Sanity check */
-	if (m == NULL)
-		return (NULL);
-	M_ASSERTPKTHDR(m);
-
-	/* While there's more data, get a new mbuf, tack it on, and fill it */
-	remain = m->m_pkthdr.len;
-	moff = 0;
-	p = &top;
-	while (remain > 0 || top == NULL) {	/* allow m->m_pkthdr.len == 0 */
-		struct mbuf *n;
-
-		/* Get the next new mbuf */
-		if (remain >= MINCLSIZE) {
-			n = m_getjcl(how, m->m_type, 0, MJUMPAGESIZE);
-			nsize = MJUMPAGESIZE;
-		} else {
-			n = m_get(how, m->m_type);
-			nsize = MLEN;
-		}
-		if (n == NULL)
-			goto nospace;
-
-		if (top == NULL) {		/* First one, must be PKTHDR */
-			if (!m_dup_pkthdr(n, m, how)) {
-				m_free(n);
-				goto nospace;
-			}
-			if ((n->m_flags & M_EXT) == 0)
-				nsize = MHLEN;
-		}
-		n->m_len = 0;
-
-		/* Link it into the new chain */
-		*p = n;
-		p = &n->m_next;
-
-		/* Copy data from original mbuf(s) into new mbuf */
-		while (n->m_len < nsize && m != NULL) {
-			int chunk = min(nsize - n->m_len, m->m_len - moff);
-
-			bcopy(m->m_data + moff, n->m_data + n->m_len, chunk);
-			moff += chunk;
-			n->m_len += chunk;
-			remain -= chunk;
-			if (moff == m->m_len) {
-				m = m->m_next;
-				moff = 0;
-			}
-		}
-
-		/* Check correct total mbuf length */
-		KASSERT((remain > 0 && m != NULL) || (remain == 0 && m == NULL),
-		    	("%s: bogus m_pkthdr.len", __func__));
-	}
-	return (top);
-
-nospace:
-	m_freem(top);
-	return (NULL);
-}
-
 static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -855,7 +786,7 @@ retry:
 	nr_txbb = desc_size / TXBB_SIZE;
 	if (unlikely(nr_txbb > MAX_DESC_TXBBS)) {
 		if (defrag) {
-                        mb = m_dup2(*mbp, M_NOWAIT);
+                        mb = m_defrag(*mbp, M_NOWAIT);
                         if (mb == NULL) {
                                 mb = *mbp;
                                 goto tx_drop;
