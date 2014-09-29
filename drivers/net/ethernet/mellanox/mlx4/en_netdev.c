@@ -1712,8 +1712,6 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 
 	en_dbg(DRV, priv, "Destroying netdev on port:%d\n", priv->port);
 
-	atomic_fetchadd_int(&mlx4_en_unit, -1);
-
         if (priv->vlan_attach != NULL)
                 EVENTHANDLER_DEREGISTER(vlan_config, priv->vlan_attach);
         if (priv->vlan_detach != NULL)
