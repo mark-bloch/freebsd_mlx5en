@@ -1378,5 +1378,5 @@ static void __exit ib_ucm_cleanup(void)
 	idr_destroy(&ctx_id_table);
 }
 
-module_init(ib_ucm_init);
+module_init_order(ib_ucm_init, SI_ORDER_THIRD);
 module_exit(ib_ucm_cleanup);
