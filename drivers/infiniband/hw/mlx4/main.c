@@ -48,7 +48,7 @@
 #include <linux/mlx4/driver.h>
 #include <linux/mlx4/cmd.h>
 #include <linux/sched.h>
-#include <asm/page.h>
+#include <linux/page.h>
 #include "mlx4_ib.h"
 #include "mlx4_exp.h"
 #include "user.h"
