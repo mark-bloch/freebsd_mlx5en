@@ -1691,8 +1691,6 @@ err:
 	return -ENOMEM;
 }
 
-static const char fmt_u64[] = "%llu\n";
-
 struct en_port_attribute {
 	struct attribute attr;
 	ssize_t (*show)(struct en_port *, struct en_port_attribute *, char *buf);
