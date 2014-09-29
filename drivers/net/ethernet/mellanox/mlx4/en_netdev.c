@@ -2120,7 +2120,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	mdev->pndev[priv->port] = dev;
 
 	priv->last_link_state = MLX4_DEV_EVENT_PORT_DOWN;
-	if_link_state_change(dev, LINK_STATE_DOWN);
         mlx4_en_set_default_moderation(priv);
 
 	/* Set default MAC */
@@ -2129,6 +2128,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 
 	ether_ifattach(dev, dev_addr);
+	if_link_state_change(dev, LINK_STATE_DOWN);
 	ifmedia_init(&priv->media, IFM_IMASK | IFM_ETH_FMASK,
 	    mlx4_en_media_change, mlx4_en_media_status);
 	ifmedia_add(&priv->media, IFM_ETHER | IFM_FDX | IFM_1000_T, 0, NULL);
