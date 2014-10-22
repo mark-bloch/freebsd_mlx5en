@@ -48,6 +48,7 @@
 
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
+#include <sys/queue.h>
 
 #include "mlx4_en.h"
 #include "en_port.h"
@@ -1480,13 +1481,20 @@ void mlx4_en_stop_port(struct net_device *dev)
 
 	/* Free TX Rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring[i] == NULL) {
+			continue;
+		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[i]);
 		mlx4_en_deactivate_cq(priv, priv->tx_cq[i]);
 	}
 	msleep(10);
 
-	for (i = 0; i < priv->tx_ring_num; i++)
+	for (i = 0; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring[i] == NULL) {
+			continue;
+		}
 		mlx4_en_free_tx_buf(dev, priv->tx_ring[i]);
+	}
 
 	/* Free RSS qps */
 	mlx4_en_release_rss_steer(priv);
@@ -1520,10 +1528,13 @@ static void mlx4_en_restart(struct work_struct *work)
 	if (priv->blocked == 0 || priv->port_up == 0)
 		return;
 	for (i = 0; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring[i] == NULL) {
+			continue;
+		}
 		ring = priv->tx_ring[i];
 		if (ring->blocked &&
-				ring->watchdog_time + MLX4_EN_WATCHDOG_TIMEOUT < ticks)
-			goto reset;
+			ring->watchdog_time + MLX4_EN_WATCHDOG_TIMEOUT < ticks)
+		goto reset;
 	}
 	return;
 
@@ -1652,7 +1663,7 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
 	}
 
 	/* Create tx Rings */
-	for (i = 0; i < priv->tx_ring_num; i++) {
+	for (i = 0; i < priv->native_tx_ring_num; i++) {
 		if (mlx4_en_create_cq(priv, &priv->tx_cq[i],
 				      prof->tx_ring_size, i, TX, node))
 			goto err;
@@ -1887,6 +1898,28 @@ static int mlx4_en_media_change(struct ifnet *dev)
 	return (error);
 }
 
+static void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int ring_id)
+{
+	struct mlx4_en_tx_ring *tx_ring;
+	struct sysctl_ctx_list *ctx;
+	struct sysctl_oid_list *head_node;
+	struct sysctl_oid *ring_node;
+	struct sysctl_oid_list *ring_list;
+	char namebuf[128];
+
+	tx_ring = priv->tx_ring[ring_id];
+	ctx = &tx_ring->rl_stats_ctx;
+	snprintf(namebuf, sizeof(namebuf), "tx_ring%d", ring_id);
+	head_node = SYSCTL_CHILDREN(priv->sysctl_stat);
+	ring_node = SYSCTL_ADD_NODE(ctx, head_node, OID_AUTO, namebuf,
+			CTLFLAG_RD, NULL, "TX Ring");
+	ring_list = SYSCTL_CHILDREN(ring_node);
+	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "packets",
+			CTLFLAG_RD, &tx_ring->packets, "TX packets");
+	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",
+			CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
+}
+
 static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 {
 	struct mlx4_en_priv *priv;
@@ -1894,7 +1927,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	struct ifreq *ifr;
 	int error;
 	int mask;
-
+	struct in_ratectlreq *in_ratectl;
 	error = 0;
 	mask = 0;
 	priv = dev->if_softc;
@@ -1950,6 +1983,22 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		mutex_unlock(&mdev->state_lock);
 		VLAN_CAPABILITIES(dev);
 		break;
+	case SIOCARATECTL:      /* add new rate control HW ring */
+                in_ratectl = (struct in_ratectlreq *)data;
+                error = mlx4_en_create_rate_limit_tx_res(priv, in_ratectl);
+                if (error)
+                        break;
+		/* Add sysctl statistics */
+		mlx4_en_rate_limit_sysctl_stat(priv, in_ratectl->tx_ring_id);
+		break;
+	case SIOCSRATECTL:      /* set parameters for existing HW ring */
+                break;
+	case SIOCGRATECTL:      /* get parameters for existing HW ring */
+                break;
+        case SIOCDRATECTL:      /* delete an existing rl HW ring */
+                in_ratectl = (struct in_ratectlreq *)data;
+                mlx4_en_destroy_rate_limit_tx_res(priv, in_ratectl->tx_ring_id);
+                break;
 	default:
 		error = ether_ioctl(dev, command, data);
 		break;
@@ -2015,6 +2064,10 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 	priv->num_tx_rings_p_up = mdev->profile.num_tx_rings_p_up;
 	priv->tx_ring_num = prof->tx_ring_num;
+
+	/* Save non RL ring number */
+	priv->native_tx_ring_num = priv->tx_ring_num;
+
 	priv->tx_ring = kcalloc(MAX_TX_RINGS,
 				sizeof(struct mlx4_en_tx_ring *), GFP_KERNEL);
 	if (!priv->tx_ring) {
@@ -2076,6 +2129,16 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	err = mlx4_en_alloc_resources(priv);
 	if (err)
 		goto out;
+
+	/* Rate Limit support */
+	spin_lock_init(&priv->reuse_index_list_lock);
+	STAILQ_INIT(&priv->reuse_index_list_head);
+
+	for (i = priv->native_tx_ring_num; i < MAX_TX_RINGS; i++) {
+		struct mlx4_en_list_element *p_item;
+		p_item = priv->reuse_index_list_array + i;
+		p_item->val = i;
+	}
 
 	/* Allocate page for receive rings */
 	err = mlx4_alloc_hwq_res(mdev->dev, &priv->res,
@@ -2180,6 +2243,7 @@ out:
 	mlx4_en_destroy_netdev(dev);
 	return err;
 }
+
 static int mlx4_en_set_ring_size(struct net_device *dev,
     int rx_size, int tx_size)
 {
@@ -2354,9 +2418,12 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rx_rings",
             CTLFLAG_RD, &priv->rx_ring_num, 0,
             "Number of receive rings");
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "tx_rings",
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "native_tx_rings",
+            CTLFLAG_RD, &priv->native_tx_ring_num, 0,
+            "Number of native transmit rings");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "total_tx_rings",
             CTLFLAG_RD, &priv->tx_ring_num, 0,
-            "Number of transmit rings");
+            "Number of total transmit rings");
         SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_size",
             CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
             mlx4_en_set_rx_ring_size, "I", "Receive ring size");
@@ -2420,6 +2487,7 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	sysctl_ctx_init(ctx);
 	node = SYSCTL_ADD_NODE(ctx, SYSCTL_CHILDREN(priv->sysctl), OID_AUTO,
 	    "stat", CTLFLAG_RD, NULL, "Statistics");
+	priv->sysctl_stat = node;
 	node_list = SYSCTL_CHILDREN(node);
 
 #ifdef MLX4_EN_PERF_STAT
@@ -2557,18 +2625,18 @@ struct mlx4_en_pkt_stats {
 
 
 
-	for (i = 0; i < priv->tx_ring_num; i++) {
+	for (i = 0; i < priv->native_tx_ring_num; i++) {
 		tx_ring = priv->tx_ring[i];
 		snprintf(namebuf, sizeof(namebuf), "tx_ring%d", i);
 		ring_node = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO, namebuf,
-		    CTLFLAG_RD, NULL, "TX Ring");
+			CTLFLAG_RD, NULL, "TX Ring");
 		ring_list = SYSCTL_CHILDREN(ring_node);
 		SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "packets",
-		    CTLFLAG_RD, &tx_ring->packets, "TX packets");
+			CTLFLAG_RD, &tx_ring->packets, "TX packets");
 		SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",
-		    CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
-
+			CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
 	}
+
 	for (i = 0; i < priv->rx_ring_num; i++) {
 		rx_ring = priv->rx_ring[i];
 		snprintf(namebuf, sizeof(namebuf), "rx_ring%d", i);

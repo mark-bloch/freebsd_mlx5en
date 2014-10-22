@@ -136,6 +136,11 @@ enum {
 /* Maximum ring sizes */
 #define MLX4_EN_DEF_TX_QUEUE_SIZE       4096
 
+/* Rate Limit params */
+#define MLX4_EN_DEF_RL_TX_RING_SIZE     128
+#define MLX4_EN_DEF_RL_USER_PRIO	0
+#define MLX4_EN_DEF_MAX_RL_TX_RINGS	30000
+
 /* Minimum packet number till arming the CQ */
 #define MLX4_EN_MIN_RX_ARM	2048
 #define MLX4_EN_MIN_TX_ARM	2048
@@ -153,8 +158,8 @@ enum {
 #define MLX4_EN_MAX_TX_RING_P_UP	32
 #define MLX4_EN_NUM_UP			1
 
-#define MAX_TX_RINGS			(MLX4_EN_MAX_TX_RING_P_UP * \
-					 (MLX4_EN_NUM_UP + 1))
+#define MAX_TX_RINGS			((MLX4_EN_MAX_TX_RING_P_UP * \
+					(MLX4_EN_NUM_UP )) + MLX4_EN_DEF_MAX_RL_TX_RINGS)
 
 #define MLX4_EN_DEF_TX_RING_SIZE	1024
 #define MLX4_EN_DEF_RX_RING_SIZE  	1024
@@ -309,6 +314,8 @@ struct mlx4_en_tx_ring {
 	int full_size;
 	int inline_thold;
 	u64 watchdog_time;
+	/* Rate Limit support */
+	struct sysctl_ctx_list rl_stats_ctx;
 };
 
 struct mlx4_en_rx_desc {
@@ -534,6 +541,10 @@ struct mlx4_en_frag_info {
         u16 frag_prefix_size;
 };
 
+struct mlx4_en_list_element {
+	STAILQ_ENTRY(mlx4_en_list_element) entry;
+	int val;
+};
 
 struct mlx4_en_priv {
 	struct mlx4_en_dev *mdev;
@@ -625,6 +636,7 @@ struct mlx4_en_priv {
         struct ifmedia media;
 	volatile int blocked;
 	struct sysctl_oid *sysctl;
+	struct sysctl_oid *sysctl_stat;
 	struct sysctl_ctx_list conf_ctx;
 	struct sysctl_ctx_list stat_ctx;
 #define MLX4_EN_MAC_HASH_IDX 5
@@ -645,7 +657,11 @@ struct mlx4_en_priv {
 	unsigned long last_ifq_jiffies;
 	u64 if_counters_rx_errors;
 	u64 if_counters_rx_no_buffer;
-
+	/* Rate limit support */
+	u32 native_tx_ring_num;
+	spinlock_t reuse_index_list_lock;
+	STAILQ_HEAD(, mlx4_en_list_element) reuse_index_list_head;
+	struct mlx4_en_list_element reuse_index_list_array [MAX_TX_RINGS];
 };
 
 enum mlx4_en_wol {
@@ -806,6 +822,11 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     int cq, int user_prio);
 void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring);
+int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
+				in_ratectlreq *in_ratectl);
+void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
+                                    uint32_t ring_id);
+
 void mlx4_en_qflush(struct ifnet *dev);
 
 int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,
