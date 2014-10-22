@@ -37,6 +37,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/fs.h>
+#include <linux/printk.h>
 
 #include <rdma/ib_mad.h>
 #include <rdma/ib_pma.h>
@@ -273,7 +274,7 @@ static ssize_t show_port_gid(struct ib_port *p, struct port_attribute *attr,
 	if (ret)
 		return ret;
 
-	return sprintf(buf, "%pI6\n", gid.raw);
+	return sprintf(buf, GID_PRINT_FMT"\n",GID_PRINT_ARGS(gid.raw));
 }
 
 static ssize_t show_port_pkey(struct ib_port *p, struct port_attribute *attr,

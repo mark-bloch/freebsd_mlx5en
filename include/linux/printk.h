@@ -1,59 +1,40 @@
-#ifndef _COMPAT_LINUX_PRINTK_H
-#define _COMPAT_LINUX_PRINTK_H 1
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
-#include_next <linux/printk.h>
-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) */
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
-#include <linux/kernel.h>
-
-#define pr_emerg_once(fmt, ...)					\
-	printk_once(KERN_EMERG pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_alert_once(fmt, ...)					\
-	printk_once(KERN_ALERT pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_crit_once(fmt, ...)					\
-	printk_once(KERN_CRIT pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_err_once(fmt, ...)					\
-	printk_once(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_warn_once(fmt, ...)					\
-	printk_once(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_warn pr_warning
-#define pr_notice_once(fmt, ...)				\
-	printk_once(KERN_NOTICE pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_info_once(fmt, ...)					\
-	printk_once(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
-#define pr_cont_once(fmt, ...)					\
-	printk_once(KERN_CONT pr_fmt(fmt), ##__VA_ARGS__)
-#if defined(DEBUG)
-#define pr_debug_once(fmt, ...)					\
-	printk_once(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
-#else
-#define pr_debug_once(fmt, ...)					\
-	no_printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
-#endif
-
-/*
- * ratelimited messages with local ratelimit_state,
- * no local ratelimit_state used in the !PRINTK case
+/*-
+ * Copyright (c) 2010 Isilon Systems, Inc.
+ * Copyright (c) 2010 iX Systems, Inc.
+ * Copyright (c) 2010 Panasas, Inc.
+ * Copyright (c) 2013, 2014 Mellanox Technologies, Ltd.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice unmodified, this list of conditions, and the following
+ *    disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef printk_ratelimited
-#ifdef CONFIG_PRINTK
-#define printk_ratelimited(fmt, ...)                                    \
-({                                                                      \
-        static DEFINE_RATELIMIT_STATE(_rs,                              \
-                                      DEFAULT_RATELIMIT_INTERVAL,       \
-                                      DEFAULT_RATELIMIT_BURST);         \
-                                                                        \
-        if (__ratelimit(&_rs))                                          \
-                printk(fmt, ##__VA_ARGS__);                             \
-})
-#else
-#define printk_ratelimited(fmt, ...)                                    \
-        no_printk(fmt, ##__VA_ARGS__)
-#endif
-#endif /* ifndef printk_ratelimited */
 
-#endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)) */
+#ifndef _FBSD_PRINTK_H_
+#define _FBSD_PRINTK_H_
 
-#endif	/* _COMPAT_LINUX_PRINTK_H */
+/* GID printing macros */
+#define GID_PRINT_FMT			"%.4x:%.4x:%.4x:%.4x:%.4x:%.4x:%.4x:%.4x"
+#define GID_PRINT_ARGS(gid_raw)		htons(((u16 *)gid_raw)[0]), htons(((u16 *)gid_raw)[1]),\
+					htons(((u16 *)gid_raw)[2]), htons(((u16 *)gid_raw)[3]),\
+					htons(((u16 *)gid_raw)[4]), htons(((u16 *)gid_raw)[5]),\
+					htons(((u16 *)gid_raw)[6]), htons(((u16 *)gid_raw)[7])
+
+#endif	/* _FBSD_PRINTK_H */

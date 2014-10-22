@@ -49,6 +49,7 @@
 #include <linux/mlx4/cmd.h>
 #include <linux/sched.h>
 #include <linux/page.h>
+#include <linux/printk.h>
 #include "mlx4_ib.h"
 #include "mlx4_exp.h"
 #include "user.h"
@@ -1699,12 +1700,12 @@ static int update_gid_table(struct mlx4_ib_dev *dev, int port,
 	}
 
 	if (found == -1 && !clear && free < 0) {
-		pr_err("GID table of port %d is full. Can't add %pI6\n",
-		       port, gid);
+		pr_err("GID table of port %d is full. Can't add "GID_PRINT_FMT"\n",
+		       port, GID_PRINT_ARGS(gid));
 		return -ENOMEM;
 	}
 	if (found == -1 && clear) {
-		pr_err("%pI6 is not in GID table of port %d\n", gid, port);
+		pr_err(GID_PRINT_FMT" is not in GID table of port %d\n", GID_PRINT_ARGS(gid), port);
 		return -EINVAL;
 	}
 	if (found == -1 && !clear && free >= 0) {
