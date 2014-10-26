@@ -238,8 +238,7 @@ static int addr_resolve(struct sockaddr *src_in,
                         port = sin->sin_port;
                         sin->sin_port = 0;
                         memset(&sin->sin_zero, 0, sizeof(sin->sin_zero));
-                } else
-                        src_in = NULL;
+                }
                 break;
 #endif
 #ifdef INET6
@@ -262,7 +261,7 @@ static int addr_resolve(struct sockaddr *src_in,
          * If we have a source address to use look it up first and verify
          * that it is a local interface.
          */
-        if (src_in) {
+        if (sin->sin_addr.s_addr != INADDR_ANY) {
                 ifa = ifa_ifwithaddr(src_in);
                 if (sin)
                         sin->sin_port = port;
@@ -297,8 +296,10 @@ static int addr_resolve(struct sockaddr *src_in,
                 RTFREE_LOCKED(rte);
                 return -ENETUNREACH;
         } else {
-                if (ifp == NULL)
+                if (ifp == NULL) {
                         ifp = rte->rt_ifp;
+			ifa = rte->rt_ifa;
+		}
                 RT_UNLOCK(rte);
         }
 mcast:
@@ -334,8 +335,10 @@ mcast:
                 error = -EINVAL;
         }
         RTFREE(rte);
-        if (error == 0)
+        if (error == 0) {
+		memcpy(src_in, ifa->ifa_addr, ip_addr_size(ifa->ifa_addr));
                 return rdma_copy_addr(addr, ifp, edst);
+	}
         if (error == EWOULDBLOCK)
                 return -ENODATA;
         return -error;
