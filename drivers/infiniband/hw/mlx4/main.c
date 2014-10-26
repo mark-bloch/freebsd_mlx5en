@@ -1795,8 +1795,9 @@ static void mlx4_ib_get_dev_addr(struct net_device *dev, struct mlx4_ib_dev *ibd
 	/* IPv4 gids */
         TAILQ_FOREACH(ifa, &dev->if_addrhead, ifa_link) {
                 if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET){
-                        uint32_t addr = ((struct sockaddr_in *) ifa->ifa_addr)->sin_addr.s_addr;
-                        ipv6_addr_set_v4mapped(cpu_to_be32(addr), (struct in6_addr *)&gid);
+                        ipv6_addr_set_v4mapped(
+				((struct sockaddr_in *) ifa->ifa_addr)->sin_addr.s_addr,
+				(struct in6_addr *)&gid);
                         update_gid_table(ibdev, port, &gid, 0, 0);
                 }
 
