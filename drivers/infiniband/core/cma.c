@@ -474,7 +474,7 @@ struct rdma_cm_id *rdma_create_id(rdma_cm_event_handler event_handler,
 	if (!id_priv)
 		return ERR_PTR(-ENOMEM);
 
-	id_priv->owner = current->task_thread->td_proc->p_pid;
+	id_priv->owner = curthread->td_proc->p_pid;
 	id_priv->state = RDMA_CM_IDLE;
 	id_priv->id.context = context;
 	id_priv->id.event_handler = event_handler;
@@ -3004,8 +3004,7 @@ int rdma_accept(struct rdma_cm_id *id, struct rdma_conn_param *conn_param)
 
 	id_priv = container_of(id, struct rdma_id_private, id);
 
-	id_priv->owner = current->task_thread->td_proc->p_pid;
-
+	id_priv->owner = curthread->td_proc->p_pid;
 	if (!cma_comp(id_priv, RDMA_CM_CONNECT))
 		return -EINVAL;
 
