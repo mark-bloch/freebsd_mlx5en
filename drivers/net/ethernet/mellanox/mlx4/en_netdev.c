@@ -2353,10 +2353,10 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
             CTLFLAG_RW, &priv->msg_enable, 0,
             "Driver message enable bitfield");
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rx_rings",
-            CTLTYPE_INT | CTLFLAG_RD, &priv->rx_ring_num, 0,
+            CTLFLAG_RD, &priv->rx_ring_num, 0,
             "Number of receive rings");
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "tx_rings",
-            CTLTYPE_INT | CTLFLAG_RD, &priv->tx_ring_num, 0,
+            CTLFLAG_RD, &priv->tx_ring_num, 0,
             "Number of transmit rings");
         SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_size",
             CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
@@ -2371,7 +2371,7 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
             CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
             mlx4_en_set_rx_ppp, "I", "RX Per-priority pause");
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "port_num",
-            CTLTYPE_INT | CTLFLAG_RD, &priv->port, 0,
+            CTLFLAG_RD, &priv->port, 0,
             "Port Number");
         sprintf(device_name, "%s", device_get_nameunit(priv->mdev->pdev->dev.bsddev));
         SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "device_name",
