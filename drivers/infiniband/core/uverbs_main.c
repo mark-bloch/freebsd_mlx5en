@@ -437,6 +437,7 @@ static unsigned int ib_uverbs_event_poll(struct file *filp,
 	unsigned int pollflags = 0;
 	struct ib_uverbs_event_file *file = filp->private_data;
 
+	file->filp = filp;
 	poll_wait(filp, &file->poll_wait, wait);
 
 	spin_lock_irq(&file->lock);
@@ -518,6 +519,8 @@ void ib_uverbs_comp_handler(struct ib_cq *cq, void *cq_context)
 	spin_unlock_irqrestore(&file->lock, flags);
 
 	wake_up_interruptible(&file->poll_wait);
+	if (file->filp)
+		selwakeup(&file->filp->f_selinfo);
 	kill_fasync(&file->async_queue, SIGIO, POLL_IN);
 }
 
@@ -551,6 +554,8 @@ static void ib_uverbs_async_handler(struct ib_uverbs_file *file,
 	spin_unlock_irqrestore(&file->async_file->lock, flags);
 
 	wake_up_interruptible(&file->async_file->poll_wait);
+	if (file->async_file->filp)
+		selwakeup(&file->async_file->filp->f_selinfo);
 	kill_fasync(&file->async_file->async_queue, SIGIO, POLL_IN);
 }
 
