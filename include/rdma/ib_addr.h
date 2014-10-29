@@ -169,6 +169,7 @@ static inline int rdma_gid2ip(struct sockaddr *out, union ib_gid *gid)
 	if (ipv6_addr_v4mapped((struct in6_addr *)gid)) {
 		struct sockaddr_in *out_in = (struct sockaddr_in *)out;
 		memset(out_in, 0, sizeof(*out_in));
+		out_in->sin_len = sizeof(*out_in);
 		out_in->sin_family = AF_INET;
 		memcpy(&out_in->sin_addr.s_addr, gid->raw + 12, 4);
 	} else {
