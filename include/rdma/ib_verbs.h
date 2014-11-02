@@ -727,6 +727,7 @@ struct ib_wc {
 	u8			sl;
 	u8			dlid_path_bits;
 	u8			port_num;	/* valid only for DR SMPs on switches */
+	int                     csum_ok;
 	struct {
 		uint64_t	timestamp; /* timestamp = 0 indicates error*/
 	} ts;
