@@ -1917,7 +1917,7 @@ static int mlx4_ib_inet_event(struct notifier_block *this, unsigned long event,
         struct mlx4_ib_iboe *ibdev_iboe;
         int port = 0;
 
-        ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb);
+        ibdev = container_of(this, struct mlx4_ib_dev, iboe.nb_inet);
 
         struct net_device *real_dev = rdma_vlan_dev_real_dev(event_netdev) ?
                         rdma_vlan_dev_real_dev(event_netdev) :
