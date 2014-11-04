@@ -315,6 +315,7 @@ struct mlx4_en_tx_ring {
 	int inline_thold;
 	u64 watchdog_time;
 	/* Rate Limit support */
+	u64 rate_limit_val;
 	struct sysctl_ctx_list rl_stats_ctx;
 };
 
@@ -594,6 +595,7 @@ struct mlx4_en_priv {
 	__be32 ctrl_flags;
 	u32 flags;
 	u8 num_tx_rings_p_up;
+	u32 native_tx_ring_num;
 	u32 tx_ring_num;
 	u32 rx_ring_num;
 	u32 rx_mb_size;
@@ -658,7 +660,6 @@ struct mlx4_en_priv {
 	u64 if_counters_rx_errors;
 	u64 if_counters_rx_no_buffer;
 	/* Rate limit support */
-	u32 native_tx_ring_num;
 	spinlock_t reuse_index_list_lock;
 	STAILQ_HEAD(, mlx4_en_list_element) reuse_index_list_head;
 	struct mlx4_en_list_element reuse_index_list_array [MAX_TX_RINGS];
@@ -796,6 +797,7 @@ int mlx4_en_start_port(struct net_device *dev);
 void mlx4_en_stop_port(struct net_device *dev);
 
 void mlx4_en_free_resources(struct mlx4_en_priv *priv);
+void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv);
 int mlx4_en_alloc_resources(struct mlx4_en_priv *priv);
 
 int mlx4_en_pre_config(struct mlx4_en_priv *priv);

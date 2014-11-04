@@ -123,6 +123,8 @@ struct mlx4_dev_cap {
 	u32 sync_qp;
 	u8  timestamp_support;
 	u32 max_extended_counters;
+	/* Rate Limit support */
+	struct mlx4_rate_limit_caps rl_caps;
 };
 
 struct mlx4_func_cap {

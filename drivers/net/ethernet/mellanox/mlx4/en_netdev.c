@@ -1624,7 +1624,7 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 	}
 #endif
 
-	for (i = 0; i < priv->tx_ring_num; i++) {
+	for (i = 0; i < priv->native_tx_ring_num; i++) {
 		if (priv->tx_ring && priv->tx_ring[i])
 			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
 		if (priv->tx_cq && priv->tx_cq[i])
@@ -1642,6 +1642,19 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 	if (priv->sysctl)
 		sysctl_ctx_free(&priv->stat_ctx);
 
+
+}
+
+void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv)
+{
+	int i;
+
+	for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring && priv->tx_ring[i])
+			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
+		if (priv->tx_cq && priv->tx_cq[i])
+			mlx4_en_destroy_cq(priv, &priv->tx_cq[i]);
+	}
 
 }
 
@@ -1692,7 +1705,7 @@ err:
 		if (priv->rx_cq[i])
 			mlx4_en_destroy_cq(priv, &priv->rx_cq[i]);
 	}
-	for (i = 0; i < priv->tx_ring_num; i++) {
+	for (i = 0; i < priv->native_tx_ring_num; i++) {
 		if (priv->tx_ring[i])
 			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
 		if (priv->tx_cq[i])
@@ -1749,7 +1762,7 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	mdev->pndev[priv->port] = NULL;
 	mutex_unlock(&mdev->state_lock);
 
-
+	mlx4_en_free_rl_resources(priv);
 	mlx4_en_free_resources(priv);
 
 	/* freeing the sysctl conf cannot be called from within mlx4_en_free_resources */
@@ -1914,6 +1927,8 @@ static void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int ring_i
 	ring_node = SYSCTL_ADD_NODE(ctx, head_node, OID_AUTO, namebuf,
 			CTLFLAG_RD, NULL, "TX Ring");
 	ring_list = SYSCTL_CHILDREN(ring_node);
+	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "rate_limit_val",
+			CTLFLAG_RD, &tx_ring->rate_limit_val, "Rate Limit value");
 	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "packets",
 			CTLFLAG_RD, &tx_ring->packets, "TX packets");
 	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",
@@ -1924,10 +1939,10 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 {
 	struct mlx4_en_priv *priv;
 	struct mlx4_en_dev *mdev;
+	struct in_ratectlreq *in_ratectl;
 	struct ifreq *ifr;
 	int error;
 	int mask;
-	struct in_ratectlreq *in_ratectl;
 	error = 0;
 	mask = 0;
 	priv = dev->if_softc;

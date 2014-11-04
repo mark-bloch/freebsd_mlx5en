@@ -211,14 +211,16 @@ struct mlx4_qp_context {
 	__be32			msn;
 	__be16			rq_wqe_counter;
 	__be16			sq_wqe_counter;
-	u32			reserved3[2];
+	u32			reserved3;
+	__be16			rate_limit_params;
+	__be16			reserved4;
 	__be32			param3;
 	__be32			nummmcpeers_basemkey;
 	u8			log_page_size;
-	u8			reserved4[2];
+	u8			reserved5[2];
 	u8			mtt_base_addr_h;
 	__be32			mtt_base_addr_l;
-	u32			reserved5[10];
+	u32			reserved6[10];
 };
 
 struct mlx4_update_qp_context {
@@ -421,6 +423,12 @@ enum {
 
 struct mlx4_wqe_inline_seg {
 	__be32			byte_count;
+};
+
+/* Rate limit support */
+struct mlx4_qp_ctx_rate_limit {
+	u16	val;
+	u8	unit;
 };
 
 int mlx4_qp_modify(struct mlx4_dev *dev, struct mlx4_mtt *mtt,

@@ -87,6 +87,7 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->size = size;
 	ring->size_mask = size - 1;
 	ring->stride = stride;
+	ring->rate_limit_val = 0;
 	ring->full_size = ring->size - HEADROOM - MAX_DESC_TXBBS;
 	ring->inline_thold = min(inline_thold, MAX_INLINE);
 	mtx_init(&ring->tx_lock.m, "mlx4 tx", NULL, MTX_DEF);
@@ -215,6 +216,74 @@ static int find_available_tx_ring_index(struct mlx4_en_priv *priv)
 	return index;
 }
 
+static int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
+{
+	uint64_t min_b;
+	uint64_t max_b;
+	uint64_t interval;
+
+	min_b = (uint64_t) in_ratectl->min_bytes_per_interval;
+	max_b = (uint64_t) in_ratectl->max_bytes_per_interval;
+	interval = (uint64_t)in_ratectl->micros_per_interval;
+
+	if (interval == 0) {
+		return (EINVAL);
+	}
+
+	if (min_b > max_b) {
+		return (EINVAL);
+	}
+
+	return (0);
+}
+
+static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
+					struct in_ratectlreq *in_ratectl)
+{
+	struct mlx4_en_tx_ring *tx_ring;
+	uint64_t min_b;
+	uint64_t max_b;
+	uint64_t avg_b;
+	uint64_t interval;
+	uint64_t rate;
+	uint64_t max_rate_supported;
+	uint64_t min_rate_supported;
+
+	max_rate_supported = priv->mdev->dev->caps.rl_caps.calc_max_val;
+	min_rate_supported = priv->mdev->dev->caps.rl_caps.calc_min_val;
+
+	tx_ring = priv->tx_ring[index];
+
+	min_b = (uint64_t)in_ratectl->min_bytes_per_interval;
+	max_b = (uint64_t)in_ratectl->max_bytes_per_interval;
+	interval = (uint64_t)in_ratectl->micros_per_interval;
+
+	avg_b = (min_b + max_b) / 2;
+
+	if (max_b == 0) {
+		/* No rate limit */
+		return (0);
+	}
+
+	/* This should work for both options
+	 * min_b = max_b or min_b != max_b
+	 */
+	rate = DIV_ROUND_UP(avg_b *
+		((uint64_t)(8 * 1000000)), interval);
+
+	if (rate > max_rate_supported) {
+		en_warn(priv, "Exceeded max supported rate for ring %d, using max supprted value\n", index);
+		rate = max_rate_supported;
+	}
+
+	if (rate < min_rate_supported) {
+		en_warn(priv, "Exceeded min supported rate for ring %d, using min supprted value\n", index);
+		rate = min_rate_supported;
+	}
+
+	return rate;
+}
+
 int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
                                 in_ratectlreq *in_ratectl)
 {
@@ -229,18 +298,18 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	int index = 0;
 	struct mlx4_en_list_element *p_item;
 
-#if 0	/* Check for HW support */
-	if (!priv->mdev->rate_limit_support) {
-		en_err(priv, "No HW support for rate limited QP\n");
+	/* Check for HW/FW support */
+	if (!priv->mdev->dev->caps.rl_caps.number) {
+		en_err(priv, "No HW/FW support for Rate Limit QP\n");
 		return (ENODEV);
 	}
-#endif
-#if 0	/* Check rate limit val is lagit */
-	if (in_ratectl->micros_per_interval <= 0) {
+
+	/* Validate rate limit request */
+	err = validate_rate_ctl_req(in_ratectl);
+	if (err) {
 		en_err(priv, "Illegal Rate limit value\n");
-		return (EINVAL);
+		return (err);
 	}
-#endif
 
 	/* Create resources */
 
@@ -284,7 +353,16 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 
 	tx_ring = priv->tx_ring[index];
 
-	/* calculate requested rate */
+	/* Calculate requested rate */
+	tx_ring->rate_limit_val = mlx4_en_calc_tx_rate_limit(priv,
+					index, in_ratectl);
+
+#if 0   /* Debug */
+	printf("in_ratectl->min_bytes_per_interval= %d, \
+		in_ratectl->micros_per_interval = %d\n", in_ratectl->min_bytes_per_interval,
+			in_ratectl->micros_per_interval);
+	printf("Creating resources for rate %lu\n", tx_ring->rate_limit);
+#endif
 
 	err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
 					       MLX4_EN_DEF_RL_USER_PRIO);
@@ -330,6 +408,7 @@ void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 	en_dbg(DRV, priv, "Destroying tx ring, qpn: %d\n", ring->qpn);
 
 	sysctl_ctx_free(&ring->rl_stats_ctx);
+
 	buf_ring_free(ring->br, M_DEVBUF);
 	if (ring->bf_enabled)
 		mlx4_bf_free(mdev->dev, &ring->bf);
@@ -384,11 +463,33 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 
 }
 
+static void mlx4_en_rate_limit_to_qp(uint64_t rate_limit_val,
+			struct mlx4_qp_ctx_rate_limit *qp_ctx_rl)
+{
+	u64 temp = rate_limit_val;
+	u8 shift = 0;
+
+	do {
+		temp = (temp + 1023) / 1024;
+		shift++;
+		/* if temp is too big or if we don't loose precision, then loop */
+	} while (temp >= (1U << 12) || (temp & 1023) == 0);
+
+#if 0 /* Debug */
+		printf("MENY: %s:%d to_qp_rate=%d, shift=0x%x\n", __func__, __LINE__,(int)temp, shift);
+		printf("MENY: %s:%d qpn = %d \n", __func__, __LINE__, ring->qpn);
+#endif
+
+	qp_ctx_rl->val = temp;
+	qp_ctx_rl->unit = shift;
+}
+
 int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_tx_ring *ring,
 			     int cq, int user_prio)
 {
 	struct mlx4_en_dev *mdev = priv->mdev;
+	struct mlx4_qp_ctx_rate_limit qp_rl;
 	int err;
 
 	ring->cqn = cq;
@@ -403,8 +504,19 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 	ring->qp_state = MLX4_QP_STATE_RST;
 	ring->doorbell_qpn = ring->qp.qpn << 8;
 
+	if (ring->rate_limit_val) {
+	/* Force rate limit user priority */
+		user_prio = MLX4_EN_DEF_RL_USER_PRIO;
+        }
+
 	mlx4_en_fill_qp_context(priv, ring->size, ring->stride, 1, 0, ring->qpn,
 				ring->cqn, user_prio, &ring->context);
+
+	if (ring->rate_limit_val) {
+		mlx4_en_rate_limit_to_qp(ring->rate_limit_val, &qp_rl);
+		ring->context.rate_limit_params = cpu_to_be16(((qp_rl.unit) << 14) | qp_rl.val);
+	}
+
 	if (ring->bf_enabled)
 		ring->context.usr_page = cpu_to_be32(ring->bf.uar->index);
 
@@ -1246,13 +1358,29 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	int i = 0, err = 0;
 
 	/* Which queue to use */
-	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
+	if (m->m_pkthdr.txringid > 0 && m->m_pkthdr.txringid < priv->tx_ring_num) {
+		/* XXX m->m_pkthdr.txringid should be initialized! */
+		i = m->m_pkthdr.txringid;
+	} else if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
 		i = m->m_pkthdr.flowid % (priv->native_tx_ring_num);
 	}
 	else {
 		i = mlx4_en_select_queue(dev, m);
 	}
+
+#if 0 /* Debug */
+	static volatile int last;
+
+	if (i != last) {
+		printf("MENY: %s:%d using ring %d\n", __func__, __LINE__, i);
+		last = i;
+	}
+#endif
 	ring = priv->tx_ring[i];
+	if (ring == NULL) {
+                printf("Ring id %d doesn't exist, packet dropped\n", i);
+		return (-EINVAL);
+        }
 
 	if (spin_trylock(&ring->tx_lock)) {
 		err = mlx4_en_transmit_locked(dev, i, m);
