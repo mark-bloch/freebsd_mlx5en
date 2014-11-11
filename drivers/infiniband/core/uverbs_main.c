@@ -609,7 +609,7 @@ struct file *ib_uverbs_alloc_event_file(struct ib_uverbs_file *uverbs_file,
 	struct ib_uverbs_event_file *ev_file;
 	struct file *filp;
 
-	ev_file = kmalloc(sizeof *ev_file, GFP_KERNEL);
+	ev_file = kzalloc(sizeof *ev_file, GFP_KERNEL);
 	if (!ev_file)
 		return ERR_PTR(-ENOMEM);
 
@@ -618,9 +618,7 @@ struct file *ib_uverbs_alloc_event_file(struct ib_uverbs_file *uverbs_file,
 	INIT_LIST_HEAD(&ev_file->event_list);
 	init_waitqueue_head(&ev_file->poll_wait);
 	ev_file->uverbs_file = uverbs_file;
-	ev_file->async_queue = NULL;
 	ev_file->is_async    = is_async;
-	ev_file->is_closed   = 0;
 
 	/*
 	* fops_get() can't fail here, because we're coming from a
