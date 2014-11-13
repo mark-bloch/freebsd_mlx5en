@@ -313,6 +313,7 @@ struct ipoib_ethtool_st {
  */
 struct ipoib_dev_priv {
 	spinlock_t lock;
+	spinlock_t drain_lock;
 
 	struct ifnet *dev;
 
