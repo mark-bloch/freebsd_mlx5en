@@ -125,6 +125,7 @@ struct mlx4_dev_cap {
 	u32 max_extended_counters;
 	/* Rate Limit support */
 	struct mlx4_rate_limit_caps rl_caps;
+	int max_rates_num[MLX4_MAX_PORTS + 1];
 };
 
 struct mlx4_func_cap {

@@ -272,12 +272,12 @@ static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 		((uint64_t)(8 * 1000000)), interval);
 
 	if (rate > max_rate_supported) {
-		en_warn(priv, "Exceeded max supported rate for ring %d, using max supprted value\n", index);
+		en_warn(priv, "Exceeded max supported rate for ring %d, using max supported value\n", index);
 		rate = max_rate_supported;
 	}
 
 	if (rate < min_rate_supported) {
-		en_warn(priv, "Exceeded min supported rate for ring %d, using min supprted value\n", index);
+		en_warn(priv, "Exceeded min supported rate for ring %d, using min supported value\n", index);
 		rate = min_rate_supported;
 	}
 
@@ -379,6 +379,12 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
 		*((u32 *) (tx_ring->buf + j)) = 0xffffffff;
 
+	/* Store ratectl request params */
+	tx_ring->ratectlcpy.min_bytes_per_interval = in_ratectl->min_bytes_per_interval;
+	tx_ring->ratectlcpy.max_bytes_per_interval = in_ratectl->max_bytes_per_interval;
+	tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
+
+	/* Return ring index to user */
 	in_ratectl->tx_ring_id = index;
 
 	return 0;
@@ -398,6 +404,87 @@ err:
 	STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, p_item, entry);
 	spin_unlock(&priv->reuse_index_list_lock);
 	return err;
+}
+
+static void mlx4_en_rate_limit_to_qp(uint64_t rate_limit_val,
+			struct mlx4_qp_ctx_rate_limit *qp_ctx_rl)
+{
+	u64 temp = rate_limit_val;
+	u8 shift = 0;
+
+	do {
+		temp = (temp + 1023) / 1024;
+		shift++;
+		/* if temp is too big or if we don't loose precision, then loop */
+	} while (temp >= (1U << 12) || (temp & 1023) == 0);
+
+#if 0 /* Debug */
+		printf("MENY: %s:%d to_qp_rate=%d, shift=0x%x\n", __func__, __LINE__,(int)temp, shift);
+		printf("MENY: %s:%d qpn = %d \n", __func__, __LINE__, ring->qpn);
+#endif
+
+	qp_ctx_rl->val = temp;
+	qp_ctx_rl->unit = shift;
+}
+
+int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
+					in_ratectlreq *in_ratectl)
+{
+	struct mlx4_en_tx_ring *tx_ring;
+	struct mlx4_qp_ctx_rate_limit qp_rl;
+	struct mlx4_update_qp_params update_params;
+	uint64_t new_rate;
+	int err = 0;
+	int index = in_ratectl->tx_ring_id;
+
+	/* Validate rate limit request */
+	err = validate_rate_ctl_req(in_ratectl);
+	if (err) {
+		en_err(priv, "Illegal Rate limit value\n");
+		return (err);
+	}
+
+	if (priv->tx_ring[index] == NULL) {
+		en_err(priv, "Failed modifying new rate, ring %d doesn't exist\n", index);
+		return (EINVAL);
+	}
+
+	tx_ring = priv->tx_ring[index];
+
+	/* Calculate new rate limit */
+	new_rate = mlx4_en_calc_tx_rate_limit(priv, index, in_ratectl);
+
+	if (tx_ring->rate_limit_val != new_rate) {
+		mlx4_en_rate_limit_to_qp(tx_ring->rate_limit_val, &qp_rl);
+		update_params.qp_rl = qp_rl;
+		err = mlx4_update_qp(priv->mdev->dev, tx_ring->qpn, MLX4_UPDATE_QP_RATE_LIMIT,
+					&update_params);
+		if (err) {
+			en_err(priv, "Failed updating ring with new rate\n");
+			return (err);
+		}
+		tx_ring->rate_limit_val = new_rate;
+	}
+
+	return (err);
+}
+
+void mlx4_en_get_ratectl_req_params(struct mlx4_en_priv *priv, struct
+					in_ratectlreq *in_ratectl)
+{
+	struct mlx4_en_tx_ring *tx_ring;
+	int index = in_ratectl->tx_ring_id;
+
+	if (priv->tx_ring[index] == NULL) {
+		en_err(priv, "Failed retrieving rate params, ring %d doesn't exist\n", index);
+		return;
+	}
+
+	tx_ring = priv->tx_ring[index];
+
+	in_ratectl->min_bytes_per_interval = tx_ring->ratectlcpy.min_bytes_per_interval;
+	in_ratectl->max_bytes_per_interval = tx_ring->ratectlcpy.max_bytes_per_interval;
+	in_ratectl->micros_per_interval = tx_ring->ratectlcpy.micros_per_interval;
 }
 
 void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
@@ -426,7 +513,7 @@ void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 }
 
 void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
-                                    m_txringid_t ring_id)
+                                    uint32_t ring_id)
 {
 	struct mlx4_en_list_element *p_item;
 
@@ -463,27 +550,6 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 
 }
 
-static void mlx4_en_rate_limit_to_qp(uint64_t rate_limit_val,
-			struct mlx4_qp_ctx_rate_limit *qp_ctx_rl)
-{
-	u64 temp = rate_limit_val;
-	u8 shift = 0;
-
-	do {
-		temp = (temp + 1023) / 1024;
-		shift++;
-		/* if temp is too big or if we don't loose precision, then loop */
-	} while (temp >= (1U << 12) || (temp & 1023) == 0);
-
-#if 0 /* Debug */
-		printf("MENY: %s:%d to_qp_rate=%d, shift=0x%x\n", __func__, __LINE__,(int)temp, shift);
-		printf("MENY: %s:%d qpn = %d \n", __func__, __LINE__, ring->qpn);
-#endif
-
-	qp_ctx_rl->val = temp;
-	qp_ctx_rl->unit = shift;
-}
-
 int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_tx_ring *ring,
 			     int cq, int user_prio)
@@ -505,7 +571,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 	ring->doorbell_qpn = ring->qp.qpn << 8;
 
 	if (ring->rate_limit_val) {
-	/* Force rate limit user priority */
+		/* Force rate limit user priority */
 		user_prio = MLX4_EN_DEF_RL_USER_PRIO;
         }
 

@@ -1677,6 +1677,8 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
 
 	/* Create tx Rings */
 	for (i = 0; i < priv->native_tx_ring_num; i++) {
+		/* Rate limit ring's resources are allocates elsewhere
+		 * Set ring size shouldn't affect them */
 		if (mlx4_en_create_cq(priv, &priv->tx_cq[i],
 				      prof->tx_ring_size, i, TX, node))
 			goto err;
@@ -2007,8 +2009,12 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		mlx4_en_rate_limit_sysctl_stat(priv, in_ratectl->tx_ring_id);
 		break;
 	case SIOCSRATECTL:      /* set parameters for existing HW ring */
+		in_ratectl = (struct in_ratectlreq *)data;
+		error = mlx4_en_modify_rate_limit_tx_res(priv, in_ratectl);
                 break;
 	case SIOCGRATECTL:      /* get parameters for existing HW ring */
+		in_ratectl = (struct in_ratectlreq *)data;
+		mlx4_en_get_ratectl_req_params(priv, in_ratectl);
                 break;
         case SIOCDRATECTL:      /* delete an existing rl HW ring */
                 in_ratectl = (struct in_ratectlreq *)data;
@@ -2148,6 +2154,8 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	/* Rate Limit support */
 	spin_lock_init(&priv->reuse_index_list_lock);
 	STAILQ_INIT(&priv->reuse_index_list_head);
+	priv->used_rates_num = 0;
+	priv->max_rates_num = priv->mdev->dev->caps.max_rates_num[priv->port];
 
 	for (i = priv->native_tx_ring_num; i < MAX_TX_RINGS; i++) {
 		struct mlx4_en_list_element *p_item;
@@ -2406,6 +2414,54 @@ static int mlx4_en_set_rx_ppp(SYSCTL_HANDLER_ARGS)
         return (error);
 }
 
+static int mlx4_en_set_rl_max_num(SYSCTL_HANDLER_ARGS)
+{
+	struct mlx4_en_priv *priv;
+	int max_rates_num;
+	int error;
+	int max_val_supported;
+	priv = arg1;
+
+	max_val_supported = priv->mdev->dev->caps.rl_caps.number;
+	max_rates_num = priv->max_rates_num;
+
+	error = sysctl_handle_int(oidp, &max_rates_num, 0, req);
+	if (error || !req->newptr) {
+		return (error);
+	}
+
+	if (max_rates_num <= 0 || max_rates_num > max_val_supported) {
+		return (EINVAL);
+	}
+
+	error = -mlx4_SET_PORT_RATE_LIMIT(priv->mdev->dev, priv->port,
+	    max_rates_num);
+
+	if (error == 0) {
+		priv->max_rates_num = max_rates_num;
+	}
+
+	return error;
+}
+
+static int mlx4_en_get_used_rates_num(SYSCTL_HANDLER_ARGS)
+{
+	struct mlx4_en_priv *priv;
+	int used_rates_num;
+	int error;
+
+	priv = arg1;
+	error = -mlx4_get_used_rate_limit_num(priv->mdev->dev, priv->port,
+						&priv->used_rates_num);
+	if (error) {
+		return error;
+	}
+	used_rates_num = priv->used_rates_num;
+	error = sysctl_handle_int(oidp, &used_rates_num, 0, req);
+
+	return (error);
+}
+
 static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
 {
         struct net_device *dev;
@@ -2480,8 +2536,18 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "adaptive_rx_coal",
             CTLFLAG_RW, &priv->adaptive_rx_coal, 0,
             "Enable adaptive rx coalescing");
-}
 
+	/* Rate limit support */
+	if (priv->mdev->dev->caps.rl_caps.number)
+	{
+		SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "different_rates_max_num",
+			CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+			mlx4_en_set_rl_max_num, "I", "Max number of different rates");
+		SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "used_rates_num",
+			CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, priv, 0,
+			mlx4_en_get_used_rates_num, "I", "number of different rates used");
+	}
+}
 
 static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 {

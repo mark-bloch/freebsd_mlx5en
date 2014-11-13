@@ -669,6 +669,8 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 		dev->caps.vendor_oui[i]     = dev_cap->vendor_oui[i];
 		dev->caps.wavelength[i]     = dev_cap->wavelength[i];
 		dev->caps.trans_code[i]     = dev_cap->trans_code[i];
+		/* Rate limit support */
+		dev->caps.max_rates_num[i]  = dev_cap->max_rates_num[i];
 	}
 
 	/* Rate Limit support */

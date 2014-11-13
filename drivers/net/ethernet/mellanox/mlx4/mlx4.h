@@ -79,6 +79,11 @@ struct mlx4_set_port_scheduler_context {
 	struct mlx4_port_scheduler_tc_cfg_be tc[MLX4_NUM_TC];
 };
 
+struct mlx4_set_port_packet_pacing_context {
+	__be16 qp_rate_limit_number_used;
+	__be16 qp_rate_limit_number_max;
+};
+
 enum {
 	MLX4_HCR_BASE		= 0x80680,
 	MLX4_HCR_SIZE		= 0x0001c,
@@ -1213,6 +1218,10 @@ int mlx4_get_port_ib_caps(struct mlx4_dev *dev, u8 port, __be32 *caps);
 
 int mlx4_get_slave_pkey_gid_tbl_len(struct mlx4_dev *dev, u8 port,
 				    int *gid_tbl_len, int *pkey_tbl_len);
+
+/* Rate limit support */
+int mlx4_SET_PORT_RATE_LIMIT(struct mlx4_dev *dev, u8 port, int max_rate_num);
+int mlx4_get_used_rate_limit_num(struct mlx4_dev *dev, u8 port, int *used);
 
 int mlx4_QP_ATTACH_wrapper(struct mlx4_dev *dev, int slave,
 			   struct mlx4_vhcr *vhcr,
