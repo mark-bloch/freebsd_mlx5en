@@ -287,10 +287,6 @@ static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
                                 in_ratectlreq *in_ratectl)
 {
-
-#if 0   /* Debug */
-        printf("MENY: %s:%d\n", __func__, __LINE__);
-#endif
 	struct mlx4_en_cq *cq;
 	struct mlx4_en_tx_ring *tx_ring;
 	int err = 0, node = 0;
@@ -312,7 +308,6 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	}
 
 	/* Create resources */
-
 	index = find_available_tx_ring_index(priv);
 	if (index < 0) {
 		en_err(priv, "Failed to create Rate limit resources, Max capacity reached\n");
@@ -334,8 +329,26 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		goto err;
 	}
 
-	/* Activate resources */
+	tx_ring = priv->tx_ring[index];
 
+	/* Calculate requested rate */
+	tx_ring->rate_limit_val = mlx4_en_calc_tx_rate_limit(priv,
+					index, in_ratectl);
+
+	/* Store ratectl request params */
+	tx_ring->ratectlcpy.min_bytes_per_interval = in_ratectl->min_bytes_per_interval;
+	tx_ring->ratectlcpy.max_bytes_per_interval = in_ratectl->max_bytes_per_interval;
+	tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
+
+	/* Return ring index to user */
+	in_ratectl->tx_ring_id = index;
+
+	if (!priv->port_up) {
+		/* No need activating resources, start_port will take care of that */
+		return (0);
+	}
+
+	/* Activate resources */
 	cq = priv->tx_cq[index];
 	err = mlx4_en_activate_cq(priv, cq, index);
 	if (err) {
@@ -351,19 +364,6 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	en_dbg(DRV, priv, "Resetting index of CQ:%d to -1\n", index);
 	cq->buf->wqe_index = cpu_to_be16(0xffff);
 
-	tx_ring = priv->tx_ring[index];
-
-	/* Calculate requested rate */
-	tx_ring->rate_limit_val = mlx4_en_calc_tx_rate_limit(priv,
-					index, in_ratectl);
-
-#if 0   /* Debug */
-	printf("in_ratectl->min_bytes_per_interval= %d, \
-		in_ratectl->micros_per_interval = %d\n", in_ratectl->min_bytes_per_interval,
-			in_ratectl->micros_per_interval);
-	printf("Creating resources for rate %lu\n", tx_ring->rate_limit);
-#endif
-
 	err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
 					       MLX4_EN_DEF_RL_USER_PRIO);
 	if (err) {
@@ -378,14 +378,6 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	/* Set initial ownership of all Tx TXBBs to SW (1) */
 	for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
 		*((u32 *) (tx_ring->buf + j)) = 0xffffffff;
-
-	/* Store ratectl request params */
-	tx_ring->ratectlcpy.min_bytes_per_interval = in_ratectl->min_bytes_per_interval;
-	tx_ring->ratectlcpy.max_bytes_per_interval = in_ratectl->max_bytes_per_interval;
-	tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
-
-	/* Return ring index to user */
-	in_ratectl->tx_ring_id = index;
 
 	return 0;
 
@@ -417,11 +409,6 @@ static void mlx4_en_rate_limit_to_qp(uint64_t rate_limit_val,
 		shift++;
 		/* if temp is too big or if we don't loose precision, then loop */
 	} while (temp >= (1U << 12) || (temp & 1023) == 0);
-
-#if 0 /* Debug */
-		printf("MENY: %s:%d to_qp_rate=%d, shift=0x%x\n", __func__, __LINE__,(int)temp, shift);
-		printf("MENY: %s:%d qpn = %d \n", __func__, __LINE__, ring->qpn);
-#endif
 
 	qp_ctx_rl->val = temp;
 	qp_ctx_rl->unit = shift;
@@ -455,7 +442,7 @@ int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	new_rate = mlx4_en_calc_tx_rate_limit(priv, index, in_ratectl);
 
 	if (tx_ring->rate_limit_val != new_rate) {
-		mlx4_en_rate_limit_to_qp(tx_ring->rate_limit_val, &qp_rl);
+		mlx4_en_rate_limit_to_qp(new_rate, &qp_rl);
 		update_params.qp_rl = qp_rl;
 		err = mlx4_update_qp(priv->mdev->dev, tx_ring->qpn, MLX4_UPDATE_QP_RATE_LIMIT,
 					&update_params);
@@ -517,10 +504,6 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 {
 	struct mlx4_en_list_element *p_item;
 
-#if 0   /* Debug */
-	printf("MENY: %s:%d\n", __func__, __LINE__);
-#endif
-
 	if(!priv->tx_ring[ring_id]) {
 		en_err(priv, "ring %d doesn't exist\n", ring_id);
 		return;
@@ -533,11 +516,13 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
         }
 
 	/* Deactivate resources */
-	mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[ring_id]);
-	mlx4_en_deactivate_cq(priv, priv->tx_cq[ring_id]);
+	if (priv->port_up) {
+		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[ring_id]);
+		mlx4_en_deactivate_cq(priv, priv->tx_cq[ring_id]);
 
-	msleep(10);
-	mlx4_en_free_tx_buf(priv->dev, priv->tx_ring[ring_id]);
+		msleep(10);
+		mlx4_en_free_tx_buf(priv->dev, priv->tx_ring[ring_id]);
+	}
 
 	mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[ring_id]);
 	mlx4_en_destroy_cq(priv, &priv->tx_cq[ring_id]);
@@ -1434,14 +1419,6 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 		i = mlx4_en_select_queue(dev, m);
 	}
 
-#if 0 /* Debug */
-	static volatile int last;
-
-	if (i != last) {
-		printf("MENY: %s:%d using ring %d\n", __func__, __LINE__, i);
-		last = i;
-	}
-#endif
 	ring = priv->tx_ring[i];
 	if (ring == NULL) {
                 printf("Ring id %d doesn't exist, packet dropped\n", i);

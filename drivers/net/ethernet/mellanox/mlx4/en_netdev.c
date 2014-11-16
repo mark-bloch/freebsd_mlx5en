@@ -1054,6 +1054,9 @@ static void mlx4_en_set_default_moderation(struct mlx4_en_priv *priv)
 	}
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring[i] == NULL) {
+			continue;
+		}
 		cq = priv->tx_cq[i];
 		cq->moder_cnt = priv->tx_frames;
 		cq->moder_time = priv->tx_usecs;
@@ -1292,6 +1295,9 @@ int mlx4_en_start_port(struct net_device *dev)
 
 	/* Configure tx cq's and rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring[i] == NULL) {
+			continue;
+		}
 		/* Configure cq */
 		cq = priv->tx_cq[i];
 		err = mlx4_en_activate_cq(priv, cq, i);
@@ -1569,6 +1575,9 @@ static void mlx4_en_clear_stats(struct net_device *dev)
 	memset(&priv->vport_stats, 0, sizeof(priv->vport_stats));
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring[i] == NULL) {
+			continue;
+		}
 		priv->tx_ring[i]->bytes = 0;
 		priv->tx_ring[i]->packets = 0;
 		priv->tx_ring[i]->tx_csum = 0;
@@ -2000,7 +2009,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		mutex_unlock(&mdev->state_lock);
 		VLAN_CAPABILITIES(dev);
 		break;
-	case SIOCARATECTL:      /* add new rate control HW ring */
+	case SIOCARATECTL:
                 in_ratectl = (struct in_ratectlreq *)data;
                 error = mlx4_en_create_rate_limit_tx_res(priv, in_ratectl);
                 if (error)
@@ -2008,15 +2017,15 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		/* Add sysctl statistics */
 		mlx4_en_rate_limit_sysctl_stat(priv, in_ratectl->tx_ring_id);
 		break;
-	case SIOCSRATECTL:      /* set parameters for existing HW ring */
+	case SIOCSRATECTL:
 		in_ratectl = (struct in_ratectlreq *)data;
 		error = mlx4_en_modify_rate_limit_tx_res(priv, in_ratectl);
                 break;
-	case SIOCGRATECTL:      /* get parameters for existing HW ring */
+	case SIOCGRATECTL:
 		in_ratectl = (struct in_ratectlreq *)data;
 		mlx4_en_get_ratectl_req_params(priv, in_ratectl);
                 break;
-        case SIOCDRATECTL:      /* delete an existing rl HW ring */
+        case SIOCDRATECTL:
                 in_ratectl = (struct in_ratectlreq *)data;
                 mlx4_en_destroy_rate_limit_tx_res(priv, in_ratectl->tx_ring_id);
                 break;
@@ -2707,6 +2716,7 @@ struct mlx4_en_pkt_stats {
 
 
 	for (i = 0; i < priv->native_tx_ring_num; i++) {
+		/* Rate limit rings stats are handled elsewhere */
 		tx_ring = priv->tx_ring[i];
 		snprintf(namebuf, sizeof(namebuf), "tx_ring%d", i);
 		ring_node = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO, namebuf,
