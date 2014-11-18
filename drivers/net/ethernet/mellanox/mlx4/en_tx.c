@@ -191,7 +191,7 @@ err_ring:
 	return err;
 }
 
-static int find_available_tx_ring_index(struct mlx4_en_priv *priv)
+static __used int find_available_tx_ring_index(struct mlx4_en_priv *priv)
 {
 	int index = -1;
 	struct mlx4_en_list_element *p_item;
@@ -216,7 +216,7 @@ static int find_available_tx_ring_index(struct mlx4_en_priv *priv)
 	return index;
 }
 
-static int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
+static __used int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
 {
 	uint64_t min_b;
 	uint64_t max_b;
@@ -237,7 +237,7 @@ static int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
 	return (0);
 }
 
-static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
+static __used uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 					struct in_ratectlreq *in_ratectl)
 {
 	struct mlx4_en_tx_ring *tx_ring;
@@ -284,6 +284,7 @@ static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 	return rate;
 }
 
+#ifdef CONFIG_RATELIMIT
 int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
                                 in_ratectlreq *in_ratectl)
 {
@@ -397,6 +398,7 @@ err:
 	spin_unlock(&priv->reuse_index_list_lock);
 	return err;
 }
+#endif
 
 static void mlx4_en_rate_limit_to_qp(uint64_t rate_limit_val,
 			struct mlx4_qp_ctx_rate_limit *qp_ctx_rl)
@@ -414,6 +416,7 @@ static void mlx4_en_rate_limit_to_qp(uint64_t rate_limit_val,
 	qp_ctx_rl->unit = shift;
 }
 
+#ifdef CONFIG_RATELIMIT
 int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 					in_ratectlreq *in_ratectl)
 {
@@ -473,6 +476,7 @@ void mlx4_en_get_ratectl_req_params(struct mlx4_en_priv *priv, struct
 	in_ratectl->max_bytes_per_interval = tx_ring->ratectlcpy.max_bytes_per_interval;
 	in_ratectl->micros_per_interval = tx_ring->ratectlcpy.micros_per_interval;
 }
+#endif
 
 void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_tx_ring **pring)
@@ -499,6 +503,7 @@ void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 	*pring = NULL;
 }
 
+#ifdef CONFIG_RATELIMIT
 void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
                                     uint32_t ring_id)
 {
@@ -534,6 +539,7 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 	spin_unlock(&priv->reuse_index_list_lock);
 
 }
+#endif
 
 int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_tx_ring *ring,
@@ -1409,13 +1415,15 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	int i = 0, err = 0;
 
 	/* Which queue to use */
+#ifdef CONFIG_RATELIMIT
 	if (m->m_pkthdr.txringid > 0 && m->m_pkthdr.txringid < priv->tx_ring_num) {
 		/* XXX m->m_pkthdr.txringid should be initialized! */
 		i = m->m_pkthdr.txringid;
-	} else if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
+	} else 
+#endif
+	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
 		i = m->m_pkthdr.flowid % (priv->native_tx_ring_num);
-	}
-	else {
+	} else {
 		i = mlx4_en_select_queue(dev, m);
 	}
 

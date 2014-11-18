@@ -317,7 +317,9 @@ struct mlx4_en_tx_ring {
 	/* Rate Limit support */
 	u64 rate_limit_val;
 	struct sysctl_ctx_list rl_stats_ctx;
+#ifdef CONFIG_RATELIMIT
 	struct in_ratectlreq ratectlcpy;
+#endif
 };
 
 struct mlx4_en_rx_desc {
@@ -827,7 +829,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     int cq, int user_prio);
 void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring);
-/* Rate limit support */
+#ifdef CONFIG_RATELIMIT
 int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 				in_ratectlreq *in_ratectl);
 int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
@@ -836,6 +838,7 @@ void mlx4_en_get_ratectl_req_params(struct mlx4_en_priv *priv, struct
 				in_ratectlreq *in_ratectl);
 void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 				uint32_t ring_id);
+#endif
 int mlx4_SET_PORT_RATE_LIMIT(struct mlx4_dev *dev, u8 port, int max_rate_num);
 int mlx4_get_used_rate_limit_num(struct mlx4_dev *dev, u8 port, int *used);
 

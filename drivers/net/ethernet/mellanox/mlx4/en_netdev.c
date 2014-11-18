@@ -1922,7 +1922,7 @@ static int mlx4_en_media_change(struct ifnet *dev)
 	return (error);
 }
 
-static void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int ring_id)
+static __used void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int ring_id)
 {
 	struct mlx4_en_tx_ring *tx_ring;
 	struct sysctl_ctx_list *ctx;
@@ -1950,7 +1950,9 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 {
 	struct mlx4_en_priv *priv;
 	struct mlx4_en_dev *mdev;
+#ifdef CONFIG_RATELIMIT
 	struct in_ratectlreq *in_ratectl;
+#endif
 	struct ifreq *ifr;
 	int error;
 	int mask;
@@ -2009,6 +2011,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		mutex_unlock(&mdev->state_lock);
 		VLAN_CAPABILITIES(dev);
 		break;
+#ifdef CONFIG_RATELIMIT
 	case SIOCARATECTL:
                 in_ratectl = (struct in_ratectlreq *)data;
                 error = mlx4_en_create_rate_limit_tx_res(priv, in_ratectl);
@@ -2029,6 +2032,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
                 in_ratectl = (struct in_ratectlreq *)data;
                 mlx4_en_destroy_rate_limit_tx_res(priv, in_ratectl->tx_ring_id);
                 break;
+#endif
 	default:
 		error = ether_ioctl(dev, command, data);
 		break;

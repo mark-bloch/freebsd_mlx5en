@@ -11,6 +11,10 @@ SRCS+= utils.c en_main.c en_netdev.c en_rx.c en_cq.c en_tx.c en_port.c en_resour
 CFLAGS+= -I${.CURDIR}/../../../../../drivers/net/ethernet/mellanox/mlx4/ 
 CFLAGS+= -I${.CURDIR}/../../../../../include/
 
+.if defined(CONFIG_RATELIMIT)
+CFLAGS += -DCONFIG_RATELIMIT=1
+.endif
+
 .if !defined(KERNBUILDDIR)
 .if ${MK_INET_SUPPORT} != "no"
 opt_inet.h:
