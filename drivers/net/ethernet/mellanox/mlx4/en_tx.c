@@ -216,7 +216,8 @@ static __used int find_available_tx_ring_index(struct mlx4_en_priv *priv)
 	return index;
 }
 
-static __used int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
+#ifdef CONFIG_RATELIMIT
+static int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
 {
 	uint64_t min_b;
 	uint64_t max_b;
@@ -237,7 +238,7 @@ static __used int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
 	return (0);
 }
 
-static __used uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
+static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 					struct in_ratectlreq *in_ratectl)
 {
 	struct mlx4_en_tx_ring *tx_ring;
@@ -284,7 +285,6 @@ static __used uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int
 	return rate;
 }
 
-#ifdef CONFIG_RATELIMIT
 int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
                                 in_ratectlreq *in_ratectl)
 {
@@ -1419,7 +1419,7 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	if (m->m_pkthdr.txringid > 0 && m->m_pkthdr.txringid < priv->tx_ring_num) {
 		/* XXX m->m_pkthdr.txringid should be initialized! */
 		i = m->m_pkthdr.txringid;
-	} else 
+	} else
 #endif
 	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
 		i = m->m_pkthdr.flowid % (priv->native_tx_ring_num);
@@ -1428,11 +1428,12 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	}
 
 	ring = priv->tx_ring[i];
-	if (ring == NULL) {
-                printf("Ring id %d doesn't exist, packet dropped\n", i);
+#ifdef CONFIG_RATELIMIT
+	if (ring == NULL) { /* destroyed rl tx ring */
+                en_err(priv, "Ring id %d doesn't exist, packet dropped\n", i);
 		return (-EINVAL);
         }
-
+#endif
 	if (spin_trylock(&ring->tx_lock)) {
 		err = mlx4_en_transmit_locked(dev, i, m);
 		spin_unlock(&ring->tx_lock);
