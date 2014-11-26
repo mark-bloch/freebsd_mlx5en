@@ -79,7 +79,7 @@ struct mlx4_set_port_scheduler_context {
 	struct mlx4_port_scheduler_tc_cfg_be tc[MLX4_NUM_TC];
 };
 
-struct mlx4_set_port_packet_pacing_context {
+struct mlx4_set_port_rate_limit_context {
 	__be16 qp_rate_limit_number_used;
 	__be16 qp_rate_limit_number_max;
 };

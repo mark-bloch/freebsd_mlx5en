@@ -227,11 +227,7 @@ static int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
 	max_b = (uint64_t) in_ratectl->max_bytes_per_interval;
 	interval = (uint64_t)in_ratectl->micros_per_interval;
 
-	if (interval == 0) {
-		return (EINVAL);
-	}
-
-	if (min_b > max_b) {
+	if (interval == 0 || min_b > max_b || max_b == 0) {
 		return (EINVAL);
 	}
 
@@ -260,11 +256,6 @@ static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 	interval = (uint64_t)in_ratectl->micros_per_interval;
 
 	avg_b = (min_b + max_b) / 2;
-
-	if (max_b == 0) {
-		/* No rate limit */
-		return (0);
-	}
 
 	/* This should work for both options
 	 * min_b = max_b or min_b != max_b
@@ -322,7 +313,6 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		goto err;
 	}
 
-
 	err = mlx4_en_create_tx_ring(priv, &priv->tx_ring[index],
 		MLX4_EN_DEF_RL_TX_RING_SIZE, TXBB_SIZE, node, index);
 	if (err) {
@@ -341,6 +331,11 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	tx_ring->ratectlcpy.max_bytes_per_interval = in_ratectl->max_bytes_per_interval;
 	tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
 
+	/* default moderation */
+	cq = priv->tx_cq[index];
+	cq->moder_cnt = priv->tx_frames;
+	cq->moder_time = priv->tx_usecs;
+
 	/* Return ring index to user */
 	in_ratectl->tx_ring_id = index;
 
@@ -350,12 +345,12 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	}
 
 	/* Activate resources */
-	cq = priv->tx_cq[index];
 	err = mlx4_en_activate_cq(priv, cq, index);
 	if (err) {
 		en_err(priv, "Failed activating Rate Limit Tx CQ\n");
 		goto err;
 	}
+
 	err = mlx4_en_set_cq_moder(priv, cq);
 	if (err) {
 		en_err(priv, "Failed setting cq moderation parameters");
@@ -400,7 +395,7 @@ err:
 }
 #endif
 
-static void mlx4_en_rate_limit_to_qp(uint64_t rate_limit_val,
+static void mlx4_en_rate_limit_to_qp_context(uint64_t rate_limit_val,
 			struct mlx4_qp_ctx_rate_limit *qp_ctx_rl)
 {
 	u64 temp = rate_limit_val;
@@ -434,6 +429,11 @@ int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		return (err);
 	}
 
+	if (index < priv->native_tx_ring_num || index > priv->tx_ring_num) {
+                en_err(priv, "Modifying ring %d: Permision denied: Not an RL ring\n", index);
+		return (EINVAL);
+	}
+
 	if (priv->tx_ring[index] == NULL) {
 		en_err(priv, "Failed modifying new rate, ring %d doesn't exist\n", index);
 		return (EINVAL);
@@ -445,7 +445,7 @@ int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	new_rate = mlx4_en_calc_tx_rate_limit(priv, index, in_ratectl);
 
 	if (tx_ring->rate_limit_val != new_rate) {
-		mlx4_en_rate_limit_to_qp(new_rate, &qp_rl);
+		mlx4_en_rate_limit_to_qp_context(new_rate, &qp_rl);
 		update_params.qp_rl = qp_rl;
 		err = mlx4_update_qp(priv->mdev->dev, tx_ring->qpn, MLX4_UPDATE_QP_RATE_LIMIT,
 					&update_params);
@@ -454,6 +454,11 @@ int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 			return (err);
 		}
 		tx_ring->rate_limit_val = new_rate;
+
+		/* Store new ratectl request params */
+		tx_ring->ratectlcpy.min_bytes_per_interval = in_ratectl->min_bytes_per_interval;
+		tx_ring->ratectlcpy.max_bytes_per_interval = in_ratectl->max_bytes_per_interval;
+		tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
 	}
 
 	return (err);
@@ -509,16 +514,16 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 {
 	struct mlx4_en_list_element *p_item;
 
+	/* Check that this is indeed an RL ring */
+	if (ring_id < priv->native_tx_ring_num || ring_id > priv->tx_ring_num) {
+                en_err(priv, "Deleting ring %d: Permision denied: Not an RL ring\n", ring_id);
+                return;
+        }
+
 	if(!priv->tx_ring[ring_id]) {
 		en_err(priv, "ring %d doesn't exist\n", ring_id);
 		return;
 	}
-
-	/* Check that this is indeed an RL ring */
-	if (ring_id < priv->native_tx_ring_num) {
-                en_err(priv, "deleting ring %d: Permision denied: Not an RL ring\n", ring_id);
-                return;
-        }
 
 	/* Deactivate resources */
 	if (priv->port_up) {
@@ -570,7 +575,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 				ring->cqn, user_prio, &ring->context);
 
 	if (ring->rate_limit_val) {
-		mlx4_en_rate_limit_to_qp(ring->rate_limit_val, &qp_rl);
+		mlx4_en_rate_limit_to_qp_context(ring->rate_limit_val, &qp_rl);
 		ring->context.rate_limit_params = cpu_to_be16(((qp_rl.unit) << 14) | qp_rl.val);
 	}
 
@@ -1417,7 +1422,6 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	/* Which queue to use */
 #ifdef CONFIG_RATELIMIT
 	if (m->m_pkthdr.txringid > 0 && m->m_pkthdr.txringid < priv->tx_ring_num) {
-		/* XXX m->m_pkthdr.txringid should be initialized! */
 		i = m->m_pkthdr.txringid;
 	} else
 #endif

@@ -944,7 +944,7 @@ int mlx4_SET_PORT_RATE_LIMIT(struct mlx4_dev *dev, u8 port,
 			   int max_rate_num)
 {
 	struct mlx4_cmd_mailbox *mailbox;
-	struct mlx4_set_port_packet_pacing_context *context;
+	struct mlx4_set_port_rate_limit_context *context;
 	int err;
 	u32 in_mod;
 

@@ -1988,11 +1988,35 @@ static void choose_steering_mode(struct mlx4_dev *dev,
 		 dev->oper_log_mgm_entry_size, mlx4_log_num_mgm_entry_size);
 }
 
+static char* mlx4_sysctl_rate_limit_unit_str(u8 val)
+{
+	char *unit_str = NULL;
+
+	switch (val) {
+	case 1:
+		unit_str = "Kbps";
+		break;
+	case 2:
+		unit_str = "Mbps";
+		break;
+	case 3:
+		unit_str = "Gbps";
+		break;
+	default:
+		break;
+	}
+	return unit_str;
+}
+
 static void mlx4_sysctl_rate_limit_caps(struct mlx4_dev *dev)
 {
 	struct sysctl_ctx_list     *ctx;
 	struct sysctl_oid          *node;
 	struct sysctl_oid_list     *node_list;
+	char 		*min_unit_str;
+	char    	*max_unit_str;
+	static char 	max_namebuf[32];
+	static char	min_namebuf[32];
 
 	ctx = &dev->rl_ctx;
 	sysctl_ctx_init(ctx);
@@ -2003,12 +2027,20 @@ static void mlx4_sysctl_rate_limit_caps(struct mlx4_dev *dev)
 		CTLFLAG_RD, (unsigned *)NULL, dev->caps.rl_caps.number,
 		"Number of different rates supported");
 	if (dev->caps.rl_caps.number) {
-		SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "max_value",
-			CTLFLAG_RD, &dev->caps.rl_caps.calc_max_val,
-			"Max rate limit value supported [bits/second]");
-		SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "min_value",
-			CTLFLAG_RD, &dev->caps.rl_caps.calc_min_val,
+
+		if ((min_unit_str = mlx4_sysctl_rate_limit_unit_str(dev->caps.rl_caps.min_unit))) {
+			snprintf(min_namebuf, sizeof(min_namebuf), "%d %s", dev->caps.rl_caps.min_val, min_unit_str);
+		}
+		if ((max_unit_str = mlx4_sysctl_rate_limit_unit_str(dev->caps.rl_caps.max_unit))) {
+			snprintf(max_namebuf, sizeof(max_namebuf), "%d %s", dev->caps.rl_caps.max_val, max_unit_str);
+		}
+
+		SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "min_value",
+			CTLFLAG_RD, min_namebuf, 0,
 			"Min rate limit value supported [bits/second]");
+		SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "max_value",
+			CTLFLAG_RD, max_namebuf, 0,
+			"Max rate limit value supported [bits/second]");
 	}
 }
 

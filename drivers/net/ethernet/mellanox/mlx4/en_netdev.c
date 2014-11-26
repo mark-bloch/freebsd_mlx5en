@@ -1393,6 +1393,9 @@ int mlx4_en_start_port(struct net_device *dev)
 
 tx_err:
 	while (tx_index--) {
+		if (priv->tx_ring[tx_index] == NULL) {
+			continue;
+		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[tx_index]);
 		mlx4_en_deactivate_cq(priv, priv->tx_cq[tx_index]);
 	}
@@ -1686,8 +1689,6 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
 
 	/* Create tx Rings */
 	for (i = 0; i < priv->native_tx_ring_num; i++) {
-		/* Rate limit ring's resources are allocates elsewhere
-		 * Set ring size shouldn't affect them */
 		if (mlx4_en_create_cq(priv, &priv->tx_cq[i],
 				      prof->tx_ring_size, i, TX, node))
 			goto err;
