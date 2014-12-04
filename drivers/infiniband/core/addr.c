@@ -289,8 +289,11 @@ static int addr_resolve(struct sockaddr *src_in,
          * correct interface pointer and unlock the route.
          */
         if (multi || bcast) {
-                if (ifp == NULL)
+                if (ifp == NULL) {
                         ifp = rte->rt_ifp;
+                        /* rt_ifa holds the route answer source address */
+                        ifa = rte->rt_ifa;
+		}
                 RTFREE_LOCKED(rte);
         } else if (ifp && ifp != rte->rt_ifp) {
                 RTFREE_LOCKED(rte);
@@ -314,6 +317,8 @@ mcast:
                 error = rdma_copy_addr(addr, ifp,
                     LLADDR((struct sockaddr_dl *)llsa));
                 free(llsa, M_IFMADDR);
+                if (error == 0)
+                        memcpy(src_in, ifa->ifa_addr, ip_addr_size(ifa->ifa_addr));
                 return error;
         }
         /*
