@@ -315,8 +315,10 @@ struct mlx4_en_tx_ring {
 	int inline_thold;
 	u64 watchdog_time;
 	/* Rate Limit support */
+	bool user_valid;
 	u64 rate_limit_val;
 	struct sysctl_ctx_list rl_stats_ctx;
+	struct mutex rl_ctl_lock; /* protects ctrl actions done on rl rings */
 #ifdef CONFIG_RATELIMIT
 	struct in_ratectlreq ratectlcpy;
 #endif
@@ -599,7 +601,8 @@ struct mlx4_en_priv {
 	u32 flags;
 	u8 num_tx_rings_p_up;
 	u32 native_tx_ring_num;
-	u32 tx_ring_num;
+	u32 active_tx_ring_num;
+	u32 tx_ring_num; /* number of total tx rings created */
 	u32 rx_ring_num;
 	u32 rx_mb_size;
         struct mlx4_en_frag_info frag_info[MLX4_EN_MAX_RX_FRAGS];
@@ -663,9 +666,10 @@ struct mlx4_en_priv {
 	u64 if_counters_rx_errors;
 	u64 if_counters_rx_no_buffer;
 	/* Rate limit support */
-	spinlock_t reuse_index_list_lock;
+	spinlock_t tx_ring_index_lock; /* protects tx ring index and counters */
 	STAILQ_HEAD(, mlx4_en_list_element) reuse_index_list_head;
 	struct mlx4_en_list_element reuse_index_list_array [MAX_TX_RINGS];
+	u32 rate_limit_tx_ring_num;
 	int max_rates_num;
 	int used_rates_num;
 };
@@ -841,6 +845,7 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 #endif
 int mlx4_SET_PORT_RATE_LIMIT(struct mlx4_dev *dev, u8 port, int max_rate_num);
 int mlx4_get_used_rate_limit_num(struct mlx4_dev *dev, u8 port, int *used);
+void invalidate_rate_limit_ring(struct mlx4_en_priv *priv, uint32_t ring_id);
 
 
 void mlx4_en_qflush(struct ifnet *dev);

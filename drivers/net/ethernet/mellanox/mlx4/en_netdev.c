@@ -1053,10 +1053,7 @@ static void mlx4_en_set_default_moderation(struct mlx4_en_priv *priv)
 		priv->last_moder_bytes[i] = 0;
 	}
 
-	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i] == NULL) {
-			continue;
-		}
+	for (i = 0; i < priv->native_tx_ring_num; i++) {
 		cq = priv->tx_cq[i];
 		cq->moder_cnt = priv->tx_frames;
 		cq->moder_time = priv->tx_usecs;
@@ -1295,14 +1292,14 @@ int mlx4_en_start_port(struct net_device *dev)
 
 	/* Configure tx cq's and rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i] == NULL) {
+		if (priv->tx_ring[i]->user_valid == false) {
 			continue;
 		}
 		/* Configure cq */
 		cq = priv->tx_cq[i];
 		err = mlx4_en_activate_cq(priv, cq, i);
 		if (err) {
-			en_err(priv, "Failed allocating Tx CQ\n");
+			en_err(priv, "Failed activating Tx CQ\n");
 			goto tx_err;
 		}
 		err = mlx4_en_set_cq_moder(priv, cq);
@@ -1320,8 +1317,14 @@ int mlx4_en_start_port(struct net_device *dev)
 		err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
 					       i / priv->num_tx_rings_p_up);
 		if (err) {
-			en_err(priv, "Failed allocating Tx ring\n");
+			en_err(priv, "Failed activating Tx ring %d\n", i);
 			mlx4_en_deactivate_cq(priv, cq);
+			if (i >= priv->native_tx_ring_num) {
+				/* Rate limit ring - no need for err flow*/
+				invalidate_rate_limit_ring(priv, i);
+				++tx_index;
+				continue;
+			}
 			goto tx_err;
 		}
 
@@ -1332,6 +1335,8 @@ int mlx4_en_start_port(struct net_device *dev)
 		for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
 			*((u32 *) (tx_ring->buf + j)) = 0xffffffff;
 		++tx_index;
+
+		priv->active_tx_ring_num++;
 	}
 
 	/* Configure port */
@@ -1393,11 +1398,12 @@ int mlx4_en_start_port(struct net_device *dev)
 
 tx_err:
 	while (tx_index--) {
-		if (priv->tx_ring[tx_index] == NULL) {
+		if (priv->tx_ring[tx_index]->user_valid == false) {
 			continue;
 		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[tx_index]);
 		mlx4_en_deactivate_cq(priv, priv->tx_cq[tx_index]);
+		priv->active_tx_ring_num--;
 	}
 	mlx4_en_destroy_drop_qp(priv);
 rss_err:
@@ -1490,16 +1496,17 @@ void mlx4_en_stop_port(struct net_device *dev)
 
 	/* Free TX Rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i] == NULL) {
+		if (priv->tx_ring[i]->user_valid == false) {
 			continue;
 		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[i]);
 		mlx4_en_deactivate_cq(priv, priv->tx_cq[i]);
+		priv->active_tx_ring_num--;
 	}
 	msleep(10);
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i] == NULL) {
+		if (priv->tx_ring[i]->user_valid == false) {
 			continue;
 		}
 		mlx4_en_free_tx_buf(dev, priv->tx_ring[i]);
@@ -1537,13 +1544,13 @@ static void mlx4_en_restart(struct work_struct *work)
 	if (priv->blocked == 0 || priv->port_up == 0)
 		return;
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i] == NULL) {
+		if (priv->tx_ring[i]->user_valid == false) {
 			continue;
 		}
 		ring = priv->tx_ring[i];
 		if (ring->blocked &&
 			ring->watchdog_time + MLX4_EN_WATCHDOG_TIMEOUT < ticks)
-		goto reset;
+			goto reset;
 	}
 	return;
 
@@ -1554,8 +1561,6 @@ reset:
 	mutex_lock(&mdev->state_lock);
 	if (priv->port_up) {
 		mlx4_en_stop_port(dev);
-                //for (i = 0; i < priv->tx_ring_num; i++)         
-                //        netdev_tx_reset_queue(priv->tx_ring[i]->tx_queue);
 		if (mlx4_en_start_port(dev))
 			en_err(priv, "Failed restarting port %d\n", priv->port);
 	}
@@ -1578,7 +1583,7 @@ static void mlx4_en_clear_stats(struct net_device *dev)
 	memset(&priv->vport_stats, 0, sizeof(priv->vport_stats));
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i] == NULL) {
+		if (priv->tx_ring[i]->user_valid == false) {
 			continue;
 		}
 		priv->tx_ring[i]->bytes = 0;
@@ -1660,10 +1665,18 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv)
 {
 	int i;
+	struct mlx4_en_tx_ring *ring;
 
 	for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring && priv->tx_ring[i])
+		if (priv->tx_ring && priv->tx_ring[i]) {
+			ring = priv->tx_ring[i];
+			mutex_lock(&ring->rl_ctl_lock);
+			if (ring->user_valid == true) {
+				sysctl_ctx_free(&ring->rl_stats_ctx);
+			}
+			mutex_unlock(&ring->rl_ctl_lock);
 			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
+		}
 		if (priv->tx_cq && priv->tx_cq[i])
 			mlx4_en_destroy_cq(priv, &priv->tx_cq[i]);
 	}
@@ -2103,6 +2116,9 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	/* Save non RL ring number */
 	priv->native_tx_ring_num = priv->tx_ring_num;
 
+	priv->rate_limit_tx_ring_num = 0;
+	priv->active_tx_ring_num = 0;
+
 	priv->tx_ring = kcalloc(MAX_TX_RINGS,
 				sizeof(struct mlx4_en_tx_ring *), GFP_KERNEL);
 	if (!priv->tx_ring) {
@@ -2166,7 +2182,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 		goto out;
 
 	/* Rate Limit support */
-	spin_lock_init(&priv->reuse_index_list_lock);
+	spin_lock_init(&priv->tx_ring_index_lock);
 	STAILQ_INIT(&priv->reuse_index_list_head);
 	priv->used_rates_num = 0;
 	priv->max_rates_num = priv->mdev->dev->caps.max_rates_num[priv->port];
@@ -2506,9 +2522,12 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "native_tx_rings",
             CTLFLAG_RD, &priv->native_tx_ring_num, 0,
             "Number of native transmit rings");
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "total_tx_rings",
-            CTLFLAG_RD, &priv->tx_ring_num, 0,
-            "Number of total transmit rings");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rate_limit_tx_rings",
+            CTLFLAG_RD, &priv->rate_limit_tx_ring_num, 0,
+            "Number of rate limit transmit rings");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "active_tx_rings",
+            CTLFLAG_RD, &priv->active_tx_ring_num, 0,
+            "Number of total active rings");
         SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_size",
             CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
             mlx4_en_set_rx_ring_size, "I", "Receive ring size");
