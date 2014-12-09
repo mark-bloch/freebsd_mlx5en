@@ -66,7 +66,15 @@
 #define	DIV_ROUND_UP		howmany
 
 #define	printk(X...)		printf(X)
-#define	pr_debug(fmt, ...)	log(LOG_DEBUG, fmt, ##__VA_ARGS__)
+
+#ifdef DEBUG
+#define pr_debug(fmt, ...) \
+        log(LOG_DEBUG, fmt, ##__VA_ARGS__)
+#else
+#define pr_debug(fmt, ...) \
+        ({ if (0) log(LOG_DEBUG, fmt, ##__VA_ARGS__); 0; })
+#endif
+
 #define udelay(t)       	DELAY(t)
 
 #ifndef pr_fmt
