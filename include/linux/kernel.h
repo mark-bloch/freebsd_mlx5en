@@ -160,8 +160,8 @@
 
 #define min(x, y)	(x < y ? x : y)
 #define max(x, y)	(x > y ? x : y)
-#define min_t(type, _x, _y)	(type)(_x) < (type)(_y) ? (type)(_x) : (_y)
-#define max_t(type, _x, _y)	(type)(_x) > (type)(_y) ? (type)(_x) : (_y)
+#define min_t(type, _x, _y)	((type)(_x) < (type)(_y) ? (type)(_x) : (type)(_y))
+#define max_t(type, _x, _y)	((type)(_x) > (type)(_y) ? (type)(_x) : (type)(_y))
 
 /*
  * This looks more complex than it should be. But we need to
