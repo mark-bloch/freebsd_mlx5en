@@ -1343,9 +1343,9 @@ static ssize_t show_port_ib_mtu(struct device *dev,
 						   port_mtu_attr);
 	struct mlx4_dev *mdev = info->dev;
 
+	/*When port type is eth, port mtu value isn't used.*/
 	if (mdev->caps.port_type[info->port] == MLX4_PORT_TYPE_ETH)
-		mlx4_warn(mdev, "port level mtu is only used for IB ports\n");
-
+		return -EINVAL;
 	sprintf(buf, "%d\n",
 			ibta_mtu_to_int(mdev->caps.port_ib_mtu[info->port]));
 	return strlen(buf);
