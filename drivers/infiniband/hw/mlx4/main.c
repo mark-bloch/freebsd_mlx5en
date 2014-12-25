@@ -1569,18 +1569,16 @@ static struct device_attribute *mlx4_class_attributes[] = {
 
 static void mlx4_addrconf_ifid_eui48(u8 *eui, u16 vlan_id, struct net_device *dev, u8 port)
 {
-	u16 id = (vlan_id < 0x1000) ? vlan_id : port-1;
         memcpy(eui, IF_LLADDR(dev), 3);
         memcpy(eui + 5, IF_LLADDR(dev) + 3, 3);
-	if (id || vlan_id == 0) {
-		eui[3] = (id >> 8) & 0xff;
-		eui[4] = id & 0xff;
-	} else if (!port-1) {
+	if (vlan_id < 0x1000) {
+		eui[3] = vlan_id >> 8;
+		eui[4] = vlan_id & 0xff;
+	} else {
 		eui[3] = 0xff;
 		eui[4] = 0xfe;
 	}
-	if (vlan_id < 0x1000 || !port-1)
-		eui[0] ^= 2;
+	eui[0] ^= 2;
 }
 
 static void update_gids_task(struct work_struct *work)
