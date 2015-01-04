@@ -240,15 +240,13 @@ static __used int find_available_tx_ring_index(struct mlx4_en_priv *priv)
 #ifdef CONFIG_RATELIMIT
 static int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
 {
-	uint64_t min_b;
-	uint64_t max_b;
+	uint64_t bytes;
 	uint64_t interval;
 
-	min_b = (uint64_t) in_ratectl->min_bytes_per_interval;
-	max_b = (uint64_t) in_ratectl->max_bytes_per_interval;
-	interval = (uint64_t)in_ratectl->micros_per_interval;
+	bytes = in_ratectl->bytes_per_interval;
+	interval = in_ratectl->micros_per_interval;
 
-	if (interval == 0 || min_b > max_b || max_b == 0) {
+	if (interval == 0 || bytes == 0){
 		return (EINVAL);
 	}
 
@@ -259,9 +257,7 @@ static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 					struct in_ratectlreq *in_ratectl)
 {
 	struct mlx4_en_tx_ring *tx_ring;
-	uint64_t min_b;
-	uint64_t max_b;
-	uint64_t avg_b;
+	uint64_t bytes;
 	uint64_t interval;
 	uint64_t rate;
 	uint64_t max_rate_supported;
@@ -272,16 +268,10 @@ static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
 
 	tx_ring = priv->tx_ring[index];
 
-	min_b = (uint64_t)in_ratectl->min_bytes_per_interval;
-	max_b = (uint64_t)in_ratectl->max_bytes_per_interval;
+	bytes = (uint64_t)in_ratectl->bytes_per_interval;
 	interval = (uint64_t)in_ratectl->micros_per_interval;
 
-	avg_b = (min_b + max_b) / 2;
-
-	/* This should work for both options
-	 * min_b = max_b or min_b != max_b
-	 */
-	rate = DIV_ROUND_UP(avg_b *
+	rate = DIV_ROUND_UP(bytes *
 		((uint64_t)(8 * 1000000)), interval);
 
 	if (rate > max_rate_supported) {
@@ -378,8 +368,7 @@ activate:
 					index, in_ratectl);
 
 	/* Store ratectl request params */
-	tx_ring->ratectlcpy.min_bytes_per_interval = in_ratectl->min_bytes_per_interval;
-	tx_ring->ratectlcpy.max_bytes_per_interval = in_ratectl->max_bytes_per_interval;
+	tx_ring->ratectlcpy.bytes_per_interval = in_ratectl->bytes_per_interval;
 	tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
 
 	/* default moderation */
@@ -520,8 +509,7 @@ int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		tx_ring->rl_data.rate_limit_val = new_rate;
 
 		/* Store new ratectl request params */
-		tx_ring->ratectlcpy.min_bytes_per_interval = in_ratectl->min_bytes_per_interval;
-		tx_ring->ratectlcpy.max_bytes_per_interval = in_ratectl->max_bytes_per_interval;
+		tx_ring->ratectlcpy.bytes_per_interval = in_ratectl->bytes_per_interval;
 		tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
 	}
 	mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
@@ -550,8 +538,7 @@ void mlx4_en_get_ratectl_req_params(struct mlx4_en_priv *priv, struct
 		return;
 	}
 
-	in_ratectl->min_bytes_per_interval = tx_ring->ratectlcpy.min_bytes_per_interval;
-	in_ratectl->max_bytes_per_interval = tx_ring->ratectlcpy.max_bytes_per_interval;
+	in_ratectl->bytes_per_interval = tx_ring->ratectlcpy.bytes_per_interval;
 	in_ratectl->micros_per_interval = tx_ring->ratectlcpy.micros_per_interval;
 
 	mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
