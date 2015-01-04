@@ -329,12 +329,12 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		return (EINVAL);
 	}
 
-	tx_ring = priv->tx_ring[index];
 	priv->rate_limit_tx_ring_num++;
 
-	if (tx_ring) {
+	if (priv->tx_ring[index]) {
 		/* Ring already exists, needs activation */
 		/* Make sure drbr queue has no left overs from before */
+		tx_ring = priv->tx_ring[index];
 		if (!drbr_empty(priv->dev, tx_ring->br)) {
 			struct mbuf *m;
 			spin_lock(&tx_ring->tx_lock);
@@ -356,13 +356,14 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		goto err_create_resources;
 	}
 
-	err = mlx4_en_create_tx_ring(priv, &tx_ring,
+	err = mlx4_en_create_tx_ring(priv, &priv->tx_ring[index],
 		MLX4_EN_DEF_RL_TX_RING_SIZE, TXBB_SIZE, node, index);
 	if (err) {
 		en_err(priv, "Failed to create Rate Limited TX ring\n");
 		goto err_create_resources;
 	}
 
+	tx_ring = priv->tx_ring[index];
 	sysctl_ctx_init(&tx_ring->rl_stats_ctx);
 
 	spin_unlock(&priv->tx_ring_index_lock);
