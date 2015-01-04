@@ -1292,7 +1292,7 @@ int mlx4_en_start_port(struct net_device *dev)
 
 	/* Configure tx cq's and rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->user_valid == false) {
+		if (priv->tx_ring[i]->rl_data.user_valid == false) {
 			continue;
 		}
 		/* Configure cq */
@@ -1398,7 +1398,7 @@ int mlx4_en_start_port(struct net_device *dev)
 
 tx_err:
 	while (tx_index--) {
-		if (priv->tx_ring[tx_index]->user_valid == false) {
+		if (priv->tx_ring[tx_index]->rl_data.user_valid == false) {
 			continue;
 		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[tx_index]);
@@ -1496,7 +1496,7 @@ void mlx4_en_stop_port(struct net_device *dev)
 
 	/* Free TX Rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->user_valid == false) {
+		if (priv->tx_ring[i]->rl_data.user_valid == false) {
 			continue;
 		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[i]);
@@ -1506,7 +1506,7 @@ void mlx4_en_stop_port(struct net_device *dev)
 	msleep(10);
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->user_valid == false) {
+		if (priv->tx_ring[i]->rl_data.user_valid == false) {
 			continue;
 		}
 		mlx4_en_free_tx_buf(dev, priv->tx_ring[i]);
@@ -1544,7 +1544,7 @@ static void mlx4_en_restart(struct work_struct *work)
 	if (priv->blocked == 0 || priv->port_up == 0)
 		return;
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->user_valid == false) {
+		if (priv->tx_ring[i]->rl_data.user_valid == false) {
 			continue;
 		}
 		ring = priv->tx_ring[i];
@@ -1583,7 +1583,7 @@ static void mlx4_en_clear_stats(struct net_device *dev)
 	memset(&priv->vport_stats, 0, sizeof(priv->vport_stats));
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->user_valid == false) {
+		if (priv->tx_ring[i]->rl_data.user_valid == false) {
 			continue;
 		}
 		priv->tx_ring[i]->bytes = 0;
@@ -1670,11 +1670,11 @@ void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv)
 	for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
 		if (priv->tx_ring && priv->tx_ring[i]) {
 			ring = priv->tx_ring[i];
-			mutex_lock(&ring->rl_ctl_lock);
-			if (ring->user_valid == true) {
-				sysctl_ctx_free(&ring->rl_stats_ctx);
+			mutex_lock(&ring->rl_data.rl_ctl_lock);
+			if (ring->rl_data.user_valid == true) {
+				sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
 			}
-			mutex_unlock(&ring->rl_ctl_lock);
+			mutex_unlock(&ring->rl_data.rl_ctl_lock);
 			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
 		}
 		if (priv->tx_cq && priv->tx_cq[i])
@@ -1946,14 +1946,14 @@ static __used void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int
 	char namebuf[128];
 
 	tx_ring = priv->tx_ring[ring_id];
-	ctx = &tx_ring->rl_stats_ctx;
+	ctx = &tx_ring->rl_data.rl_stats_ctx;
 	snprintf(namebuf, sizeof(namebuf), "tx_ring%d", ring_id);
 	head_node = SYSCTL_CHILDREN(priv->sysctl_stat);
 	ring_node = SYSCTL_ADD_NODE(ctx, head_node, OID_AUTO, namebuf,
 			CTLFLAG_RD, NULL, "TX Ring");
 	ring_list = SYSCTL_CHILDREN(ring_node);
 	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "rate_limit_val",
-			CTLFLAG_RD, &tx_ring->rate_limit_val, "Rate Limit value");
+			CTLFLAG_RD, &tx_ring->rl_data.rate_limit_val, "Rate Limit value");
 	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "packets",
 			CTLFLAG_RD, &tx_ring->packets, "TX packets");
 	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",

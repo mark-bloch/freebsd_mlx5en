@@ -191,7 +191,7 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 	priv->port_stats.queue_stopped = 0;
 	priv->port_stats.wake_queue = 0;
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->user_valid == false) {
+		if (priv->tx_ring[i]->rl_data.user_valid == false) {
 			continue;
 		}
 		priv->port_stats.tx_chksum_offload += priv->tx_ring[i]->tx_csum;

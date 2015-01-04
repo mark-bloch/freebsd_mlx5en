@@ -276,6 +276,13 @@ struct mlx4_en_tx_desc {
 #define MLX4_EN_CX3_LOW_ID	0x1000
 #define MLX4_EN_CX3_HIGH_ID	0x1005
 
+struct mlx4_en_rl_data {
+        bool user_valid;
+	 u64 rate_limit_val;
+        struct sysctl_ctx_list rl_stats_ctx;
+        struct mutex rl_ctl_lock;
+};
+
 struct mlx4_en_tx_ring {
         spinlock_t tx_lock;
 	struct mlx4_hwq_resources wqres;
@@ -315,10 +322,7 @@ struct mlx4_en_tx_ring {
 	int inline_thold;
 	u64 watchdog_time;
 	/* Rate Limit support */
-	bool user_valid;
-	u64 rate_limit_val;
-	struct sysctl_ctx_list rl_stats_ctx;
-	struct mutex rl_ctl_lock; /* protects ctrl actions done on rl rings */
+	struct mlx4_en_rl_data rl_data;
 #ifdef CONFIG_RATELIMIT
 	struct in_ratectlreq ratectlcpy;
 #endif
