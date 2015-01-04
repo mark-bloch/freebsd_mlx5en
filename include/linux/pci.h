@@ -580,6 +580,16 @@ pci_enable_msix(struct pci_dev *pdev, struct msix_entry *entries, int nreq)
 	avail = nreq;
 	if ((error = -pci_alloc_msix(pdev->dev.bsddev, &avail)) != 0)
 		return error;
+
+	/*
+	 * pci_alloc_msix may allocate less interrupts than avail and return
+	 * with no error
+	 */
+	if (avail < nreq) {
+		pci_release_msi(pdev->dev.bsddev);
+		return avail;
+	}
+
 	rle = _pci_get_rle(pdev, SYS_RES_IRQ, 1);
 	pdev->dev.msix = rle->start;
 	pdev->dev.msix_max = rle->start + avail;
