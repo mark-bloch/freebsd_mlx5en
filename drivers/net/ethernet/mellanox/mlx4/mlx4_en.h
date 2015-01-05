@@ -670,7 +670,7 @@ struct mlx4_en_priv {
 	u64 if_counters_rx_errors;
 	u64 if_counters_rx_no_buffer;
 	/* Rate limit support */
-	spinlock_t tx_ring_index_lock; /* protects tx ring index and counters */
+	struct mutex tx_ring_index_lock; /* protects tx ring index and counters */
 	STAILQ_HEAD(, mlx4_en_list_element) reuse_index_list_head;
 	struct mlx4_en_list_element reuse_index_list_array [MAX_TX_RINGS];
 	u32 rate_limit_tx_ring_num;

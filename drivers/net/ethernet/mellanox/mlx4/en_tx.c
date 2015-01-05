@@ -206,9 +206,9 @@ void invalidate_rate_limit_ring(struct mlx4_en_priv *priv, uint32_t ring_id)
 	* will be reused in the future.
 	*/
 	p_item = priv->reuse_index_list_array + ring_id;
-	spin_lock(&priv->tx_ring_index_lock);
+	mutex_lock(&priv->tx_ring_index_lock);
 	STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, p_item, entry);
-	spin_unlock(&priv->tx_ring_index_lock);
+	mutex_unlock(&priv->tx_ring_index_lock);
 
 	priv->rate_limit_tx_ring_num--;
 }
@@ -320,7 +320,7 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		return (err);
 	}
 
-	spin_lock(&priv->tx_ring_index_lock);
+	mutex_lock(&priv->tx_ring_index_lock);
 
 	/* Create resources */
 	index = find_available_tx_ring_index(priv);
@@ -345,7 +345,7 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		}
 		/* re-initialize stats context */
 		sysctl_ctx_init(&tx_ring->rl_data.rl_stats_ctx);
-		spin_unlock(&priv->tx_ring_index_lock);
+		mutex_unlock(&priv->tx_ring_index_lock);
 		goto activate;
 	}
 
@@ -366,7 +366,7 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 	tx_ring = priv->tx_ring[index];
 	sysctl_ctx_init(&tx_ring->rl_data.rl_stats_ctx);
 
-	spin_unlock(&priv->tx_ring_index_lock);
+	mutex_unlock(&priv->tx_ring_index_lock);
 
 activate:
 
@@ -442,7 +442,7 @@ err_create_resources:
 
 	priv->tx_ring_num--;
 	priv->rate_limit_tx_ring_num--;
-	spin_unlock(&priv->tx_ring_index_lock);
+	mutex_unlock(&priv->tx_ring_index_lock);
 
 	return err;
 
@@ -630,10 +630,10 @@ void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 
 	/* Add index to re-use list */
 	p_item = priv->reuse_index_list_array + ring_id;
-	spin_lock(&priv->tx_ring_index_lock);
+	mutex_lock(&priv->tx_ring_index_lock);
 	STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, p_item, entry);
 	priv->rate_limit_tx_ring_num--;
-	spin_unlock(&priv->tx_ring_index_lock);
+	mutex_unlock(&priv->tx_ring_index_lock);
 }
 #endif
 

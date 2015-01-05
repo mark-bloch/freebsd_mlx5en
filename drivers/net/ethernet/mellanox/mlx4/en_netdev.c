@@ -2182,7 +2182,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 		goto out;
 
 	/* Rate Limit support */
-	spin_lock_init(&priv->tx_ring_index_lock);
+	mutex_init(&priv->tx_ring_index_lock);
 	STAILQ_INIT(&priv->reuse_index_list_head);
 	priv->used_rates_num = 0;
 	priv->max_rates_num = priv->mdev->dev->caps.max_rates_num[priv->port];
