@@ -323,9 +323,6 @@ struct mlx4_en_tx_ring {
 	u64 watchdog_time;
 	/* Rate Limit support */
 	struct mlx4_en_rl_data rl_data;
-#ifdef CONFIG_RATELIMIT
-	struct in_ratectlreq ratectlcpy;
-#endif
 };
 
 struct mlx4_en_rx_desc {

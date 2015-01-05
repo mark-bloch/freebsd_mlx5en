@@ -367,10 +367,6 @@ activate:
 	tx_ring->rl_data.rate_limit_val = mlx4_en_calc_tx_rate_limit(priv,
 					index, in_ratectl);
 
-	/* Store ratectl request params */
-	tx_ring->ratectlcpy.bytes_per_interval = in_ratectl->bytes_per_interval;
-	tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
-
 	/* default moderation */
 	cq = priv->tx_cq[index];
 	cq->moder_cnt = priv->tx_frames;
@@ -508,9 +504,6 @@ int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		}
 		tx_ring->rl_data.rate_limit_val = new_rate;
 
-		/* Store new ratectl request params */
-		tx_ring->ratectlcpy.bytes_per_interval = in_ratectl->bytes_per_interval;
-		tx_ring->ratectlcpy.micros_per_interval = in_ratectl->micros_per_interval;
 	}
 	mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
 	return (err);
@@ -538,8 +531,9 @@ void mlx4_en_get_ratectl_req_params(struct mlx4_en_priv *priv, struct
 		return;
 	}
 
-	in_ratectl->bytes_per_interval = tx_ring->ratectlcpy.bytes_per_interval;
-	in_ratectl->micros_per_interval = tx_ring->ratectlcpy.micros_per_interval;
+	/* Returning ring's actual rate in bytes per millisecond */
+	in_ratectl->micros_per_interval = 1000;
+	in_ratectl->bytes_per_interval = (uint32_t)(tx_ring->rl_data.rate_limit_val / (u64)8000);
 
 	mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
 }
