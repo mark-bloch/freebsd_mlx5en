@@ -229,7 +229,6 @@ static __used int find_available_tx_ring_index(struct mlx4_en_priv *priv)
 	}
 	else if (priv->tx_ring_num < MAX_TX_RINGS) {
 			index = priv->tx_ring_num;
-			priv->tx_ring_num++;
 	} else { /* Reached max resources capacity */
 		index = -1;
 	}
@@ -353,6 +352,8 @@ int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
 		goto err_create_resources;
 	}
 
+	priv->tx_ring_num++;
+
 	tx_ring = priv->tx_ring[index];
 	sysctl_ctx_init(&tx_ring->rl_data.rl_stats_ctx);
 
@@ -425,7 +426,6 @@ err_create_resources:
 	if (priv->tx_cq[index])
 		mlx4_en_destroy_cq(priv, &priv->tx_cq[index]);
 
-	priv->tx_ring_num--;
 	priv->rate_limit_tx_ring_num--;
 	mutex_unlock(&priv->tx_ring_index_lock);
 
