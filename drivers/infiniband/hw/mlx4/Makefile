@@ -11,7 +11,7 @@ SRCS+= linux_compat.c linux_radix.c linux_idr.c
 SRCS+=	opt_inet.h opt_inet6.h
 
 CFLAGS+= -I${.CURDIR}/../../../../drivers/infiniband/hw/mlx4
-CFLAGS+= -I${.CURDIR}/../../../../include/
+CFLAGS+= -I${.CURDIR}/../../../../include
 CFLAGS+= -DCONFIG_INFINIBAND_USER_MEM
 CFLAGS+= -DINET6 -DINET -DOFED
 

@@ -5,7 +5,7 @@
 .include <bsd.own.mk>
 
 KMOD    = ibcore
-SRCS=  cm_msgs.h mad_rmpp.h iwcm.h agent.h core_priv.h smi.h mad_priv.h sa.h uverbs.h
+SRCS    =  cm_msgs.h mad_rmpp.h iwcm.h agent.h core_priv.h smi.h mad_priv.h sa.h uverbs.h
 SRCS+= addr.c iwcm.c sa_query.c ucma.c uverbs_cmd.c 
 SRCS+= agent.c multicast.c smi.c ud_header.c uverbs_main.c
 SRCS+= mad.c umem.c uverbs_marshall.c peer_mem.c 
@@ -15,7 +15,7 @@ SRCS+= linux_compat.c linux_radix.c linux_idr.c
 SRCS+= vnode_if.h device_if.h bus_if.h pci_if.h opt_inet.h opt_inet6.h
 
 CFLAGS+= -I${.CURDIR}/../../../drivers/infiniband/core
-CFLAGS+= -I${.CURDIR}/../../../include/
+CFLAGS+= -I${.CURDIR}/../../../include
 CFLAGS+= -DINET6 -DINET -DOFED
 
 .include <bsd.kmod.mk>
