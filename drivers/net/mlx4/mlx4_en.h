@@ -419,6 +419,7 @@ struct mlx4_en_cq {
 #define MLX4_EN_OPCODE_ERROR	0x1e
 	u32 tot_rx;
 	u32 tot_tx;
+	u32 curr_poll_rx_cpu_id;
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
 	unsigned int state;

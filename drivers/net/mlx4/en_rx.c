@@ -692,6 +692,7 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq)
         // Because there is no NAPI in freeBSD
         done = mlx4_en_poll_rx_cq(cq, MLX4_EN_RX_BUDGET);
 	if (priv->port_up  && (done == MLX4_EN_RX_BUDGET) ) {
+		cq->curr_poll_rx_cpu_id = curcpu;
 		taskqueue_enqueue(cq->tq, &cq->cq_task);
         }
 	else {
@@ -702,8 +703,15 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq)
 void mlx4_en_rx_que(void *context, int pending)
 {
         struct mlx4_en_cq *cq;
+	struct thread *td;
 
         cq = context;
+	td = curthread;
+
+	thread_lock(td);
+	sched_bind(td, cq->curr_poll_rx_cpu_id);
+	thread_unlock(td);
+
         while (mlx4_en_poll_rx_cq(cq, MLX4_EN_RX_BUDGET)
                         == MLX4_EN_RX_BUDGET);
         mlx4_en_arm_cq(cq->dev->if_softc, cq);
