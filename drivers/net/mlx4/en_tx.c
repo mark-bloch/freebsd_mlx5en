@@ -715,14 +715,6 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 	/* Optimize the common case when there are no wraparounds */
 	if (likely((void *) tx_desc + tx_info->nr_txbb * TXBB_SIZE <= end)) {
 		if (!tx_info->inl) {
-			if (tx_info->linear) {
-				dma_unmap_single(priv->ddev,
-					(dma_addr_t) be64_to_cpu(data->addr),
-					 be32_to_cpu(data->byte_count),
-					 PCI_DMA_TODEVICE);
-				++data;
-			}
-
 			for (i = 0; i < frags; i++) {
                                 pci_unmap_single(mdev->pdev,
                                                 (dma_addr_t) be64_to_cpu(data[i].addr),
@@ -734,15 +726,6 @@ static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 			if ((void *) data >= end) {
 				data = ring->buf + ((void *)data - end);
 			}
-
-			if (tx_info->linear) {
-				dma_unmap_single(priv->ddev,
-					(dma_addr_t) be64_to_cpu(data->addr),
-					 be32_to_cpu(data->byte_count),
-					 PCI_DMA_TODEVICE);
-				++data;
-			}
-
 			for (i = 0; i < frags; i++) {
 				/* Check for wraparound before unmapping */
 				if ((void *) data >= end)
