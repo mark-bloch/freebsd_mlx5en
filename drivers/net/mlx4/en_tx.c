@@ -1247,7 +1247,7 @@ retry:
 		/* Use interrupts to find out when queue opened */
 		cq = priv->tx_cq[tx_ind];
 		mlx4_en_arm_cq(priv, cq);
-		return EBUSY;
+		return (ENOBUFS);
         }
 
 	/* Track current inflight packets for performance analysis */
@@ -1442,7 +1442,7 @@ mlx4_en_transmit_locked(struct ifnet *dev, int tx_ind, struct mbuf *m)
 	}
 	/* Process the queue */
 	while ((next = drbr_peek(dev, ring->br)) != NULL) {
-		if ((err = mlx4_en_xmit(dev, tx_ind, &next)) != 0) {
+		if (mlx4_en_xmit(dev, tx_ind, &next) != 0) {
 			if (next == NULL) {
 				drbr_advance(dev, ring->br);
 			} else {
