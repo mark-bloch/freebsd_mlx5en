@@ -1779,40 +1779,27 @@ static u8 mlx4_ib_get_dev_port(struct net_device *dev, struct mlx4_ib_dev *ibdev
 static void mlx4_ib_get_dev_addr(struct net_device *dev, struct mlx4_ib_dev *ibdev, u8 port)
 {
         struct ifaddr *ifa;
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	struct inet6_dev *in6_dev;
 	union ib_gid  *pgid;
-	struct inet6_ifaddr *ifp;
-#endif
 	union ib_gid gid;
 
 
 	if ((port == 0) || (port > MLX4_MAX_PORTS))
 		return;
 
-	/* IPv4 gids */
         TAILQ_FOREACH(ifa, &dev->if_addrhead, ifa_link) {
                 if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET){
                         ipv6_addr_set_v4mapped(
 				((struct sockaddr_in *) ifa->ifa_addr)->sin_addr.s_addr,
 				(struct in6_addr *)&gid);
                         update_gid_table(ibdev, port, &gid, 0, 0);
-                }
+		} else if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET6) {
+			if (!(IN6_IS_ADDR_LINKLOCAL(&((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr))) {
+				pgid = (union ib_gid *)(&((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr);
+				update_gid_table(ibdev, port, pgid, 0, 0);
+			}
+		}
 
         }
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	/* IPv6 gids */
-	in6_dev = in6_dev_get(dev);
-	if (in6_dev) {
-		read_lock_bh(&in6_dev->lock);
-		list_for_each_entry(ifp, &in6_dev->addr_list, if_list) {
-			pgid = (union ib_gid *)&ifp->addr;
-			update_gid_table(ibdev, port, pgid, 0, 0);
-		}
-		read_unlock_bh(&in6_dev->lock);
-		in6_dev_put(in6_dev);
-	}
-#endif
 }
 
 static void mlx4_set_default_gid(struct mlx4_ib_dev *ibdev,
