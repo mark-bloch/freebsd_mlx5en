@@ -194,6 +194,14 @@ static void queue_req(struct addr_req *req)
 	mutex_unlock(&lock);
 }
 
+#define SCOPE_ID_CACHE(_scope_id, _addr6) {		\
+	(_addr6)->sin6_addr.s6_addr[3] = (_scope_id); 	\
+	(_addr6)->sin6_scope_id = 0; }			\
+
+#define SCOPE_ID_RESTORE(_scope_id, _addr6) {		\
+	(_addr6)->sin6_scope_id = (_scope_id);		\
+	(_addr6)->sin6_addr.s6_addr[3] = 0; }		\
+
 static int addr_resolve(struct sockaddr *src_in,
                         struct sockaddr *dst_in,
                         struct rdma_dev_addr *addr)
@@ -213,6 +221,11 @@ static int addr_resolve(struct sockaddr *src_in,
         int error = 0;
 	struct route_in6 ro6;
 	struct in6_addr src6;
+	/*
+	 * Scope_id represents the index of the relevant interface.
+	 * In Freebsd, each default ipv6 address holds the scope id.
+	 */
+	int scope_id;
 	uint16_t vtag = 0;
 	/*
          * Determine whether the address is unicast, multicast, or broadcast
@@ -262,12 +275,24 @@ static int addr_resolve(struct sockaddr *src_in,
                 sin6 = (struct sockaddr_in6 *)dst_in;
                 if (IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
                         multi = 1;
+		if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr)) {
+			/*
+			 * Address comparison fails if the scope id is set
+			 * and not as part of the addr.
+			 */
+			scope_id = sin6->sin6_scope_id;
+			SCOPE_ID_CACHE(scope_id, sin6);
+		}
                 sin6 = (struct sockaddr_in6 *)src_in;
                 if (!IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
                         port = sin6->sin6_port;
                         sin6->sin6_port = 0;
+			if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr))
+				SCOPE_ID_CACHE(scope_id, sin6);
 			ifa = ifa_ifwithaddr(src_in);
 			sin6->sin6_port = port;
+			if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr))
+				SCOPE_ID_RESTORE(scope_id, sin6);
 			if (ifa == NULL)
 				return -ENETUNREACH;
 			ifp = ifa->ifa_ifp;
@@ -316,6 +341,8 @@ static int addr_resolve(struct sockaddr *src_in,
 				sin6->sin6_family = AF_INET6;
 				sin6->sin6_len = sizeof(*sin6);
 				sin6->sin6_addr = src6;
+				if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr))
+					SCOPE_ID_RESTORE(scope_id, sin6);
 			}
 		}
                 RT_UNLOCK(rte);
@@ -348,6 +375,9 @@ mcast:
 #ifdef INET6
         case AF_INET6:
 		error = toe_l2_resolve(NULL, ifp, dst_in, edst, &vtag);
+		sin6 = (struct sockaddr_in6 *)dst_in;
+		if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr))
+			SCOPE_ID_RESTORE(scope_id, sin6);
                 break;
 #endif
         default:
