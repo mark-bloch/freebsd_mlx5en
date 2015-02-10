@@ -790,3 +790,8 @@ static moduledata_t ibcore_mod = {
 
 MODULE_VERSION(ibcore, 1);
 DECLARE_MODULE(ibcore, ibcore_mod, SI_SUB_SMP, SI_ORDER_ANY);
+/*
+ * We are using a function for resolving l2 layer from toecore,
+ * therefore, we need to make sure that module is loaded.
+ */
+MODULE_DEPEND(ibcore, toecore, 1, 1, 1);

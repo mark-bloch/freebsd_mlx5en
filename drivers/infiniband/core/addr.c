@@ -44,6 +44,7 @@
 #include <rdma/ib_addr.h>
 #include <netinet/if_ether.h>
 #include <netinet6/ip6_var.h>
+#include <netinet/toecore.h>
 
 
 /* IB Address Translation */
@@ -212,6 +213,7 @@ static int addr_resolve(struct sockaddr *src_in,
         int error = 0;
 	struct route_in6 ro6;
 	struct in6_addr src6;
+	uint16_t vtag = 0;
 	/*
          * Determine whether the address is unicast, multicast, or broadcast
          * and whether the source interface is valid.
@@ -345,7 +347,7 @@ mcast:
 #endif
 #ifdef INET6
         case AF_INET6:
-                error = nd6_storelladdr(ifp, NULL, dst_in, (u_char *)edst, &lle);
+		error = toe_l2_resolve(NULL, ifp, dst_in, edst, &vtag);
                 break;
 #endif
         default:
