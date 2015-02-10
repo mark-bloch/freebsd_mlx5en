@@ -519,7 +519,7 @@ static void resolve_cb(int status, struct sockaddr *src_addr,
 }
 
 int rdma_addr_find_dmac_by_grh(union ib_gid *sgid, union ib_gid *dgid, u8 *dmac,
-			       u16 *vlan_id)
+			       u16 *vlan_id, u8 if_index)
 {
 	int ret = 0;
 	struct rdma_dev_addr dev_addr;
@@ -540,6 +540,12 @@ int rdma_addr_find_dmac_by_grh(union ib_gid *sgid, union ib_gid *dgid, u8 *dmac,
 	ret = rdma_gid2ip(&dgid_addr._sockaddr, dgid);
 	if (ret)
 		return ret;
+
+	if (if_index != -1 && sgid_addr._sockaddr.sa_family == AF_INET6 &&
+	    IN6_IS_SCOPE_LINKLOCAL(&sgid_addr._sockaddr_in6.sin6_addr)) {
+		sgid_addr._sockaddr_in6.sin6_scope_id = if_index;
+		dgid_addr._sockaddr_in6.sin6_scope_id = if_index;
+	}
 
 	memset(&dev_addr, 0, sizeof(dev_addr));
 

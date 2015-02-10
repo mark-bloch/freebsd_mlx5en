@@ -194,6 +194,7 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num, struct ib_wc *wc,
 	u32 flow_class;
 	u16 gid_index;
 	int ret;
+	u8 if_index;
 	int is_eth = (rdma_port_get_link_layer(device, port_num) ==
 			IB_LINK_LAYER_ETHERNET);
 
@@ -207,8 +208,9 @@ int ib_init_ah_from_wc(struct ib_device *device, u8 port_num, struct ib_wc *wc,
 			memcpy(ah_attr->dmac, wc->smac, ETH_ALEN);
 			ah_attr->vlan_id = wc->vlan_id;
 		} else {
+			if_index = device->get_netdev(device, port_num);
 			ret = rdma_addr_find_dmac_by_grh(&grh->dgid, &grh->sgid,
-					ah_attr->dmac, &ah_attr->vlan_id);
+					ah_attr->dmac, &ah_attr->vlan_id, if_index);
 			if (ret)
 				return ret;
 		}

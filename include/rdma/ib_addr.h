@@ -107,7 +107,7 @@ int rdma_copy_addr(struct rdma_dev_addr *dev_addr, struct net_device *dev,
 	      const unsigned char *dst_dev_addr);
 int rdma_addr_find_smac_by_sgid(union ib_gid *sgid, u8 *smac, u16 *vlan_id);
 int rdma_addr_find_dmac_by_grh(union ib_gid *sgid, union ib_gid *dgid, u8 *smac,
-			       u16 *vlan_id);
+			       u16 *vlan_id, u8 if_index);
 
 static inline int ip_addr_size(struct sockaddr *addr)
 {
