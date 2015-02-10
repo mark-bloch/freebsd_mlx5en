@@ -43,6 +43,7 @@
 #include <net/netevent.h>
 #include <rdma/ib_addr.h>
 #include <netinet/if_ether.h>
+#include <netinet6/ip6_var.h>
 
 
 /* IB Address Translation */
@@ -209,6 +210,8 @@ static int addr_resolve(struct sockaddr *src_in,
         int multi;
         int bcast;
         int error = 0;
+	struct route_in6 ro6;
+	struct in6_addr src6;
 	/*
          * Determine whether the address is unicast, multicast, or broadcast
          * and whether the source interface is valid.
@@ -236,6 +239,19 @@ static int addr_resolve(struct sockaddr *src_in,
                         port = sin->sin_port;
                         sin->sin_port = 0;
                         memset(&sin->sin_zero, 0, sizeof(sin->sin_zero));
+
+			/*
+			 * If we have a source address to use look it up first and verify
+			 * that it is a local interface.
+			 */
+			ifa = ifa_ifwithaddr(src_in);
+			sin->sin_port = port;
+			if (ifa == NULL)
+				return -ENETUNREACH;
+			ifp = ifa->ifa_ifp;
+			ifa_free(ifa);
+			if (bcast || multi)
+				goto mcast;
                 }
                 break;
 #endif
@@ -248,31 +264,21 @@ static int addr_resolve(struct sockaddr *src_in,
                 if (!IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
                         port = sin6->sin6_port;
                         sin6->sin6_port = 0;
-                } else
-                        src_in = NULL;
+			ifa = ifa_ifwithaddr(src_in);
+			sin6->sin6_port = port;
+			if (ifa == NULL)
+				return -ENETUNREACH;
+			ifp = ifa->ifa_ifp;
+			ifa_free(ifa);
+			if (bcast || multi)
+				goto mcast;
+		}
                 break;
 #endif
         default:
                 return -EINVAL;
         }
-		/*
-         * If we have a source address to use look it up first and verify
-         * that it is a local interface.
-         */
-        if (sin->sin_addr.s_addr != INADDR_ANY) {
-                ifa = ifa_ifwithaddr(src_in);
-                if (sin)
-                        sin->sin_port = port;
-                if (sin6)
-                        sin6->sin6_port = port;
-                if (ifa == NULL)
-                        return -ENETUNREACH;
-                ifp = ifa->ifa_ifp;
-                ifa_free(ifa);
-                if (bcast || multi)
-                        goto mcast;
-        }
-		/*
+	/*
          * Make sure the route exists and has a valid link.
          */
         rte = rtalloc1(dst_in, 1, 0);
@@ -281,7 +287,7 @@ static int addr_resolve(struct sockaddr *src_in,
                         RTFREE_LOCKED(rte);
                 return -EHOSTUNREACH;
         }
-		/*
+	/*
          * If it's not multicast or broadcast and the route doesn't match the
          * requested interface return unreachable.  Otherwise fetch the
          * correct interface pointer and unlock the route.
@@ -300,6 +306,15 @@ static int addr_resolve(struct sockaddr *src_in,
                 if (ifp == NULL) {
                         ifp = rte->rt_ifp;
 			ifa = rte->rt_ifa;
+			if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET)
+				memcpy(src_in, ifa->ifa_addr, ip_addr_size(ifa->ifa_addr));
+			else if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET6) {
+				bzero(&ro6, sizeof(ro6));
+				in6_selectsrc(((struct sockaddr_in6 *)dst_in), NULL, NULL, &ro6, NULL, NULL, &src6);
+				sin6->sin6_family = AF_INET6;
+				sin6->sin6_len = sizeof(*sin6);
+				sin6->sin6_addr = src6;
+			}
 		}
                 RT_UNLOCK(rte);
         }
@@ -338,10 +353,8 @@ mcast:
                 error = -EINVAL;
         }
         RTFREE(rte);
-        if (error == 0) {
-		memcpy(src_in, ifa->ifa_addr, ip_addr_size(ifa->ifa_addr));
+	if (error == 0)
                 return rdma_copy_addr(addr, ifp, edst);
-	}
         if (error == EWOULDBLOCK)
                 return -ENODATA;
         return -error;
