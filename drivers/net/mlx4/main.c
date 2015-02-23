@@ -1335,6 +1335,43 @@ static inline int ibta_mtu_to_int(enum ibta_mtu mtu)
 	}
 }
 
+static ssize_t
+show_board(struct device *device, struct device_attribute *attr,
+			  char *buf)
+{
+	struct mlx4_hca_info *info = container_of(attr, struct mlx4_hca_info,
+						   board_attr);
+	struct mlx4_dev *mdev = info->dev;
+
+	return sprintf(buf, "%.*s\n", MLX4_BOARD_ID_LEN,
+		       mdev->board_id);
+}
+
+static ssize_t
+show_hca(struct device *device, struct device_attribute *attr,
+			char *buf)
+{
+	struct mlx4_hca_info *info = container_of(attr, struct mlx4_hca_info,
+						   hca_attr);
+	struct mlx4_dev *mdev = info->dev;
+
+	return sprintf(buf, "MT%d\n", mdev->pdev->device);
+}
+
+static ssize_t
+show_firmware_version(struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct mlx4_hca_info *info = container_of(attr, struct mlx4_hca_info,
+						   firmware_attr);
+	struct mlx4_dev *mdev = info->dev;
+
+	return sprintf(buf, "%d.%d.%d\n", (int)(mdev->caps.fw_ver >> 32),
+		       (int)(mdev->caps.fw_ver >> 16) & 0xffff,
+		       (int)mdev->caps.fw_ver & 0xffff);
+}
+
 static ssize_t show_port_ib_mtu(struct device *dev,
 			     struct device_attribute *attr,
 			     char *buf)
@@ -3039,6 +3076,29 @@ no_irq:
 	return;
 }
 
+static void
+mlx4_init_hca_info(struct mlx4_dev *dev)
+{
+	struct mlx4_hca_info *info = &mlx4_priv(dev)->hca_info;
+
+	info->dev = dev;
+
+	info->firmware_attr = (struct device_attribute)__ATTR(fw_ver, S_IRUGO,
+							show_firmware_version, NULL);
+	if (device_create_file(&dev->pdev->dev, &info->firmware_attr))
+		mlx4_err(dev, "Failed to add file firmware version");
+
+	info->hca_attr = (struct device_attribute)__ATTR(hca, S_IRUGO, show_hca,
+										NULL);
+	if (device_create_file(&dev->pdev->dev, &info->hca_attr))
+		mlx4_err(dev, "Failed to add file hca type");
+
+	info->board_attr = (struct device_attribute)__ATTR(board_id, S_IRUGO,
+							    show_board, NULL);
+	if (device_create_file(&dev->pdev->dev, &info->board_attr))
+		mlx4_err(dev, "Failed to add file board id type");
+}
+
 static int mlx4_init_port_info(struct mlx4_dev *dev, int port)
 {
 	struct mlx4_port_info *info = &mlx4_priv(dev)->port[port];
@@ -3088,6 +3148,14 @@ static int mlx4_init_port_info(struct mlx4_dev *dev, int port)
 	}
 
 	return err;
+}
+
+static void
+mlx4_cleanup_hca_info(struct mlx4_hca_info *info)
+{
+	device_remove_file(&info->dev->pdev->dev, &info->firmware_attr);
+	device_remove_file(&info->dev->pdev->dev, &info->board_attr);
+	device_remove_file(&info->dev->pdev->dev, &info->hca_attr);
 }
 
 static void mlx4_cleanup_port_info(struct mlx4_port_info *info)
@@ -3448,6 +3516,8 @@ slave_start:
 
 	mlx4_init_quotas(dev);
 
+	mlx4_init_hca_info(dev);
+
 	for (port = 1; port <= dev->caps.num_ports; port++) {
 		err = mlx4_init_port_info(dev, port);
 		if (err)
@@ -3560,6 +3630,7 @@ static void mlx4_remove_one(struct pci_dev *pdev)
 		mlx4_stop_sense(dev);
 		mlx4_unregister_device(dev);
 
+		mlx4_cleanup_hca_info(&priv->hca_info);
 		for (p = 1; p <= dev->caps.num_ports; p++) {
 			mlx4_cleanup_port_info(&priv->port[p]);
 			mlx4_CLOSE_PORT(dev, p);

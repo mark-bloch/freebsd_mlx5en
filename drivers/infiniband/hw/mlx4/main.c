@@ -1503,24 +1503,6 @@ out:
 	return err;
 }
 
-static ssize_t show_hca(struct device *device, struct device_attribute *attr,
-			char *buf)
-{
-	struct mlx4_ib_dev *dev =
-		container_of(device, struct mlx4_ib_dev, ib_dev.dev);
-	return sprintf(buf, "MT%d\n", dev->dev->pdev->device);
-}
-
-static ssize_t show_fw_ver(struct device *device, struct device_attribute *attr,
-			   char *buf)
-{
-	struct mlx4_ib_dev *dev =
-		container_of(device, struct mlx4_ib_dev, ib_dev.dev);
-	return sprintf(buf, "%d.%d.%d\n", (int) (dev->dev->caps.fw_ver >> 32),
-		       (int) (dev->dev->caps.fw_ver >> 16) & 0xffff,
-		       (int) dev->dev->caps.fw_ver & 0xffff);
-}
-
 static ssize_t show_rev(struct device *device, struct device_attribute *attr,
 			char *buf)
 {
@@ -1529,14 +1511,6 @@ static ssize_t show_rev(struct device *device, struct device_attribute *attr,
 	return sprintf(buf, "%x\n", dev->dev->rev_id);
 }
 
-static ssize_t show_board(struct device *device, struct device_attribute *attr,
-			  char *buf)
-{
-	struct mlx4_ib_dev *dev =
-		container_of(device, struct mlx4_ib_dev, ib_dev.dev);
-	return sprintf(buf, "%.*s\n", MLX4_BOARD_ID_LEN,
-		       dev->dev->board_id);
-}
 
 static ssize_t show_vsd(struct device *device, struct device_attribute *attr,
 			  char *buf)
@@ -1554,16 +1528,10 @@ static ssize_t show_vsd(struct device *device, struct device_attribute *attr,
 }
 
 static DEVICE_ATTR(hw_rev,   S_IRUGO, show_rev,    NULL);
-static DEVICE_ATTR(fw_ver,   S_IRUGO, show_fw_ver, NULL);
-static DEVICE_ATTR(hca_type, S_IRUGO, show_hca,    NULL);
-static DEVICE_ATTR(board_id, S_IRUGO, show_board,  NULL);
 static DEVICE_ATTR(vsd,      S_IRUGO, show_vsd,    NULL);
 
 static struct device_attribute *mlx4_class_attributes[] = {
 	&dev_attr_hw_rev,
-	&dev_attr_fw_ver,
-	&dev_attr_hca_type,
-	&dev_attr_board_id,
 	&dev_attr_vsd
 };
 

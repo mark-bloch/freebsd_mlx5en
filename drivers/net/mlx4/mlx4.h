@@ -760,6 +760,13 @@ struct mlx4_set_port_rqp_calc_context {
 	__be32 mcast;
 };
 
+struct mlx4_hca_info {
+	struct mlx4_dev	       *dev;
+	struct device_attribute firmware_attr;
+	struct device_attribute hca_attr;
+	struct device_attribute board_attr;
+};
+
 struct mlx4_port_info {
 	struct mlx4_dev	       *dev;
 	int			port;
@@ -850,6 +857,7 @@ struct mlx4_priv {
 	struct mlx4_uar		driver_uar;
 	void __iomem	       *kar;
 	struct mlx4_port_info	port[MLX4_MAX_PORTS + 1];
+	struct mlx4_hca_info	hca_info;
 	struct mlx4_sense       sense;
 	struct mutex		port_mutex;
 	struct mlx4_msix_ctl	msix_ctl;

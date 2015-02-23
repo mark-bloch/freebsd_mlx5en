@@ -82,7 +82,7 @@ struct class_attribute {
 
 #define	CLASS_ATTR(_name, _mode, _show, _store)				\
 	struct class_attribute class_attr_##_name =			\
-	    { { #_name, NULL, _mode }, _show, _store }
+	    __ATTR(name, _mode, _show, _store)
 
 struct device_attribute {
 	struct attribute	attr;
@@ -95,7 +95,7 @@ struct device_attribute {
 
 #define	DEVICE_ATTR(_name, _mode, _show, _store)			\
 	struct device_attribute dev_attr_##_name =			\
-	    { { #_name, NULL, _mode }, _show, _store }
+	    __ATTR(_name, _mode, _show, _store)
 
 /* Simple class attribute that is just a static string */
 struct class_attribute_string {
