@@ -2,7 +2,8 @@
 
 # Which files/dirs to include in the final packge file.
 _DEFAULT=("include" \
-          "drivers")
+          "drivers" \
+          "build/install.sh")
 
 _EN_ONLY=("include" \
           "drivers/net/ethernet/mellanox/mlx4")
@@ -139,7 +140,7 @@ main()
 
         tar_repo
         popd
-        cp ${TMP_DIR}/${FILE_NAME}.tar.gz $(date +"%m_%d_%Y-%H_%M")-${FILE_NAME}.tar.gz
+        cp ${TMP_DIR}/${FILE_NAME}.tar.gz ${FILE_NAME}.tar.gz
 }
 
 main "$@"
