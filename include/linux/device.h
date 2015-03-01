@@ -82,7 +82,7 @@ struct class_attribute {
 
 #define	CLASS_ATTR(_name, _mode, _show, _store)				\
 	struct class_attribute class_attr_##_name =			\
-	    __ATTR(name, _mode, _show, _store)
+	    __ATTR(_name, _mode, _show, _store)
 
 struct device_attribute {
 	struct attribute	attr;
