@@ -40,9 +40,7 @@
 
 #include "core_priv.h"
 
-MODULE_AUTHOR("Roland Dreier");
-MODULE_DESCRIPTION("core kernel InfiniBand API");
-MODULE_LICENSE("Dual BSD/GPL");
+/* core kernel InfiniBand API */
 
 struct ib_client_data {
 	struct list_head  list;

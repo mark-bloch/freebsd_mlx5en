@@ -47,9 +47,7 @@
 #include <rdma/rdma_cm.h>
 #include <rdma/rdma_cm_ib.h>
 
-MODULE_AUTHOR("Sean Hefty");
-MODULE_DESCRIPTION("RDMA Userspace Connection Manager Access");
-MODULE_LICENSE("Dual BSD/GPL");
+/* RDMA Userspace Connection Manager Access */
 
 static unsigned int max_backlog = 1024;
 

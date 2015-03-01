@@ -49,9 +49,7 @@ static	int ipoib_resolvemulti(struct ifnet *, struct sockaddr **,
 #include <net/ip.h>
 #include <net/ipv6.h>
 
-MODULE_AUTHOR("Roland Dreier");
-MODULE_DESCRIPTION("IP-over-InfiniBand net driver");
-MODULE_LICENSE("Dual BSD/GPL");
+/* IP-over-InfiniBand net driver */
 
 int ipoib_sendq_size = IPOIB_TX_RING_SIZE;
 int ipoib_recvq_size = IPOIB_RX_RING_SIZE;

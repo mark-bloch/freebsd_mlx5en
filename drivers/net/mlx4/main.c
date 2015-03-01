@@ -57,9 +57,7 @@
 #include "icm.h"
 #include "mlx4_stats.h"
 
-MODULE_AUTHOR("Roland Dreier");
-MODULE_DESCRIPTION("Mellanox ConnectX HCA low-level driver");
-MODULE_LICENSE("Dual BSD/GPL");
+/* Mellanox ConnectX HCA low-level driver */
 
 struct workqueue_struct *mlx4_wq;
 
@@ -177,7 +175,7 @@ MODULE_PARM_DESC(enable_64b_cqe_eqe,
 #define PF_CONTEXT_BEHAVIOUR_MASK	MLX4_FUNC_CAP_64B_EQE_CQE
 
 static char mlx4_version[] __devinitdata =
-	DRV_NAME ": Mellanox ConnectX core driver v"
+	DRV_NAME ": Mellanox ConnectX VPI driver v"
 	DRV_VERSION " (" DRV_RELDATE ")\n";
 
 static int log_num_mac = 7;
@@ -3609,8 +3607,7 @@ err_disable_pdev:
 static int __devinit mlx4_init_one(struct pci_dev *pdev,
 				   const struct pci_device_id *id)
 {
-	printk_once(KERN_INFO "%s", mlx4_version);
-
+	device_set_desc(pdev->dev.bsddev, mlx4_version);
 	return __mlx4_init_one(pdev, id->driver_data);
 }
 

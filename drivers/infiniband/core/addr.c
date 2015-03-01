@@ -45,9 +45,7 @@
 #include <netinet/if_ether.h>
 
 
-MODULE_AUTHOR("Sean Hefty");
-MODULE_DESCRIPTION("IB Address Translation");
-MODULE_LICENSE("Dual BSD/GPL");
+/* IB Address Translation */
 
 struct addr_req {
 	struct list_head list;

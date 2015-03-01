@@ -51,9 +51,7 @@
 
 #include "uverbs.h"
 
-MODULE_AUTHOR("Roland Dreier");
-MODULE_DESCRIPTION("InfiniBand userspace verbs access");
-MODULE_LICENSE("Dual BSD/GPL");
+/* InfiniBand userspace verbs access */
 
 enum {
 	IB_UVERBS_MAJOR       = 231,

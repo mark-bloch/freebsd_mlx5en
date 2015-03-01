@@ -56,9 +56,7 @@
 #include <rdma/ib_cm.h>
 #include "cm_msgs.h"
 
-MODULE_AUTHOR("Sean Hefty");
-MODULE_DESCRIPTION("InfiniBand CM");
-MODULE_LICENSE("Dual BSD/GPL");
+/* InfiniBand CM */
 
 #ifdef pr_fmt
 #undef pr_fmt

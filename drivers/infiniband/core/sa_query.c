@@ -46,9 +46,7 @@
 #include <rdma/ib_cache.h>
 #include "sa.h"
 
-MODULE_AUTHOR("Roland Dreier");
-MODULE_DESCRIPTION("InfiniBand subnet administration query support");
-MODULE_LICENSE("Dual BSD/GPL");
+/* InfiniBand subnet administration query support */
 
 struct ib_sa_sm_ah {
 	struct ib_ah        *ah;

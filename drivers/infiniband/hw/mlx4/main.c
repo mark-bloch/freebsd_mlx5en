@@ -55,19 +55,12 @@
 #include "user.h"
 #include "wc.h"
 
-#define DRV_NAME	MLX4_IB_DRV_NAME
-#define DRV_VERSION	"1.0"
-#define DRV_RELDATE	__DATE__
-
 #define MLX4_IB_DRIVER_PROC_DIR_NAME "driver/mlx4_ib"
 #define MLX4_IB_MRS_PROC_DIR_NAME "mrs"
 #define MLX4_IB_FLOW_MAX_PRIO 0xFFF
 #define MLX4_IB_FLOW_QPN_MASK 0xFFFFFF
 
-MODULE_AUTHOR("Roland Dreier");
-MODULE_DESCRIPTION("Mellanox ConnectX HCA InfiniBand driver");
-MODULE_LICENSE("Dual BSD/GPL");
-MODULE_VERSION(DRV_VERSION);
+/* Mellanox ConnectX HCA InfiniBand driver */
 
 int mlx4_ib_sm_guid_assign = 1;
 
@@ -95,10 +88,6 @@ MODULE_PARM_DESC(dev_assign_str,
 
 static unsigned long *dev_num_str_bitmap;
 static spinlock_t dev_num_str_lock;
-
-static const char mlx4_ib_version[] =
-	DRV_NAME ": Mellanox ConnectX InfiniBand driver v"
-	DRV_VERSION " (" DRV_RELDATE ")\n";
 
 struct update_gid_work {
 	struct work_struct	work;
@@ -2183,8 +2172,6 @@ static void *mlx4_ib_add(struct mlx4_dev *dev)
 	int err;
 	struct mlx4_ib_iboe *iboe;
 	int dev_idx;
-
-        pr_info_once("%s", mlx4_ib_version);
 
 	mlx4_foreach_ib_transport_port(i, dev)
 		num_ports++;

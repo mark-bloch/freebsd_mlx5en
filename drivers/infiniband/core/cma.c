@@ -55,9 +55,7 @@
 #include <rdma/ib_sa.h>
 #include <rdma/iw_cm.h>
 
-MODULE_AUTHOR("Sean Hefty");
-MODULE_DESCRIPTION("Generic RDMA CM Agent");
-MODULE_LICENSE("Dual BSD/GPL");
+/* Generic RDMA CM Agent */
 
 #define CMA_CM_RESPONSE_TIMEOUT 20
 #define CMA_MAX_CM_RETRIES 15

@@ -51,9 +51,7 @@
 #include <rdma/ib_user_cm.h>
 #include <rdma/ib_marshall.h>
 
-MODULE_AUTHOR("Libor Michalek");
-MODULE_DESCRIPTION("InfiniBand userspace Connection Manager access");
-MODULE_LICENSE("Dual BSD/GPL");
+/* InfiniBand userspace Connection Manager access */
 
 struct ib_ucm_device {
 	int			devnum;

@@ -53,9 +53,7 @@
 
 #include "iwcm.h"
 
-MODULE_AUTHOR("Tom Tucker");
-MODULE_DESCRIPTION("iWARP CM");
-MODULE_LICENSE("Dual BSD/GPL");
+/* iWARP CM */
 
 static struct workqueue_struct *iwcm_wq;
 struct iwcm_work {

@@ -52,9 +52,7 @@
 #include <rdma/ib_mad.h>
 #include <rdma/ib_user_mad.h>
 
-MODULE_AUTHOR("Roland Dreier");
-MODULE_DESCRIPTION("InfiniBand userspace MAD packet access");
-MODULE_LICENSE("Dual BSD/GPL");
+/* InfiniBand userspace MAD packet access */
 
 enum {
 	IB_UMAD_MAX_PORTS  = 64,
