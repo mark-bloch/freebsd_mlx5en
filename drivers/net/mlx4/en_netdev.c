@@ -1981,19 +1981,22 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		error = -mlx4_en_change_mtu(dev, ifr->ifr_mtu);
 		break;
 	case SIOCSIFFLAGS:
-		mutex_lock(&mdev->state_lock);
 		if (dev->if_flags & IFF_UP) {
-			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0)
+			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0) {
+				mutex_lock(&mdev->state_lock);
 				mlx4_en_start_port(dev);
+				mutex_unlock(&mdev->state_lock);
+			}
 			else
 				mlx4_en_set_rx_mode(dev);
 		} else {
 			if (dev->if_drv_flags & IFF_DRV_RUNNING) {
+				mutex_lock(&mdev->state_lock);
 				mlx4_en_stop_port(dev);
+				mutex_unlock(&mdev->state_lock);
                                 if_link_state_change(dev, LINK_STATE_DOWN);
 			}
 		}
-		mutex_unlock(&mdev->state_lock);
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
