@@ -33,5 +33,40 @@
 #define is_multicast_ether_addr(x) 0
 #define is_broadcast_ether_addr(x) 0
 
+/* EEPROM Standards for plug in modules */
+#ifndef ETH_MODULE_SFF_8079
+#define ETH_MODULE_SFF_8079             0x1
+#define ETH_MODULE_SFF_8079_LEN         256
+#endif
+
+#ifndef ETH_MODULE_SFF_8472
+#define ETH_MODULE_SFF_8472             0x2
+#define ETH_MODULE_SFF_8472_LEN         512
+#endif
+
+#ifndef ETH_MODULE_SFF_8636
+#define ETH_MODULE_SFF_8636             0x3
+#define ETH_MODULE_SFF_8636_LEN         256
+#endif
+
+#ifndef ETH_MODULE_SFF_8436
+#define ETH_MODULE_SFF_8436             0x4
+#define ETH_MODULE_SFF_8436_LEN         256
+#endif
+
+struct mlx4_eeprom {
+        __u32   cmd;
+        __u32   magic;
+        __u32   offset;		/* in bytes */
+        __u32   len;		/* in bytes */
+        __u8    data[0];
+};
+
+struct mlx4_eeprom_modinfo {
+        __u32   cmd;
+        __u32   type;
+        __u32   eeprom_len;
+        __u32   reserved[8];
+};
 
 #endif	/* _LINUX_COMPAT_H_ */

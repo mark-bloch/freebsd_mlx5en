@@ -34,6 +34,7 @@
 #include <linux/etherdevice.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
+#include <linux/compat.h>
 #ifdef CONFIG_NET_RX_BUSY_POLL
 #include <net/busy_poll.h>
 #endif
@@ -2274,6 +2275,160 @@ static int mlx4_en_set_tx_ring_size(SYSCTL_HANDLER_ARGS)
         return (error);
 }
 
+static int mlx4_en_get_module_info(struct net_device *dev,
+                                   struct mlx4_eeprom_modinfo *modinfo)
+{
+        struct mlx4_en_priv *priv = netdev_priv(dev);
+        struct mlx4_en_dev *mdev = priv->mdev;
+        int ret;
+        u8 data[4];
+
+        /* Read first 2 bytes to get Module & REV ID */
+        ret = mlx4_get_module_info(mdev->dev, priv->port,
+                                   0/*offset*/, 2/*size*/, data);
+
+        if (ret < 2)
+                return ret;
+
+        switch (data[0] /* identifier */) {
+        case MLX4_MODULE_ID_QSFP:
+                modinfo->type = ETH_MODULE_SFF_8436;
+                modinfo->eeprom_len = ETH_MODULE_SFF_8436_LEN;
+                break;
+        case MLX4_MODULE_ID_QSFP_PLUS:
+                if (data[1] >= 0x3) { /* revision id */
+                        modinfo->type = ETH_MODULE_SFF_8636;
+                        modinfo->eeprom_len = ETH_MODULE_SFF_8636_LEN;
+                } else {
+                        modinfo->type = ETH_MODULE_SFF_8436;
+                        modinfo->eeprom_len = ETH_MODULE_SFF_8436_LEN;
+                }
+                break;
+        case MLX4_MODULE_ID_QSFP28:
+                modinfo->type = ETH_MODULE_SFF_8636;
+                modinfo->eeprom_len = ETH_MODULE_SFF_8636_LEN;
+                break;
+        case MLX4_MODULE_ID_SFP:
+                modinfo->type = ETH_MODULE_SFF_8472;
+                modinfo->eeprom_len = ETH_MODULE_SFF_8472_LEN;
+                break;
+        default:
+		en_err(priv, "mlx4_en_get_module_info :  Not recognized cable type\n");
+                return -EINVAL;
+        }
+
+        return 0;
+}
+
+static int mlx4_en_get_module_eeprom(struct net_device *dev,
+                                     struct mlx4_eeprom *ee,
+                                     u8 *data)
+{
+        struct mlx4_en_priv *priv = netdev_priv(dev);
+        struct mlx4_en_dev *mdev = priv->mdev;
+        int offset = ee->offset;
+        int i = 0, ret;
+
+        if (ee->len == 0)
+                return -EINVAL;
+
+        memset(data, 0, ee->len);
+
+        while (i < ee->len) {
+                en_dbg(DRV, priv,
+                       "mlx4_get_module_info i(%d) offset(%d) len(%d)\n",
+                       i, offset, ee->len - i);
+
+                ret = mlx4_get_module_info(mdev->dev, priv->port,
+                                           offset, ee->len - i, data + i);
+
+                if (!ret) /* Done reading */
+                        return 0;
+
+                if (ret < 0) {
+                        en_err(priv,
+                               "mlx4_get_module_info i(%d) offset(%d) bytes_to_read(%d) - FAILED (0x%x)\n",
+                               i, offset, ee->len - i, ret);
+                        return -1;
+                }
+
+                i += ret;
+                offset += ret;
+        }
+        return 0;
+}
+
+static void mlx4_en_print_eeprom(u8 *data, __u32 len)
+{
+	int		i;
+	int		j = 0;
+	int		row = 0;
+	const int	NUM_OF_BYTES = 16;
+
+	printf("\nOffset\t\tValues\n");
+	printf("------\t\t------\n");
+	while(row < len){
+		printf("0x%04x\t\t",row);
+		for(i=0; i < NUM_OF_BYTES; i++){
+			printf("%02x ", data[j]);
+			row++;
+			j++;
+		}
+		printf("\n");
+	}
+}
+
+static int mlx4_en_read_eeprom(SYSCTL_HANDLER_ARGS)
+{
+
+	u8* 		data;
+	int 		error;
+	int		result;
+	struct 		mlx4_en_priv *priv;
+	struct 		net_device *dev;
+	struct 		mlx4_eeprom_modinfo modinfo;
+	struct 		mlx4_eeprom ee;
+
+	result = 0;
+	error = sysctl_handle_int(oidp, &result, 0, req);
+	if (error || !req->newptr)
+		return (error);
+
+	if (result == 1){
+		priv = arg1;
+		dev = priv->dev;
+		data = kmalloc(PAGE_SIZE, GFP_KERNEL);
+
+		error = mlx4_en_get_module_info(dev, &modinfo);
+		if (error){
+			en_err(priv,
+                               "mlx4_en_get_module_info returned with error - FAILED (0x%x)\n",
+                               error);
+                        error = 0;
+			goto out;
+                }
+
+		ee.len = modinfo.eeprom_len;
+		ee.offset = 0;
+
+		error = mlx4_en_get_module_eeprom(dev, &ee, data);
+		if (error){
+			en_err(priv,
+                               "mlx4_en_get_module_eeprom returned with error - FAILED (0x%x)\n",
+                               error);
+			error = 0;
+			goto out;
+		}
+
+		/* EEPROM information will be printed in the dmesg */
+		mlx4_en_print_eeprom(data, ee.len);
+out:
+		kfree(data);
+	}
+	return error;
+
+}
+
 static int mlx4_en_set_tx_ppp(SYSCTL_HANDLER_ARGS)
 {
         struct mlx4_en_priv *priv;
@@ -2418,6 +2573,12 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "adaptive_rx_coal",
             CTLFLAG_RW, &priv->adaptive_rx_coal, 0,
             "Enable adaptive rx coalescing");
+
+	/* EEPROM support */
+        SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "eeprom_info",
+            CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+             mlx4_en_read_eeprom, "I", "EEPROM information");
+
 }
 
 
