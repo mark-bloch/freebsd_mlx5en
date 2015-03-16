@@ -1993,8 +1993,8 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 			if (dev->if_drv_flags & IFF_DRV_RUNNING) {
 				mutex_lock(&mdev->state_lock);
 				mlx4_en_stop_port(dev);
-				mutex_unlock(&mdev->state_lock);
                                 if_link_state_change(dev, LINK_STATE_DOWN);
+				mutex_unlock(&mdev->state_lock);
 			}
 		}
 		break;
