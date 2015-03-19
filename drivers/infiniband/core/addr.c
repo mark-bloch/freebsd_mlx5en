@@ -574,7 +574,7 @@ int rdma_addr_find_dmac_by_grh(union ib_gid *sgid, union ib_gid *dgid, u8 *dmac,
 }
 EXPORT_SYMBOL(rdma_addr_find_dmac_by_grh);
 
-int rdma_addr_find_smac_by_sgid(union ib_gid *sgid, u8 *smac, u16 *vlan_id)
+int rdma_addr_find_smac_by_sgid(union ib_gid *sgid, u8 *smac, u16 *vlan_id, u8 if_index)
 {
 	int ret = 0;
 	struct rdma_dev_addr dev_addr;
@@ -585,6 +585,10 @@ int rdma_addr_find_smac_by_sgid(union ib_gid *sgid, u8 *smac, u16 *vlan_id)
 	} gid_addr;
 
 	ret = rdma_gid2ip(&gid_addr._sockaddr, sgid);
+
+	if (if_index != -1 && gid_addr._sockaddr.sa_family == AF_INET6 &&
+	    IN6_IS_SCOPE_LINKLOCAL(&gid_addr._sockaddr_in6.sin6_addr))
+		gid_addr._sockaddr_in6.sin6_scope_id = if_index;
 
 	if (ret)
 		return ret;

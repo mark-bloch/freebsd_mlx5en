@@ -2097,7 +2097,7 @@ static ssize_t __uverbs_modify_qp(struct ib_uverbs_file *file,
 			if (ret)
 				goto out;
 			ret = rdma_addr_find_smac_by_sgid(&sgid, attr->smac,
-							  NULL);
+							  NULL, -1);
 			if (ret)
 				goto out;
 		}
