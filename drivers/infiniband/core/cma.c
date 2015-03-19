@@ -847,11 +847,13 @@ static void cma_save_net_info(struct rdma_addr *addr,
 		ip4->sin_family = listen4->sin_family;
 		ip4->sin_addr.s_addr = dst->ip4.addr;
 		ip4->sin_port = listen4->sin_port;
+		ip4->sin_len = sizeof(struct sockaddr_in);
 
 		ip4 = (struct sockaddr_in *) &addr->dst_addr;
 		ip4->sin_family = listen4->sin_family;
 		ip4->sin_addr.s_addr = src->ip4.addr;
 		ip4->sin_port = port;
+		ip4->sin_len = sizeof(struct sockaddr_in);
 		break;
 	case 6:
 		listen6 = (struct sockaddr_in6 *) &listen_addr->src_addr;
@@ -859,11 +861,13 @@ static void cma_save_net_info(struct rdma_addr *addr,
 		ip6->sin6_family = listen6->sin6_family;
 		ip6->sin6_addr = dst->ip6;
 		ip6->sin6_port = listen6->sin6_port;
+		ip6->sin6_len = sizeof(struct sockaddr_in6);
 
 		ip6 = (struct sockaddr_in6 *) &addr->dst_addr;
 		ip6->sin6_family = listen6->sin6_family;
 		ip6->sin6_addr = src->ip6;
 		ip6->sin6_port = port;
+		ip6->sin6_len = sizeof(struct sockaddr_in6);
 		break;
 	default:
 		break;
