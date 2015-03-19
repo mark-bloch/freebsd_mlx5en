@@ -109,6 +109,15 @@ int rdma_copy_addr(struct rdma_dev_addr *dev_addr, struct ifnet *dev,
 }
 EXPORT_SYMBOL(rdma_copy_addr);
 
+#define SCOPE_ID_CACHE(_scope_id, _addr6) {		\
+	(_addr6)->sin6_addr.s6_addr[3] = (_scope_id); 	\
+	(_addr6)->sin6_scope_id = 0; }			\
+
+#define SCOPE_ID_RESTORE(_scope_id, _addr6) {		\
+	(_addr6)->sin6_scope_id = (_scope_id);		\
+	(_addr6)->sin6_addr.s6_addr[3] = 0; }		\
+
+
 int rdma_translate_ip(struct sockaddr *addr, struct rdma_dev_addr *dev_addr,
 		      u16 *vlan_id)
 {
@@ -148,8 +157,12 @@ int rdma_translate_ip(struct sockaddr *addr, struct rdma_dev_addr *dev_addr,
 		sin6 = (struct sockaddr_in6 *)addr;
 		port = sin6->sin6_port;
 		sin6->sin6_port = 0;
+		if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr))
+			SCOPE_ID_CACHE(sin6->sin6_scope_id, sin6);
 		ifa = ifa_ifwithaddr(addr);
 		sin6->sin6_port = port;
+		if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr))
+			SCOPE_ID_RESTORE(sin6->sin6_scope_id, sin6);
 		if (ifa == NULL) {
 			ret = -ENODEV;
 				break;
@@ -193,14 +206,6 @@ static void queue_req(struct addr_req *req)
 		set_timeout(req->timeout);
 	mutex_unlock(&lock);
 }
-
-#define SCOPE_ID_CACHE(_scope_id, _addr6) {		\
-	(_addr6)->sin6_addr.s6_addr[3] = (_scope_id); 	\
-	(_addr6)->sin6_scope_id = 0; }			\
-
-#define SCOPE_ID_RESTORE(_scope_id, _addr6) {		\
-	(_addr6)->sin6_scope_id = (_scope_id);		\
-	(_addr6)->sin6_addr.s6_addr[3] = 0; }		\
 
 static int addr_resolve(struct sockaddr *src_in,
                         struct sockaddr *dst_in,

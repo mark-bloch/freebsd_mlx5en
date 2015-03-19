@@ -862,12 +862,14 @@ static void cma_save_net_info(struct rdma_addr *addr,
 		ip6->sin6_addr = dst->ip6;
 		ip6->sin6_port = listen6->sin6_port;
 		ip6->sin6_len = sizeof(struct sockaddr_in6);
+		ip6->sin6_scope_id = listen6->sin6_scope_id;
 
 		ip6 = (struct sockaddr_in6 *) &addr->dst_addr;
 		ip6->sin6_family = listen6->sin6_family;
 		ip6->sin6_addr = src->ip6;
 		ip6->sin6_port = port;
 		ip6->sin6_len = sizeof(struct sockaddr_in6);
+		ip6->sin6_scope_id = listen6->sin6_scope_id;
 		break;
 	default:
 		break;
