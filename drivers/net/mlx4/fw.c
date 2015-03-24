@@ -560,11 +560,6 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 #define QUERY_DEV_CAP_ETS_CFG_OFFSET		0x9c
 #define QUERY_DEV_CAP_MAX_ICM_SZ_OFFSET		0xa0
 
-/* Rate Limit support */
-#define QUERY_DEV_CAP_QP_RATE_LIMIT_NUM_OFFSET      0xcc
-#define QUERY_DEV_CAP_QP_RATE_LIMIT_MAX_OFFSET      0xd0
-#define QUERY_DEV_CAP_QP_RATE_LIMIT_MIN_OFFSET      0xd2
-
 	dev_cap->flags2 = 0;
 	mailbox = mlx4_alloc_cmd_mailbox(dev);
 	if (IS_ERR(mailbox))
@@ -730,16 +725,6 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 	MLX4_GET(size, outbox, QUERY_DEV_CAP_MAX_DESC_SZ_RQ_OFFSET);
 	dev_cap->max_rq_desc_sz = size;
 
-	/* Rate Limit support */
-	MLX4_GET(size, outbox, QUERY_DEV_CAP_QP_RATE_LIMIT_NUM_OFFSET);
-	dev_cap->rl_caps.number = size;
-	MLX4_GET(size, outbox, QUERY_DEV_CAP_QP_RATE_LIMIT_MAX_OFFSET);
-        dev_cap->rl_caps.max_val = size & 0xfff;
-        dev_cap->rl_caps.max_unit = size >> 14;
-	MLX4_GET(size, outbox, QUERY_DEV_CAP_QP_RATE_LIMIT_MIN_OFFSET);
-        dev_cap->rl_caps.min_val = size & 0xfff;
-        dev_cap->rl_caps.min_unit = size >> 14;
-
 	MLX4_GET(dev_cap->bmme_flags, outbox,
 		 QUERY_DEV_CAP_BMME_FLAGS_OFFSET);
 	MLX4_GET(dev_cap->reserved_lkey, outbox,
@@ -799,9 +784,6 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 #define QUERY_PORT_TRANS_VENDOR_OFFSET		0x18
 #define QUERY_PORT_WAVELENGTH_OFFSET		0x1c
 #define QUERY_PORT_TRANS_CODE_OFFSET		0x20
-/* Rate limit support */
-#define QUERY_PORT_RATE_LIMIT_MAX_NUM_OFFSET	0x02
-
 
 		for (i = 1; i <= dev_cap->num_ports; ++i) {
 			err = mlx4_cmd_box(dev, 0, mailbox->dma, i, 0, MLX4_CMD_QUERY_PORT,
@@ -832,19 +814,9 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 			dev_cap->vendor_oui[i] = field32 & 0xffffff;
 			MLX4_GET(dev_cap->wavelength[i], outbox, QUERY_PORT_WAVELENGTH_OFFSET);
 			MLX4_GET(dev_cap->trans_code[i], outbox, QUERY_PORT_TRANS_CODE_OFFSET);
-
-			if (dev_cap->rl_caps.number) {
-				/* Rate limit support */
-				err = mlx4_cmd_box(dev, 0, mailbox->dma, MLX4_SET_PORT_RATE_LIMIT << 8 | i, 1, MLX4_CMD_QUERY_PORT,
-					MLX4_CMD_TIME_CLASS_B, MLX4_CMD_NATIVE);
-				if (err)
-					goto out;
-
-				MLX4_GET(size, outbox, QUERY_PORT_RATE_LIMIT_MAX_NUM_OFFSET);
-				dev_cap->max_rates_num[i] = size;
-			}
 		}
 	}
+
 	mlx4_dbg(dev, "Base MM extensions: flags %08x, rsvd L_Key %08x\n",
 		 dev_cap->bmme_flags, dev_cap->reserved_lkey);
 
@@ -1021,36 +993,6 @@ out:
 	return err;
 }
 EXPORT_SYMBOL(mlx4_get_slave_pkey_gid_tbl_len);
-
-int mlx4_get_used_rate_limit_num(struct mlx4_dev *dev, u8 port, int *used)
-{
-	struct mlx4_cmd_mailbox *mailbox;
-	u32			*outbox;
-	u16			field;
-	int			err;
-
-#define QUERY_PORT_USED_RATE_LIMIT_NUM_OFFSET 0x00
-
-	mailbox = mlx4_alloc_cmd_mailbox(dev);
-	if (IS_ERR(mailbox))
-		return PTR_ERR(mailbox);
-
-	err =  mlx4_cmd_box(dev, 0, mailbox->dma, MLX4_SET_PORT_RATE_LIMIT << 8 | port, 1,
-			    MLX4_CMD_QUERY_PORT, MLX4_CMD_TIME_CLASS_B,
-			    MLX4_CMD_NATIVE);
-	if (err)
-		goto out;
-
-	outbox = mailbox->buf;
-
-	MLX4_GET(field, outbox, QUERY_PORT_USED_RATE_LIMIT_NUM_OFFSET);
-	*used = field;
-
-out:
-	mlx4_free_cmd_mailbox(dev, mailbox);
-	return err;
-}
-EXPORT_SYMBOL(mlx4_get_used_rate_limit_num);
 
 int mlx4_map_cmd(struct mlx4_dev *dev, u16 op, struct mlx4_icm *icm, u64 virt)
 {

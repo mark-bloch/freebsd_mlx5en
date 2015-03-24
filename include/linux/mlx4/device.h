@@ -187,18 +187,7 @@ enum {
 	MLX4_DEV_CAP_FLAG2_FLOWSTATS_EN		= 1LL <<  11,
 	MLX4_DEV_CAP_FLAG2_RECOVERABLE_ERROR_EVENT = 1LL << 12,
 	MLX4_DEV_CAP_FLAG2_TS                   = 1LL <<  13,
-	MLX4_DEV_CAP_FLAG2_DRIVER_VERSION_TO_FW    = 1LL <<  14,
-	MLX4_DEV_CAP_FLAG2_REASSIGN_MAC_EN	= 1LL <<  15,
-	MLX4_DEV_CAP_FLAG2_VXLAN_OFFLOADS	= 1LL <<  16,
-	MLX4_DEV_CAP_FLAG2_FS_EN_NCSI		= 1LL <<  17,
-	MLX4_DEV_CAP_FLAG2_80_VFS		= 1LL <<  18,
-	MLX4_DEV_CAP_FLAG2_DMFS_TAG_MODE        = 1LL <<  19,
-	MLX4_DEV_CAP_FLAG2_ROCEV2	        = 1LL <<  20,
-	MLX4_DEV_CAP_FLAG2_ETH_PROT_CTRL	= 1LL <<  21,
-	MLX4_DEV_CAP_FLAG2_CQE_STRIDE		= 1LL <<  22,
-	MLX4_DEV_CAP_FLAG2_EQE_STRIDE		= 1LL <<  23,
-	MLX4_DEV_CAP_FLAG2_UPDATE_QP_SRC_CHECK_LB = 1LL << 24,
-	MLX4_DEV_CAP_FLAG2_RX_CSUM_MODE		= 1LL <<  25,
+	MLX4_DEV_CAP_FLAG2_DRIVER_VERSION_TO_FW    = 1LL <<  14
 };
 
 /* bit enums for an 8-bit flags field indicating special use
@@ -427,17 +416,6 @@ struct mlx4_phys_caps {
 	u32			base_tunnel_sqpn;
 };
 
-/* Rate limit support */
-struct mlx4_rate_limit_caps {
-	u8			max_unit;
-	u8			min_unit;
-	u16			number; /* Number of different rates */
-	u16			max_val;
-	u16			min_val;
-	u64			calc_max_val;
-	u64			calc_min_val;
-};
-
 struct mlx4_caps {
 	u64			fw_ver;
 	u32			function;
@@ -535,17 +513,7 @@ struct mlx4_caps {
 	u32			max_basic_counters;
 	u32			max_extended_counters;
 	u8			def_counter_index[MLX4_MAX_PORTS + 1];
-	/* Rate Limit support */
-	struct mlx4_rate_limit_caps rl_caps;
-	int 			max_rates_num[MLX4_MAX_PORTS + 1];
 };
-
-enum { /* rl */
-        MLX4_QP_RATE_LIMIT_NONE         = 0x0,
-        MLX4_QP_RATE_LIMIT_KBPS         = 0x1,
-        MLX4_QP_RATE_LIMIT_MBPS         = 0x2,
-        MLX4_QP_RATE_LIMIT_GBPS         = 0x3,
- };
 
 struct mlx4_buf_list {
 	void		       *buf;
@@ -811,8 +779,6 @@ struct mlx4_dev {
 	int			oper_log_mgm_entry_size;
 	u64			regid_promisc_array[MLX4_MAX_PORTS + 1];
 	u64			regid_allmulti_array[MLX4_MAX_PORTS + 1];
-	/* Rate limit support */
-	struct sysctl_ctx_list  rl_ctx;
 };
 
 struct mlx4_clock_params {

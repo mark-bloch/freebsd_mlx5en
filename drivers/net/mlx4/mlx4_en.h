@@ -134,11 +134,6 @@ enum {
 /* Maximum ring sizes */
 #define MLX4_EN_DEF_TX_QUEUE_SIZE       4096
 
-/* Rate Limit params */
-#define MLX4_EN_DEF_RL_TX_RING_SIZE     128
-#define MLX4_EN_DEF_RL_USER_PRIO	0
-#define MLX4_EN_DEF_MAX_RL_TX_RINGS	30000
-
 /* Minimum packet number till arming the CQ */
 #define MLX4_EN_MIN_RX_ARM	2048
 #define MLX4_EN_MIN_TX_ARM	2048
@@ -156,8 +151,8 @@ enum {
 #define MLX4_EN_MAX_TX_RING_P_UP	32
 #define MLX4_EN_NUM_UP			1
 
-#define MAX_TX_RINGS			((MLX4_EN_MAX_TX_RING_P_UP * \
-					(MLX4_EN_NUM_UP )) + MLX4_EN_DEF_MAX_RL_TX_RINGS)
+#define MAX_TX_RINGS			(MLX4_EN_MAX_TX_RING_P_UP * \
+					 (MLX4_EN_NUM_UP + 1))
 
 #define MLX4_EN_DEF_TX_RING_SIZE	1024
 #define MLX4_EN_DEF_RX_RING_SIZE  	1024
@@ -273,13 +268,6 @@ struct mlx4_en_tx_desc {
 #define MLX4_EN_CX3_LOW_ID	0x1000
 #define MLX4_EN_CX3_HIGH_ID	0x1005
 
-struct mlx4_en_rl_data {
-        bool user_valid;
-	 u64 rate_limit_val;
-        struct sysctl_ctx_list rl_stats_ctx;
-        struct mutex rl_ctl_lock;
-};
-
 struct mlx4_en_tx_ring {
         spinlock_t tx_lock;
 	struct mlx4_hwq_resources wqres;
@@ -318,8 +306,6 @@ struct mlx4_en_tx_ring {
 	int full_size;
 	int inline_thold;
 	u64 watchdog_time;
-	/* Rate Limit support */
-	struct mlx4_en_rl_data rl_data;
 };
 
 struct mlx4_en_rx_desc {
@@ -546,10 +532,6 @@ struct mlx4_en_frag_info {
         u16 frag_prefix_size;
 };
 
-struct mlx4_en_list_element {
-	STAILQ_ENTRY(mlx4_en_list_element) entry;
-	int val;
-};
 
 struct mlx4_en_priv {
 	struct mlx4_en_dev *mdev;
@@ -599,9 +581,7 @@ struct mlx4_en_priv {
 	__be32 ctrl_flags;
 	u32 flags;
 	u8 num_tx_rings_p_up;
-	u32 native_tx_ring_num;
-	u32 active_tx_ring_num;
-	u32 tx_ring_num; /* number of total tx rings created */
+	u32 tx_ring_num;
 	u32 rx_ring_num;
 	u32 rx_mb_size;
         struct mlx4_en_frag_info frag_info[MLX4_EN_MAX_RX_FRAGS];
@@ -643,7 +623,6 @@ struct mlx4_en_priv {
         struct ifmedia media;
 	volatile int blocked;
 	struct sysctl_oid *sysctl;
-	struct sysctl_oid *sysctl_stat;
 	struct sysctl_ctx_list conf_ctx;
 	struct sysctl_ctx_list stat_ctx;
 #define MLX4_EN_MAC_HASH_IDX 5
@@ -664,13 +643,7 @@ struct mlx4_en_priv {
 	unsigned long last_ifq_jiffies;
 	u64 if_counters_rx_errors;
 	u64 if_counters_rx_no_buffer;
-	/* Rate limit support */
-	struct mutex tx_ring_index_lock; /* protects tx ring index and counters */
-	STAILQ_HEAD(, mlx4_en_list_element) reuse_index_list_head;
-	struct mlx4_en_list_element reuse_index_list_array [MAX_TX_RINGS];
-	u32 rate_limit_tx_ring_num;
-	int max_rates_num;
-	int used_rates_num;
+
 };
 
 enum mlx4_en_wol {
@@ -805,7 +778,6 @@ int mlx4_en_start_port(struct net_device *dev);
 void mlx4_en_stop_port(struct net_device *dev);
 
 void mlx4_en_free_resources(struct mlx4_en_priv *priv);
-void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv);
 int mlx4_en_alloc_resources(struct mlx4_en_priv *priv);
 
 int mlx4_en_pre_config(struct mlx4_en_priv *priv);
@@ -832,21 +804,6 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     int cq, int user_prio);
 void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring);
-#ifdef CONFIG_RATELIMIT
-int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
-				in_ratectlreq *in_ratectl);
-int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
-				in_ratectlreq *in_ratectl);
-void mlx4_en_get_ratectl_req_params(struct mlx4_en_priv *priv, struct
-				in_ratectlreq *in_ratectl);
-void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
-				uint32_t ring_id);
-#endif
-int mlx4_SET_PORT_RATE_LIMIT(struct mlx4_dev *dev, u8 port, int max_rate_num);
-int mlx4_get_used_rate_limit_num(struct mlx4_dev *dev, u8 port, int *used);
-void invalidate_rate_limit_ring(struct mlx4_en_priv *priv, uint32_t ring_id);
-
-
 void mlx4_en_qflush(struct ifnet *dev);
 
 int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,

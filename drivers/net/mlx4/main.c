@@ -592,28 +592,6 @@ static void mlx4_set_port_mask(struct mlx4_dev *dev)
 		dev->caps.port_mask[i] = dev->caps.port_type[i];
 }
 
-static u64 mlx4_calc_rl_supported_rate(u16 rate_val, u8 unit)
-{
-	u64 calc_rate = 0;
-	u64 rate = (u64)rate_val;
-
-	switch (unit) {
-	case MLX4_QP_RATE_LIMIT_KBPS:
-		calc_rate = rate * (u64)(1024);
-		break;
-	case MLX4_QP_RATE_LIMIT_MBPS:
-		calc_rate = rate * (u64)(1024*1024);
-		break;
-	case MLX4_QP_RATE_LIMIT_GBPS:
-		calc_rate = rate * (u64)(1024*1024*1024);
-		break;
-	default:
-		calc_rate = rate;
-	}
-
-	return calc_rate;
-}
-
 static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 {
 	int err;
@@ -667,21 +645,7 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 		dev->caps.vendor_oui[i]     = dev_cap->vendor_oui[i];
 		dev->caps.wavelength[i]     = dev_cap->wavelength[i];
 		dev->caps.trans_code[i]     = dev_cap->trans_code[i];
-		/* Rate limit support */
-		dev->caps.max_rates_num[i]  = dev_cap->max_rates_num[i];
 	}
-
-	/* Rate Limit support */
-	dev->caps.rl_caps.number	= dev_cap->rl_caps.number;
-	dev->caps.rl_caps.max_val	= dev_cap->rl_caps.max_val;
-        dev->caps.rl_caps.max_unit	= dev_cap->rl_caps.max_unit;
-        dev->caps.rl_caps.min_val	= dev_cap->rl_caps.min_val;
-        dev->caps.rl_caps.min_unit	= dev_cap->rl_caps.min_unit;
-
-	dev->caps.rl_caps.calc_max_val =  mlx4_calc_rl_supported_rate(dev->caps.rl_caps.max_val,
-								dev->caps.rl_caps.max_unit);
-	dev->caps.rl_caps.calc_min_val =  mlx4_calc_rl_supported_rate(dev->caps.rl_caps.min_val,
-								dev->caps.rl_caps.min_unit);
 
 	dev->caps.uar_page_size	     = PAGE_SIZE;
 	dev->caps.num_uars	     = dev_cap->uar_size / PAGE_SIZE;
@@ -1865,7 +1829,6 @@ static void unmap_internal_clock(struct mlx4_dev *dev)
 
 static void mlx4_close_hca(struct mlx4_dev *dev)
 {
-	sysctl_ctx_free(&dev->rl_ctx);
 	unmap_internal_clock(dev);
 	unmap_bf_area(dev);
 	if (mlx4_is_slave(dev)) {
@@ -2023,62 +1986,6 @@ static void choose_steering_mode(struct mlx4_dev *dev,
 		 dev->oper_log_mgm_entry_size, mlx4_log_num_mgm_entry_size);
 }
 
-static char* mlx4_sysctl_rate_limit_unit_str(u8 val)
-{
-	char *unit_str = NULL;
-
-	switch (val) {
-	case 1:
-		unit_str = "Kbps";
-		break;
-	case 2:
-		unit_str = "Mbps";
-		break;
-	case 3:
-		unit_str = "Gbps";
-		break;
-	default:
-		break;
-	}
-	return unit_str;
-}
-
-static void mlx4_sysctl_rate_limit_caps(struct mlx4_dev *dev)
-{
-	struct sysctl_ctx_list     *ctx;
-	struct sysctl_oid          *node;
-	struct sysctl_oid_list     *node_list;
-	char 		*min_unit_str;
-	char    	*max_unit_str;
-	static char 	max_namebuf[32];
-	static char	min_namebuf[32];
-
-	ctx = &dev->rl_ctx;
-	sysctl_ctx_init(ctx);
-	node = SYSCTL_ADD_NODE(ctx, SYSCTL_CHILDREN(dev->pdev->dev.kobj.oidp),
-		OID_AUTO, "rate_limit_caps" , CTLFLAG_RD, 0, "rate limit capabilitiess");
-	node_list = SYSCTL_CHILDREN(node);
-	SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "different_rates_num",
-		CTLFLAG_RD, (unsigned *)NULL, dev->caps.rl_caps.number,
-		"Number of different rates supported");
-	if (dev->caps.rl_caps.number) {
-
-		if ((min_unit_str = mlx4_sysctl_rate_limit_unit_str(dev->caps.rl_caps.min_unit))) {
-			snprintf(min_namebuf, sizeof(min_namebuf), "%d %s", dev->caps.rl_caps.min_val, min_unit_str);
-		}
-		if ((max_unit_str = mlx4_sysctl_rate_limit_unit_str(dev->caps.rl_caps.max_unit))) {
-			snprintf(max_namebuf, sizeof(max_namebuf), "%d %s", dev->caps.rl_caps.max_val, max_unit_str);
-		}
-
-		SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "min_value",
-			CTLFLAG_RD, min_namebuf, 0,
-			"Min rate limit value supported [bits/second]");
-		SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "max_value",
-			CTLFLAG_RD, max_namebuf, 0,
-			"Max rate limit value supported [bits/second]");
-	}
-}
-
 static int mlx4_init_hca(struct mlx4_dev *dev)
 {
 	struct mlx4_priv	  *priv = mlx4_priv(dev);
@@ -2124,9 +2031,6 @@ static int mlx4_init_hca(struct mlx4_dev *dev)
 			mlx4_err(dev, "QUERY_DEV_CAP command failed, aborting.\n");
 			goto err_stop_fw;
 		}
-
-		/* Add Rate Limit DEV CAP to sysctl */
-		mlx4_sysctl_rate_limit_caps(dev);
 
 		choose_steering_mode(dev, dev_cap);
 

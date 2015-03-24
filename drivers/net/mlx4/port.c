@@ -940,29 +940,6 @@ int mlx4_SET_PORT_SCHEDULER(struct mlx4_dev *dev, u8 port, u8 *tc_tx_bw,
 }
 EXPORT_SYMBOL(mlx4_SET_PORT_SCHEDULER);
 
-int mlx4_SET_PORT_RATE_LIMIT(struct mlx4_dev *dev, u8 port,
-			   int max_rate_num)
-{
-	struct mlx4_cmd_mailbox *mailbox;
-	struct mlx4_set_port_rate_limit_context *context;
-	int err;
-	u32 in_mod;
-
-	mailbox = mlx4_alloc_cmd_mailbox(dev);
-	if (IS_ERR(mailbox))
-		return PTR_ERR(mailbox);
-	context = mailbox->buf;
-	memset(context, 0, sizeof *context);
-
-	context->qp_rate_limit_number_max = (u16)max_rate_num;
-	in_mod = MLX4_SET_PORT_RATE_LIMIT << 8 | port;
-	err = mlx4_cmd(dev, mailbox->dma, in_mod, 1, MLX4_CMD_SET_PORT,
-			MLX4_CMD_TIME_CLASS_B, MLX4_CMD_NATIVE);
-
-	mlx4_free_cmd_mailbox(dev, mailbox);
-	return err;
-}
-
 int mlx4_SET_MCAST_FLTR_wrapper(struct mlx4_dev *dev, int slave,
 				struct mlx4_vhcr *vhcr,
 				struct mlx4_cmd_mailbox *inbox,

@@ -38,7 +38,6 @@
 #include <linux/if_vlan.h>
 #include <linux/vmalloc.h>
 #include <linux/moduleparam.h>
-#include <linux/delay.h>
 
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
@@ -48,9 +47,6 @@
 #include <netinet/tcp.h>
 #include <netinet/tcp_lro.h>
 #include <netinet/udp.h>
-
-#include <sys/queue.h>
-#include <sys/sysctl.h>
 
 #include "mlx4_en.h"
 #include "utils.h"
@@ -87,13 +83,10 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->size = size;
 	ring->size_mask = size - 1;
 	ring->stride = stride;
-	ring->rl_data.rate_limit_val = 0;
-	ring->rl_data.user_valid = true;
 	ring->full_size = ring->size - HEADROOM - MAX_DESC_TXBBS;
 	ring->inline_thold = min(inline_thold, MAX_INLINE);
 	mtx_init(&ring->tx_lock.m, "mlx4 tx", NULL, MTX_DEF);
 	mtx_init(&ring->comp_lock.m, "mlx4 comp", NULL, MTX_DEF);
-	mutex_init(&ring->rl_data.rl_ctl_lock);
 
 	/* Allocate the buf ring */
 	ring->br = buf_ring_alloc(MLX4_EN_DEF_TX_QUEUE_SIZE, M_DEVBUF,
@@ -191,354 +184,6 @@ err_ring:
 	return err;
 }
 
-void invalidate_rate_limit_ring(struct mlx4_en_priv *priv, uint32_t ring_id)
-{
-	/* called upon rl ring activation failure
-	* this should be protected by netdev state_lock */
-
-	struct mlx4_en_list_element *p_item;
-
-	priv->tx_ring[ring_id]->rl_data.user_valid = false;
-	sysctl_ctx_free(&priv->tx_ring[ring_id]->rl_data.rl_stats_ctx);
-
-	/* Add index to re-use list.
-	* No need to decrement tx_ring_num as this index
-	* will be reused in the future.
-	*/
-	p_item = priv->reuse_index_list_array + ring_id;
-	mutex_lock(&priv->tx_ring_index_lock);
-	STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, p_item, entry);
-	mutex_unlock(&priv->tx_ring_index_lock);
-
-	priv->rate_limit_tx_ring_num--;
-}
-
-static __used int find_available_tx_ring_index(struct mlx4_en_priv *priv)
-{
-	/* This should be protected by tx_ring_index_lock */
-
-	int index = -1;
-	struct mlx4_en_list_element *p_item;
-
-	/* Check for availble index in re-use list */
-	if ((p_item = STAILQ_FIRST(&priv->reuse_index_list_head)))
-	{
-		index = p_item->val;
-		/* Remove head index from re-use list */
-		STAILQ_REMOVE_HEAD(&priv->reuse_index_list_head, entry);
-	}
-	else if (priv->tx_ring_num < MAX_TX_RINGS) {
-			index = priv->tx_ring_num;
-	} else { /* Reached max resources capacity */
-		index = -1;
-	}
-
-	return index;
-}
-
-#ifdef CONFIG_RATELIMIT
-static int validate_rate_ctl_req(struct in_ratectlreq *in_ratectl)
-{
-	uint64_t bytes;
-	uint64_t interval;
-
-	bytes = in_ratectl->bytes_per_interval;
-	interval = in_ratectl->micros_per_interval;
-
-	if (interval == 0 || bytes == 0){
-		return (EINVAL);
-	}
-
-	return (0);
-}
-
-static uint64_t mlx4_en_calc_tx_rate_limit(struct mlx4_en_priv *priv, int index,
-					struct in_ratectlreq *in_ratectl)
-{
-	struct mlx4_en_tx_ring *tx_ring;
-	uint64_t bytes;
-	uint64_t interval;
-	uint64_t rate;
-	uint64_t max_rate_supported;
-	uint64_t min_rate_supported;
-
-	max_rate_supported = priv->mdev->dev->caps.rl_caps.calc_max_val;
-	min_rate_supported = priv->mdev->dev->caps.rl_caps.calc_min_val;
-
-	tx_ring = priv->tx_ring[index];
-
-	bytes = (uint64_t)in_ratectl->bytes_per_interval;
-	interval = (uint64_t)in_ratectl->micros_per_interval;
-
-	rate = DIV_ROUND_UP(bytes *
-		((uint64_t)(8 * 1000000)), interval);
-
-	if (rate > max_rate_supported) {
-		en_warn(priv, "Exceeded max supported rate for ring %d, using max supported value\n", index);
-		rate = max_rate_supported;
-	}
-
-	if (rate < min_rate_supported) {
-		en_warn(priv, "Exceeded min supported rate for ring %d, using min supported value\n", index);
-		rate = min_rate_supported;
-	}
-
-	return rate;
-}
-
-int mlx4_en_create_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
-                                in_ratectlreq *in_ratectl)
-{
-	struct mlx4_en_cq *cq;
-	struct mlx4_en_tx_ring *tx_ring;
-	struct mlx4_en_dev *mdev = priv->mdev;
-	int err = 0, node = 0;
-	int j;
-	int index = 0;
-
-	/* Check for HW/FW support */
-	if (!priv->mdev->dev->caps.rl_caps.number) {
-		en_err(priv, "No HW/FW support for Rate Limit QP\n");
-		return (ENODEV);
-	}
-
-	/* Validate rate limit request */
-	err = validate_rate_ctl_req(in_ratectl);
-	if (err) {
-		en_err(priv, "Illegal Rate limit value\n");
-		return (err);
-	}
-
-	mutex_lock(&priv->tx_ring_index_lock);
-
-	/* Create resources */
-	index = find_available_tx_ring_index(priv);
-	if (index < 0) {
-		en_err(priv, "Failed to create Rate limit resources, Max capacity reached\n");
-		return (EINVAL);
-	}
-
-	priv->rate_limit_tx_ring_num++;
-
-	if (priv->tx_ring[index]) {
-		/* Ring already exists, needs activation */
-		/* Make sure drbr queue has no left overs from before */
-		tx_ring = priv->tx_ring[index];
-		if (!drbr_empty(priv->dev, tx_ring->br)) {
-			struct mbuf *m;
-			spin_lock(&tx_ring->tx_lock);
-			while ((m = buf_ring_dequeue_sc(tx_ring->br)) != NULL) {
-				m_freem(m);
-			}
-			spin_unlock(&tx_ring->tx_lock);
-		}
-		/* re-initialize stats context */
-		sysctl_ctx_init(&tx_ring->rl_data.rl_stats_ctx);
-		mutex_unlock(&priv->tx_ring_index_lock);
-		goto activate;
-	}
-
-	err = mlx4_en_create_cq(priv, &priv->tx_cq[index],
-		MLX4_EN_DEF_RL_TX_RING_SIZE, index, TX, node);
-	if (err) {
-		en_err(priv, "Failed to create Rate Limit Tx CQ\n");
-		goto err_create_resources;
-	}
-
-	err = mlx4_en_create_tx_ring(priv, &priv->tx_ring[index],
-		MLX4_EN_DEF_RL_TX_RING_SIZE, TXBB_SIZE, node, index);
-	if (err) {
-		en_err(priv, "Failed to create Rate Limited TX ring\n");
-		goto err_create_resources;
-	}
-
-	priv->tx_ring_num++;
-
-	tx_ring = priv->tx_ring[index];
-	sysctl_ctx_init(&tx_ring->rl_data.rl_stats_ctx);
-
-	mutex_unlock(&priv->tx_ring_index_lock);
-
-activate:
-
-	/* Set ring as valid */
-	tx_ring->rl_data.user_valid = true;
-
-	/* Calculate requested rate */
-	tx_ring->rl_data.rate_limit_val = mlx4_en_calc_tx_rate_limit(priv,
-					index, in_ratectl);
-
-	/* default moderation */
-	cq = priv->tx_cq[index];
-	cq->moder_cnt = priv->tx_frames;
-	cq->moder_time = priv->tx_usecs;
-
-	/* store ring index in ratectl req which will return to user */
-	in_ratectl->tx_ring_id = index;
-
-	mutex_lock(&mdev->state_lock);
-	if (!priv->port_up) {
-		/* No need activating resources, start_port will take care of that */
-		mutex_unlock(&mdev->state_lock);
-		return (0);
-	}
-
-	/* Activate resources */
-	err = mlx4_en_activate_cq(priv, cq, index);
-	if (err) {
-		en_err(priv, "Failed activating Rate Limit Tx CQ\n");
-		goto err_activate_resources;
-	}
-
-	err = mlx4_en_set_cq_moder(priv, cq);
-	if (err) {
-		en_err(priv, "Failed setting cq moderation parameters");
-		mlx4_en_deactivate_cq(priv, cq);
-		goto err_activate_resources;
-	}
-	en_dbg(DRV, priv, "Resetting index of CQ:%d to -1\n", index);
-	cq->buf->wqe_index = cpu_to_be16(0xffff);
-
-	err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
-					       MLX4_EN_DEF_RL_USER_PRIO);
-	if (err) {
-		en_err(priv, "Failed activating rate limit TX ring\n");
-		mlx4_en_deactivate_cq(priv, cq);
-		goto err_activate_resources;
-	}
-
-	/* Arm CQ for TX completions */
-	mlx4_en_arm_cq(priv, cq);
-
-	/* Set initial ownership of all Tx TXBBs to SW (1) */
-	for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
-		*((u32 *) (tx_ring->buf + j)) = 0xffffffff;
-
-	priv->active_tx_ring_num++;
-
-	mutex_unlock(&mdev->state_lock);
-
-	return 0;
-
-err_create_resources:
-	if (priv->tx_ring[index])
-		mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[index]);
-	if (priv->tx_cq[index])
-		mlx4_en_destroy_cq(priv, &priv->tx_cq[index]);
-
-	priv->rate_limit_tx_ring_num--;
-	mutex_unlock(&priv->tx_ring_index_lock);
-
-	return err;
-
-err_activate_resources:
-	invalidate_rate_limit_ring(priv, index);
-	in_ratectl->tx_ring_id = 0;
-	mutex_unlock(&mdev->state_lock);
-
-	return err;
-}
-#endif
-
-static void mlx4_en_rate_limit_to_qp_context(uint64_t rate_limit_val,
-			struct mlx4_qp_ctx_rate_limit *qp_ctx_rl)
-{
-	u64 temp = rate_limit_val;
-	u8 shift = 0;
-
-	do {
-		temp = (temp + 1023) / 1024;
-		shift++;
-		/* if temp is too big or if we don't loose precision, then loop */
-	} while (temp >= (1U << 12) || (temp & 1023) == 0);
-
-	qp_ctx_rl->val = temp;
-	qp_ctx_rl->unit = shift;
-}
-
-#ifdef CONFIG_RATELIMIT
-int mlx4_en_modify_rate_limit_tx_res(struct mlx4_en_priv *priv, struct
-					in_ratectlreq *in_ratectl)
-{
-	struct mlx4_en_tx_ring *tx_ring;
-	struct mlx4_qp_ctx_rate_limit qp_rl;
-	struct mlx4_update_qp_params update_params;
-	uint64_t new_rate;
-	int err = 0;
-	int index = in_ratectl->tx_ring_id;
-
-	/* Validate rate limit request */
-	err = validate_rate_ctl_req(in_ratectl);
-	if (err) {
-		en_err(priv, "Illegal Rate limit value\n");
-		return (err);
-	}
-
-	if (index < priv->native_tx_ring_num || index >= priv->tx_ring_num) {
-                en_err(priv, "Modifying ring %d: Permision denied: Not an RL ring\n", index);
-		return (EINVAL);
-	}
-
-	tx_ring = priv->tx_ring[index];
-
-	mutex_lock(&tx_ring->rl_data.rl_ctl_lock);
-
-	if (!tx_ring->rl_data.user_valid) {
-		en_err(priv, "Failed modifying new rate, ring %d doesn't exist\n", index);
-		mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
-		return (EINVAL);
-	}
-
-	/* Calculate new rate limit */
-	new_rate = mlx4_en_calc_tx_rate_limit(priv, index, in_ratectl);
-
-	if (tx_ring->rl_data.rate_limit_val != new_rate) {
-		mlx4_en_rate_limit_to_qp_context(new_rate, &qp_rl);
-		update_params.qp_rl = qp_rl;
-		err = mlx4_update_qp(priv->mdev->dev, tx_ring->qpn, MLX4_UPDATE_QP_RATE_LIMIT,
-					&update_params);
-		if (err) {
-			en_err(priv, "Failed updating ring with new rate\n");
-			mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
-			return (err);
-		}
-		tx_ring->rl_data.rate_limit_val = new_rate;
-
-	}
-	mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
-	return (err);
-}
-
-void mlx4_en_get_ratectl_req_params(struct mlx4_en_priv *priv, struct
-					in_ratectlreq *in_ratectl)
-{
-	struct mlx4_en_tx_ring *tx_ring;
-	int index = in_ratectl->tx_ring_id;
-
-	if (index < priv->native_tx_ring_num || index >= priv->tx_ring_num) {
-                en_err(priv, "Can't query ring %d: Not an RL ring\n", index);
-		return;
-	}
-
-	/* Index was validated, thus ring is not NULL */
-
-	tx_ring = priv->tx_ring[index];
-
-	mutex_lock(&tx_ring->rl_data.rl_ctl_lock);
-	if (tx_ring->rl_data.user_valid == false) {
-		en_err(priv, "Failed retrieving rate params, ring %d doesn't exist\n", index);
-		mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
-		return;
-	}
-
-	/* Returning ring's actual rate in bytes per millisecond */
-	in_ratectl->micros_per_interval = 1000;
-	in_ratectl->bytes_per_interval = (uint32_t)(tx_ring->rl_data.rate_limit_val / (u64)8000);
-
-	mutex_unlock(&tx_ring->rl_data.rl_ctl_lock);
-}
-#endif
-
 void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_tx_ring **pring)
 {
@@ -562,68 +207,11 @@ void mlx4_en_destroy_tx_ring(struct mlx4_en_priv *priv,
 	*pring = NULL;
 }
 
-#ifdef CONFIG_RATELIMIT
-void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
-                                    uint32_t ring_id)
-{
-	struct mlx4_en_list_element *p_item;
-	struct mlx4_en_tx_ring *ring;
-	struct mlx4_en_dev *mdev = priv->mdev;
-
-	/* Check that this is indeed an RL ring */
-	if (ring_id < priv->native_tx_ring_num || ring_id >= priv->tx_ring_num) {
-                en_err(priv, "Deleting ring %d: Permision denied: Not an RL ring\n", ring_id);
-                return;
-        }
-
-	ring = priv->tx_ring[ring_id];
-
-	/* Index was validated, thus ring is not NULL */
-	mutex_lock(&ring->rl_data.rl_ctl_lock);
-	spin_lock(&ring->tx_lock);
-	if (ring->rl_data.user_valid == false) {
-		en_err(priv, "ring %d doesn't exist\n", ring_id);
-		spin_unlock(&ring->tx_lock);
-		mutex_unlock(&ring->rl_data.rl_ctl_lock);
-		return;
-	} else {
-		ring->rl_data.user_valid = false;
-	}
-	spin_unlock(&ring->tx_lock);
-	mutex_unlock(&ring->rl_data.rl_ctl_lock);
-
-	/* Deactivate resources */
-	mutex_lock(&mdev->state_lock);
-	if (priv->port_up) {
-		mlx4_en_deactivate_tx_ring(priv, ring);
-		mlx4_en_deactivate_cq(priv, priv->tx_cq[ring_id]);
-		priv->active_tx_ring_num--;
-		msleep(10);
-		mlx4_en_free_tx_buf(priv->dev, ring);
-	}
-	mutex_unlock(&mdev->state_lock);
-
-	/* clear statistics */
-	ring->bytes = 0;
-	ring->packets = 0;
-
-	sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
-
-	/* Add index to re-use list */
-	p_item = priv->reuse_index_list_array + ring_id;
-	mutex_lock(&priv->tx_ring_index_lock);
-	STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, p_item, entry);
-	priv->rate_limit_tx_ring_num--;
-	mutex_unlock(&priv->tx_ring_index_lock);
-}
-#endif
-
 int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_tx_ring *ring,
 			     int cq, int user_prio)
 {
 	struct mlx4_en_dev *mdev = priv->mdev;
-	struct mlx4_qp_ctx_rate_limit qp_rl;
 	int err;
 
 	ring->cqn = cq;
@@ -638,25 +226,13 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 	ring->qp_state = MLX4_QP_STATE_RST;
 	ring->doorbell_qpn = ring->qp.qpn << 8;
 
-	if (ring->rl_data.rate_limit_val) {
-		/* Force rate limit user priority */
-		user_prio = MLX4_EN_DEF_RL_USER_PRIO;
-        }
-
 	mlx4_en_fill_qp_context(priv, ring->size, ring->stride, 1, 0, ring->qpn,
 				ring->cqn, user_prio, &ring->context);
-
-	if (ring->rl_data.rate_limit_val) {
-		mlx4_en_rate_limit_to_qp_context(ring->rl_data.rate_limit_val, &qp_rl);
-		ring->context.rate_limit_params = cpu_to_be16(((qp_rl.unit) << 14) | qp_rl.val);
-	}
-
 	if (ring->bf_enabled)
 		ring->context.usr_page = cpu_to_be32(ring->bf.uar->index);
 
 	err = mlx4_qp_to_ready(mdev->dev, &ring->wqres.mtt, &ring->context,
 			       &ring->qp, &ring->qp_state);
-
 	return err;
 }
 
@@ -1461,7 +1037,7 @@ mlx4_en_tx_que(void *context, int pending)
         if (dev->if_drv_flags & IFF_DRV_RUNNING) {
 		mlx4_en_xmit_poll(priv, tx_ind);
 		spin_lock(&ring->tx_lock);
-                if (ring->rl_data.user_valid && !drbr_empty(dev, ring->br))
+                if (!drbr_empty(dev, ring->br))
 			mlx4_en_transmit_locked(dev, tx_ind, NULL);
 		spin_unlock(&ring->tx_lock);
 	}
@@ -1476,33 +1052,15 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	int i = 0, err = 0;
 
 	/* Which queue to use */
-#ifdef CONFIG_RATELIMIT
-	if (m->m_pkthdr.txringid > 0 && m->m_pkthdr.txringid < priv->tx_ring_num) {
-		i = m->m_pkthdr.txringid;
-		/* Index was validated, thus ring is not NULL */
-	} else
-#endif
 	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
-		i = m->m_pkthdr.flowid % (priv->native_tx_ring_num);
-	} else {
+		i = m->m_pkthdr.flowid % (priv->tx_ring_num - 1);
+	}
+	else {
 		i = mlx4_en_select_queue(dev, m);
 	}
-
 	ring = priv->tx_ring[i];
 
 	if (spin_trylock(&ring->tx_lock)) {
-#ifdef CONFIG_RATELIMIT
-		if (ring->rl_data.user_valid == false) {
-			en_err(priv, "Ring id %d doesn't exist, packet dropped\n", i);
-			/* XXX bug in FreeBSD kernel:
-			* when returning EINVAL, kernel will try to re-send packet,
-			* though ring is not valid.
-			* need to free the mbuf and return "ok" */
-			m_freem(m);
-			spin_unlock(&ring->tx_lock);
-			return (0);
-		}
-#endif
 		err = mlx4_en_transmit_locked(dev, i, m);
 		spin_unlock(&ring->tx_lock);
 		/* Poll CQ here */

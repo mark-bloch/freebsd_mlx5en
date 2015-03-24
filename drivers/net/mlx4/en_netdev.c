@@ -48,7 +48,6 @@
 
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
-#include <sys/queue.h>
 
 #include "mlx4_en.h"
 #include "en_port.h"
@@ -1053,7 +1052,7 @@ static void mlx4_en_set_default_moderation(struct mlx4_en_priv *priv)
 		priv->last_moder_bytes[i] = 0;
 	}
 
-	for (i = 0; i < priv->native_tx_ring_num; i++) {
+	for (i = 0; i < priv->tx_ring_num; i++) {
 		cq = priv->tx_cq[i];
 		cq->moder_cnt = priv->tx_frames;
 		cq->moder_time = priv->tx_usecs;
@@ -1292,14 +1291,11 @@ int mlx4_en_start_port(struct net_device *dev)
 
 	/* Configure tx cq's and rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->rl_data.user_valid == false) {
-			continue;
-		}
 		/* Configure cq */
 		cq = priv->tx_cq[i];
 		err = mlx4_en_activate_cq(priv, cq, i);
 		if (err) {
-			en_err(priv, "Failed activating Tx CQ\n");
+			en_err(priv, "Failed allocating Tx CQ\n");
 			goto tx_err;
 		}
 		err = mlx4_en_set_cq_moder(priv, cq);
@@ -1317,14 +1313,8 @@ int mlx4_en_start_port(struct net_device *dev)
 		err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
 					       i / priv->num_tx_rings_p_up);
 		if (err) {
-			en_err(priv, "Failed activating Tx ring %d\n", i);
+			en_err(priv, "Failed allocating Tx ring\n");
 			mlx4_en_deactivate_cq(priv, cq);
-			if (i >= priv->native_tx_ring_num) {
-				/* Rate limit ring - no need for err flow*/
-				invalidate_rate_limit_ring(priv, i);
-				++tx_index;
-				continue;
-			}
 			goto tx_err;
 		}
 
@@ -1335,8 +1325,6 @@ int mlx4_en_start_port(struct net_device *dev)
 		for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
 			*((u32 *) (tx_ring->buf + j)) = 0xffffffff;
 		++tx_index;
-
-		priv->active_tx_ring_num++;
 	}
 
 	/* Configure port */
@@ -1398,12 +1386,8 @@ int mlx4_en_start_port(struct net_device *dev)
 
 tx_err:
 	while (tx_index--) {
-		if (priv->tx_ring[tx_index]->rl_data.user_valid == false) {
-			continue;
-		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[tx_index]);
 		mlx4_en_deactivate_cq(priv, priv->tx_cq[tx_index]);
-		priv->active_tx_ring_num--;
 	}
 	mlx4_en_destroy_drop_qp(priv);
 rss_err:
@@ -1496,21 +1480,13 @@ void mlx4_en_stop_port(struct net_device *dev)
 
 	/* Free TX Rings */
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->rl_data.user_valid == false) {
-			continue;
-		}
 		mlx4_en_deactivate_tx_ring(priv, priv->tx_ring[i]);
 		mlx4_en_deactivate_cq(priv, priv->tx_cq[i]);
-		priv->active_tx_ring_num--;
 	}
 	msleep(10);
 
-	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->rl_data.user_valid == false) {
-			continue;
-		}
+	for (i = 0; i < priv->tx_ring_num; i++)
 		mlx4_en_free_tx_buf(dev, priv->tx_ring[i]);
-	}
 
 	/* Free RSS qps */
 	mlx4_en_release_rss_steer(priv);
@@ -1544,12 +1520,9 @@ static void mlx4_en_restart(struct work_struct *work)
 	if (priv->blocked == 0 || priv->port_up == 0)
 		return;
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->rl_data.user_valid == false) {
-			continue;
-		}
 		ring = priv->tx_ring[i];
 		if (ring->blocked &&
-			ring->watchdog_time + MLX4_EN_WATCHDOG_TIMEOUT < ticks)
+				ring->watchdog_time + MLX4_EN_WATCHDOG_TIMEOUT < ticks)
 			goto reset;
 	}
 	return;
@@ -1561,6 +1534,8 @@ reset:
 	mutex_lock(&mdev->state_lock);
 	if (priv->port_up) {
 		mlx4_en_stop_port(dev);
+                //for (i = 0; i < priv->tx_ring_num; i++)         
+                //        netdev_tx_reset_queue(priv->tx_ring[i]->tx_queue);
 		if (mlx4_en_start_port(dev))
 			en_err(priv, "Failed restarting port %d\n", priv->port);
 	}
@@ -1583,9 +1558,6 @@ static void mlx4_en_clear_stats(struct net_device *dev)
 	memset(&priv->vport_stats, 0, sizeof(priv->vport_stats));
 
 	for (i = 0; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring[i]->rl_data.user_valid == false) {
-			continue;
-		}
 		priv->tx_ring[i]->bytes = 0;
 		priv->tx_ring[i]->packets = 0;
 		priv->tx_ring[i]->tx_csum = 0;
@@ -1641,7 +1613,7 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 	}
 #endif
 
-	for (i = 0; i < priv->native_tx_ring_num; i++) {
+	for (i = 0; i < priv->tx_ring_num; i++) {
 		if (priv->tx_ring && priv->tx_ring[i])
 			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
 		if (priv->tx_cq && priv->tx_cq[i])
@@ -1659,27 +1631,6 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 	if (priv->sysctl)
 		sysctl_ctx_free(&priv->stat_ctx);
 
-
-}
-
-void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv)
-{
-	int i;
-	struct mlx4_en_tx_ring *ring;
-
-	for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
-		if (priv->tx_ring && priv->tx_ring[i]) {
-			ring = priv->tx_ring[i];
-			mutex_lock(&ring->rl_data.rl_ctl_lock);
-			if (ring->rl_data.user_valid == true) {
-				sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
-			}
-			mutex_unlock(&ring->rl_data.rl_ctl_lock);
-			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
-		}
-		if (priv->tx_cq && priv->tx_cq[i])
-			mlx4_en_destroy_cq(priv, &priv->tx_cq[i]);
-	}
 
 }
 
@@ -1701,7 +1652,7 @@ int mlx4_en_alloc_resources(struct mlx4_en_priv *priv)
 	}
 
 	/* Create tx Rings */
-	for (i = 0; i < priv->native_tx_ring_num; i++) {
+	for (i = 0; i < priv->tx_ring_num; i++) {
 		if (mlx4_en_create_cq(priv, &priv->tx_cq[i],
 				      prof->tx_ring_size, i, TX, node))
 			goto err;
@@ -1730,7 +1681,7 @@ err:
 		if (priv->rx_cq[i])
 			mlx4_en_destroy_cq(priv, &priv->rx_cq[i]);
 	}
-	for (i = 0; i < priv->native_tx_ring_num; i++) {
+	for (i = 0; i < priv->tx_ring_num; i++) {
 		if (priv->tx_ring[i])
 			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
 		if (priv->tx_cq[i])
@@ -1787,7 +1738,7 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	mdev->pndev[priv->port] = NULL;
 	mutex_unlock(&mdev->state_lock);
 
-	mlx4_en_free_rl_resources(priv);
+
 	mlx4_en_free_resources(priv);
 
 	/* freeing the sysctl conf cannot be called from within mlx4_en_free_resources */
@@ -1936,40 +1887,14 @@ static int mlx4_en_media_change(struct ifnet *dev)
 	return (error);
 }
 
-static __used void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int ring_id)
-{
-	struct mlx4_en_tx_ring *tx_ring;
-	struct sysctl_ctx_list *ctx;
-	struct sysctl_oid_list *head_node;
-	struct sysctl_oid *ring_node;
-	struct sysctl_oid_list *ring_list;
-	char namebuf[128];
-
-	tx_ring = priv->tx_ring[ring_id];
-	ctx = &tx_ring->rl_data.rl_stats_ctx;
-	snprintf(namebuf, sizeof(namebuf), "tx_ring%d", ring_id);
-	head_node = SYSCTL_CHILDREN(priv->sysctl_stat);
-	ring_node = SYSCTL_ADD_NODE(ctx, head_node, OID_AUTO, namebuf,
-			CTLFLAG_RD, NULL, "TX Ring");
-	ring_list = SYSCTL_CHILDREN(ring_node);
-	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "rate_limit_val",
-			CTLFLAG_RD, &tx_ring->rl_data.rate_limit_val, "Rate Limit value");
-	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "packets",
-			CTLFLAG_RD, &tx_ring->packets, "TX packets");
-	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",
-			CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
-}
-
 static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 {
 	struct mlx4_en_priv *priv;
 	struct mlx4_en_dev *mdev;
-#ifdef CONFIG_RATELIMIT
-	struct in_ratectlreq *in_ratectl;
-#endif
 	struct ifreq *ifr;
 	int error;
 	int mask;
+
 	error = 0;
 	mask = 0;
 	priv = dev->if_softc;
@@ -2028,28 +1953,6 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		mutex_unlock(&mdev->state_lock);
 		VLAN_CAPABILITIES(dev);
 		break;
-#ifdef CONFIG_RATELIMIT
-	case SIOCARATECTL:
-                in_ratectl = (struct in_ratectlreq *)data;
-                error = mlx4_en_create_rate_limit_tx_res(priv, in_ratectl);
-                if (error)
-                        break;
-		/* Add sysctl statistics */
-		mlx4_en_rate_limit_sysctl_stat(priv, in_ratectl->tx_ring_id);
-		break;
-	case SIOCSRATECTL:
-		in_ratectl = (struct in_ratectlreq *)data;
-		error = mlx4_en_modify_rate_limit_tx_res(priv, in_ratectl);
-                break;
-	case SIOCGRATECTL:
-		in_ratectl = (struct in_ratectlreq *)data;
-		mlx4_en_get_ratectl_req_params(priv, in_ratectl);
-                break;
-        case SIOCDRATECTL:
-                in_ratectl = (struct in_ratectlreq *)data;
-                mlx4_en_destroy_rate_limit_tx_res(priv, in_ratectl->tx_ring_id);
-                break;
-#endif
 	default:
 		error = ether_ioctl(dev, command, data);
 		break;
@@ -2115,13 +2018,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 	priv->num_tx_rings_p_up = mdev->profile.num_tx_rings_p_up;
 	priv->tx_ring_num = prof->tx_ring_num;
-
-	/* Save non RL ring number */
-	priv->native_tx_ring_num = priv->tx_ring_num;
-
-	priv->rate_limit_tx_ring_num = 0;
-	priv->active_tx_ring_num = 0;
-
 	priv->tx_ring = kcalloc(MAX_TX_RINGS,
 				sizeof(struct mlx4_en_tx_ring *), GFP_KERNEL);
 	if (!priv->tx_ring) {
@@ -2184,18 +2080,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	if (err)
 		goto out;
 
-	/* Rate Limit support */
-	mutex_init(&priv->tx_ring_index_lock);
-	STAILQ_INIT(&priv->reuse_index_list_head);
-	priv->used_rates_num = 0;
-	priv->max_rates_num = priv->mdev->dev->caps.max_rates_num[priv->port];
-
-	for (i = priv->native_tx_ring_num; i < MAX_TX_RINGS; i++) {
-		struct mlx4_en_list_element *p_item;
-		p_item = priv->reuse_index_list_array + i;
-		p_item->val = i;
-	}
-
 	/* Allocate page for receive rings */
 	err = mlx4_alloc_hwq_res(mdev->dev, &priv->res,
 				MLX4_EN_PAGE_SIZE, MLX4_EN_PAGE_SIZE);
@@ -2213,9 +2097,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	dev->if_capabilities |= IFCAP_VLAN_HWCSUM | IFCAP_VLAN_HWFILTER;
 	dev->if_capabilities |= IFCAP_LINKSTATE | IFCAP_JUMBO_MTU;
 	dev->if_capabilities |= IFCAP_LRO;
-#ifdef CONFIG_RATELIMIT
-	dev->if_capabilities |= IFCAP_HWTXRINGS;
-#endif
+
 	if (mdev->LSO_support)
 		dev->if_capabilities |= IFCAP_TSO4 | IFCAP_TSO6 | IFCAP_VLAN_HWTSO;
 #if __FreeBSD_version >= 1100000
@@ -2301,7 +2183,6 @@ out:
 	mlx4_en_destroy_netdev(dev);
 	return err;
 }
-
 static int mlx4_en_set_ring_size(struct net_device *dev,
     int rx_size, int tx_size)
 {
@@ -2449,54 +2330,6 @@ static int mlx4_en_set_rx_ppp(SYSCTL_HANDLER_ARGS)
         return (error);
 }
 
-static int mlx4_en_set_rl_max_num(SYSCTL_HANDLER_ARGS)
-{
-	struct mlx4_en_priv *priv;
-	int max_rates_num;
-	int error;
-	int max_val_supported;
-	priv = arg1;
-
-	max_val_supported = priv->mdev->dev->caps.rl_caps.number;
-	max_rates_num = priv->max_rates_num;
-
-	error = sysctl_handle_int(oidp, &max_rates_num, 0, req);
-	if (error || !req->newptr) {
-		return (error);
-	}
-
-	if (max_rates_num <= 0 || max_rates_num > max_val_supported) {
-		return (EINVAL);
-	}
-
-	error = -mlx4_SET_PORT_RATE_LIMIT(priv->mdev->dev, priv->port,
-	    max_rates_num);
-
-	if (error == 0) {
-		priv->max_rates_num = max_rates_num;
-	}
-
-	return error;
-}
-
-static int mlx4_en_get_used_rates_num(SYSCTL_HANDLER_ARGS)
-{
-	struct mlx4_en_priv *priv;
-	int used_rates_num;
-	int error;
-
-	priv = arg1;
-	error = -mlx4_get_used_rate_limit_num(priv->mdev->dev, priv->port,
-						&priv->used_rates_num);
-	if (error) {
-		return error;
-	}
-	used_rates_num = priv->used_rates_num;
-	error = sysctl_handle_int(oidp, &used_rates_num, 0, req);
-
-	return (error);
-}
-
 static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
 {
         struct net_device *dev;
@@ -2524,15 +2357,9 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rx_rings",
             CTLFLAG_RD, &priv->rx_ring_num, 0,
             "Number of receive rings");
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "native_tx_rings",
-            CTLFLAG_RD, &priv->native_tx_ring_num, 0,
-            "Number of native transmit rings");
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rate_limit_tx_rings",
-            CTLFLAG_RD, &priv->rate_limit_tx_ring_num, 0,
-            "Number of rate limit transmit rings");
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "active_tx_rings",
-            CTLFLAG_RD, &priv->active_tx_ring_num, 0,
-            "Number of total active rings");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "tx_rings",
+            CTLFLAG_RD, &priv->tx_ring_num, 0,
+            "Number of transmit rings");
         SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_size",
             CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
             mlx4_en_set_rx_ring_size, "I", "Receive ring size");
@@ -2574,18 +2401,8 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, coal_list, OID_AUTO, "adaptive_rx_coal",
             CTLFLAG_RW, &priv->adaptive_rx_coal, 0,
             "Enable adaptive rx coalescing");
-
-	/* Rate limit support */
-	if (priv->mdev->dev->caps.rl_caps.number)
-	{
-		SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "different_rates_max_num",
-			CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
-			mlx4_en_set_rl_max_num, "I", "Max number of different rates");
-		SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "used_rates_num",
-			CTLTYPE_INT | CTLFLAG_RD | CTLFLAG_MPSAFE, priv, 0,
-			mlx4_en_get_used_rates_num, "I", "number of different rates used");
-	}
 }
+
 
 static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 {
@@ -2606,7 +2423,6 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	sysctl_ctx_init(ctx);
 	node = SYSCTL_ADD_NODE(ctx, SYSCTL_CHILDREN(priv->sysctl), OID_AUTO,
 	    "stat", CTLFLAG_RD, NULL, "Statistics");
-	priv->sysctl_stat = node;
 	node_list = SYSCTL_CHILDREN(node);
 
 #ifdef MLX4_EN_PERF_STAT
@@ -2744,19 +2560,18 @@ struct mlx4_en_pkt_stats {
 
 
 
-	for (i = 0; i < priv->native_tx_ring_num; i++) {
-		/* Rate limit rings stats are handled elsewhere */
+	for (i = 0; i < priv->tx_ring_num; i++) {
 		tx_ring = priv->tx_ring[i];
 		snprintf(namebuf, sizeof(namebuf), "tx_ring%d", i);
 		ring_node = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO, namebuf,
-			CTLFLAG_RD, NULL, "TX Ring");
+		    CTLFLAG_RD, NULL, "TX Ring");
 		ring_list = SYSCTL_CHILDREN(ring_node);
 		SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "packets",
-			CTLFLAG_RD, &tx_ring->packets, "TX packets");
+		    CTLFLAG_RD, &tx_ring->packets, "TX packets");
 		SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",
-			CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
-	}
+		    CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
 
+	}
 	for (i = 0; i < priv->rx_ring_num; i++) {
 		rx_ring = priv->rx_ring[i];
 		snprintf(namebuf, sizeof(namebuf), "rx_ring%d", i);
