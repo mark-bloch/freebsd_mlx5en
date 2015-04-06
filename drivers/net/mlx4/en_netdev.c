@@ -1892,6 +1892,9 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	struct mlx4_en_priv *priv;
 	struct mlx4_en_dev *mdev;
 	struct ifreq *ifr;
+#ifdef CONFIG_RATELIMIT
+	struct ifreq_hwtxring *rl_req;
+#endif
 	int error;
 	int mask;
 
@@ -1953,6 +1956,20 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		mutex_unlock(&mdev->state_lock);
 		VLAN_CAPABILITIES(dev);
 		break;
+#ifdef CONFIG_RATELIMIT
+	case SIOCARATECTL:
+                rl_req = (struct ifreq_hwtxring *)data;
+		break;
+	case SIOCSRATECTL:
+                rl_req = (struct ifreq_hwtxring *)data;
+                break;
+	case SIOCGRATECTL:
+                rl_req = (struct ifreq_hwtxring *)data;
+                break;
+        case SIOCDRATECTL:
+                rl_req = (struct ifreq_hwtxring *)data;
+                break;
+#endif
 	default:
 		error = ether_ioctl(dev, command, data);
 		break;
