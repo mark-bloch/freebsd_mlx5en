@@ -111,6 +111,14 @@ enum mlx4_en_alloc_type {
 	MLX4_EN_ALLOC_REPLACEMENT = 1,
 };
 
+#ifdef CONFIG_RATELIMIT
+enum mlx4_en_rl_operation {
+	MLX4_EN_RL_ADD = 0,
+	MLX4_EN_RL_DEL = 1,
+	MLX4_EN_RL_MOD = 2,
+};
+#endif
+
 /* Receive fragment sizes; we use at most 3 fragments (for 9600 byte MTU
  * and 4K allocations) */
 #if MJUMPAGESIZE == 4096
@@ -151,8 +159,14 @@ enum {
 #define MLX4_EN_MAX_TX_RING_P_UP	32
 #define MLX4_EN_NUM_UP			1
 
-#define MAX_TX_RINGS			(MLX4_EN_MAX_TX_RING_P_UP * \
-					 (MLX4_EN_NUM_UP + 1))
+#ifdef CONFIG_RATELIMIT
+#define MLX4_EN_DEF_MAX_RL_TX_RINGS     45000
+#else
+#define MLX4_EN_DEF_MAX_RL_TX_RINGS     0
+#endif
+
+#define MAX_TX_RINGS			((MLX4_EN_MAX_TX_RING_P_UP * \
+					(MLX4_EN_NUM_UP)) + MLX4_EN_DEF_MAX_RL_TX_RINGS)
 
 #define MLX4_EN_DEF_TX_RING_SIZE	1024
 #define MLX4_EN_DEF_RX_RING_SIZE  	1024
@@ -532,6 +546,18 @@ struct mlx4_en_frag_info {
         u16 frag_prefix_size;
 };
 
+#ifdef CONFIG_RATELIMIT
+struct mlx4_en_reuse_index_list_element {
+	STAILQ_ENTRY(mlx4_en_reuse_index_list_element)	entry;
+	int					val;
+};
+
+struct mlx4_en_rl_task_list_element {
+	STAILQ_ENTRY(mlx4_en_rl_task_list_element)	entry;
+	struct ifreq_hwtxring				hw_ring_req;
+	enum mlx4_en_rl_operation			operation;
+};
+#endif
 
 struct mlx4_en_priv {
 	struct mlx4_en_dev *mdev;
@@ -644,6 +670,15 @@ struct mlx4_en_priv {
 	u64 if_counters_rx_errors;
 	u64 if_counters_rx_no_buffer;
 
+	/* Rate limit support */
+#ifdef CONFIG_RATELIMIT
+	struct mutex tx_ring_index_lock;
+	STAILQ_HEAD(, mlx4_en_reuse_index_list_element) reuse_index_list_head;
+	STAILQ_HEAD(, mlx4_en_rl_task_list_element) rl_op_list_head;
+	struct mlx4_en_reuse_index_list_element reuse_index_list_array [MAX_TX_RINGS];
+	struct 		task rl_task;
+	struct 		taskqueue *rl_tq;
+#endif
 };
 
 enum mlx4_en_wol {
@@ -804,6 +839,11 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     int cq, int user_prio);
 void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring);
+#ifdef CONFIG_RATELIMIT
+int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv, struct
+                                ifreq_hwtxring *rl_req);
+void mlx4_en_async_rl_operation(void *context, int index);
+#endif
 void mlx4_en_qflush(struct ifnet *dev);
 
 int mlx4_en_create_rx_ring(struct mlx4_en_priv *priv,

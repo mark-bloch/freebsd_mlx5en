@@ -1739,6 +1739,10 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	mdev->pndev[priv->port] = NULL;
 	mutex_unlock(&mdev->state_lock);
 
+#ifdef CONFIG_RATELIMIT
+	taskqueue_drain(priv->rl_tq, &priv->rl_task);
+	taskqueue_free(priv->rl_tq);
+#endif
 
 	mlx4_en_free_resources(priv);
 
@@ -1960,6 +1964,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 #ifdef CONFIG_RATELIMIT
 	case SIOCARATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;
+		mlx4_en_create_rate_limit_ring(priv, rl_req);
 		break;
 	case SIOCSRATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;
@@ -2098,6 +2103,17 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	if (err)
 		goto out;
 
+#ifdef CONFIG_RATELIMIT
+	mutex_init(&priv->tx_ring_index_lock);
+	STAILQ_INIT(&priv->reuse_index_list_head);
+	STAILQ_INIT(&priv->rl_op_list_head);
+	priv->rl_tq = taskqueue_create_fast("mlx4_en_rl_operation", M_NOWAIT,
+			taskqueue_thread_enqueue, &priv->rl_tq);
+	TASK_INIT(&priv->rl_task, 0, mlx4_en_async_rl_operation, priv);
+	taskqueue_start_threads(&priv->rl_tq, 1, PI_NET, "%s priv rl task",
+		if_name(priv->dev));
+#endif
+
 	/* Allocate page for receive rings */
 	err = mlx4_alloc_hwq_res(mdev->dev, &priv->res,
 				MLX4_EN_PAGE_SIZE, MLX4_EN_PAGE_SIZE);
@@ -2192,8 +2208,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
         if (mdev->dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_TS)
                 queue_delayed_work(mdev->workqueue, &priv->service_task, SERVICE_TASK_DELAY);
-
-        
 
 	return 0;
 

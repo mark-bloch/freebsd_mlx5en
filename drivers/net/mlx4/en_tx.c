@@ -236,6 +236,157 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 	return err;
 }
 
+#ifdef CONFIG_RATELIMIT
+/* Return an available ring index, there are two options:
+ * 1. Reused index from the reused list (diactivated ring)
+ * 2. The next new ring index (empty reused list) */
+static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
+{
+	int		index = -1;
+	struct		mlx4_en_reuse_index_list_element *reused_item;
+
+	/* Check for availble index in re-use list */
+	if ((reused_item = STAILQ_FIRST(&priv->reuse_index_list_head))) {
+		index = reused_item->val;
+		/* Remove head index from re-use list */
+		STAILQ_REMOVE_HEAD(&priv->reuse_index_list_head, entry);
+	}
+	else if (priv->tx_ring_num < MAX_TX_RINGS) {
+		index = priv->tx_ring_num;
+	} else { /* Reached max resources capacity */
+		index = -1;
+	}
+
+	return index;
+}
+
+static int mlx4_en_validate_rate_ctl_req(struct ifreq_hwtxring *rl_req)
+{
+	uint64_t rate;
+
+	rate = rl_req->txringid_max_rate;
+
+	return (0);
+}
+
+static uint32_t calculate_rate_limit(struct ifreq_hwtxring *rl_req)
+{
+	return rl_req->txringid_max_rate;
+}
+
+static void mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
+				struct ifreq_hwtxring *rl_req,
+				int index,
+				enum mlx4_en_rl_operation opp)
+{
+	struct mlx4_en_rl_task_list_element     *rl_item;
+
+	rl_item = kmalloc(sizeof(struct mlx4_en_rl_task_list_element), GFP_KERNEL);
+	if (!rl_item) {
+		en_err(priv, "Failed allocating rl_item\n");
+		return;
+	}
+
+	rl_item->hw_ring_req.txringid_max_rate = calculate_rate_limit(rl_req);
+	rl_item->hw_ring_req.txringid = index;
+	rl_item->operation = opp;
+
+	STAILQ_INSERT_TAIL(&priv->rl_op_list_head, rl_item, entry);
+	taskqueue_enqueue(priv->rl_tq, &priv->rl_task);
+	return;
+}
+
+/* Called by ioctl - it begins the rate limit creation
+ * process where the actual creation is deferred */
+int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
+				   struct ifreq_hwtxring *rl_req)
+{
+	int					err = 0;
+	int					index = 0;
+
+	/* Check for HW/FW support */
+	/* TODO add check for support here */
+	en_warn(priv, "No support examination - Need to be added\n");
+
+	/* Validate rate limit request */
+	err = mlx4_en_validate_rate_ctl_req(rl_req);
+	if (err) {
+		en_err(priv, "Illegal Rate limit value\n");
+		return (err);
+	}
+
+	/* Find available ring index */
+	mutex_lock(&priv->tx_ring_index_lock);
+	index = mlx4_en_find_available_tx_ring_index(priv);
+	if (index < 0) {
+		en_err(priv, "Failed to create Rate limit resources, "
+					"Max capacity reached\n");
+		return (EINVAL);
+	}
+	/* TODO Uncomment and move to the right place after ring
+	 * creation would be added.
+	 * priv->tx_ring_num++;*/
+	mutex_unlock(&priv->tx_ring_index_lock);
+
+	/* Defer ring creation */
+	mlx4_en_defer_rl_op(priv, rl_req, index, MLX4_EN_RL_ADD);
+
+	rl_req->txringid = index;
+	return (0);
+}
+
+/* Creates all the required resources of the rl ring */
+static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
+					struct ifreq_hwtxring *rl_req)
+{
+	/* TODO Add creation process here */
+	return;
+}
+
+/* Called from the rl_task context, it acquires the first
+ * task from the rl_op_list and calls the relevant functions according to
+ * the needed operation. */
+void mlx4_en_async_rl_operation(void *context, int pending)
+{
+        struct mlx4_en_priv			*priv;
+	struct mlx4_en_rl_task_list_element	*rl_item;
+	struct ifreq_hwtxring			rl_req;
+	enum mlx4_en_rl_operation		rl_operation;
+
+        priv = context;
+
+        /* Check for availble operation in the operation list
+	 * Locking is not necessary since only one thread handles this list */
+        if ((rl_item = STAILQ_FIRST(&priv->rl_op_list_head))) {
+		rl_req.txringid_max_rate = rl_item->hw_ring_req.txringid_max_rate;
+		rl_req.txringid = rl_item->hw_ring_req.txringid;
+		rl_operation = rl_item->operation;
+                STAILQ_REMOVE_HEAD(&priv->rl_op_list_head, entry);
+		kfree(rl_item);
+        }
+	else {
+		pr_err("No avaliable rate limit item \n");
+		return;
+	}
+
+	switch (rl_operation){
+		case MLX4_EN_RL_ADD:
+			mlx4_en_create_rl_res(priv, &rl_req);
+			break;
+		case MLX4_EN_RL_DEL:
+			pr_err("Not supported operation - DEL\n");
+			break;
+		case MLX4_EN_RL_MOD:
+			pr_err("Not supported operation - MOD\n");
+			break;
+		default:
+			pr_err("Not supported operation - %d \n", rl_operation);
+	}
+
+        return;
+}
+#endif
+
 void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring)
 {
@@ -1034,6 +1185,7 @@ mlx4_en_tx_que(void *context, int pending)
 	priv = dev->if_softc;
 	tx_ind = cq->ring;
 	ring = priv->tx_ring[tx_ind];
+
         if (dev->if_drv_flags & IFF_DRV_RUNNING) {
 		mlx4_en_xmit_poll(priv, tx_ind);
 		spin_lock(&ring->tx_lock);
