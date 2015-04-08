@@ -40,6 +40,10 @@
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/cmd.h>
 
+#ifdef CONFIG_RATELIMIT
+#include <sys/ctype.h>
+#endif
+
 #include "mlx4_en.h"
 
 /* Mellanox ConnectX HCA Ethernet driver */
@@ -67,6 +71,12 @@ MLX4_EN_PARM_INT(pfcrx, 0, "Priority based Flow Control policy on RX[7:0]."
 #define MAX_PFC_TX	0xff
 #define MAX_PFC_RX	0xff
 
+#ifdef CONFIG_RATELIMIT
+/* User can use up to MLX4_NUM_PRIORITIES number of priorities */
+#define PRIOS_BUFF_SIZE	(MLX4_NUM_PRIORITIES * 3)
+static char prios_for_rl[PRIOS_BUFF_SIZE] = {0};
+TUNABLE_STR("hw.mlx4_en.config_prios_for_rl_rings", prios_for_rl, sizeof(prios_for_rl));
+#endif
 
 static int mlx4_en_get_profile(struct mlx4_en_dev *mdev)
 {
@@ -214,6 +224,12 @@ static void *mlx4_en_add(struct mlx4_dev *dev)
 		mlx4_err(mdev, "Bad module parameters, aborting.\n");
 		goto err_mr;
 	}
+#ifdef CONFIG_RATELIMIT
+	mdev->num_rl_prios = mlx4_parse_prios_for_rl(prios_for_rl, &mdev->lst_of_prios, MLX4_NUM_PRIORITIES);
+	for (i = 0; i < MLX4_NUM_PRIORITIES; i++)
+		if ((mdev->lst_of_prios & (1 << i)) != 0)
+			mlx4_info(mdev, "Rate limit supports priority: %d\n", i);
+#endif
 
 	/* Configure which ports to start according to module parameters */
 	mdev->port_cnt = 0;

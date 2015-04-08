@@ -1267,6 +1267,10 @@ int mlx4_query_diag_counters(struct mlx4_dev *mlx4_dev, int array_length,
 			     u8 op_modifier, u32 in_offset[],
 			     u32 counter_out[]);
 
+#ifdef CONFIG_RATELIMIT
+u8 mlx4_parse_prios_for_rl(char *str, u8 *lst_of_prios, int max_num_prios);
+#endif
+
 int mlx4_test_interrupts(struct mlx4_dev *dev);
 int mlx4_assign_eq(struct mlx4_dev *dev, char* name, int * vector);
 void mlx4_release_eq(struct mlx4_dev *dev, int vec);

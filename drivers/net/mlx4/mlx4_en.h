@@ -485,6 +485,10 @@ struct mlx4_en_dev {
 	u8			mac_removed[MLX4_MAX_PORTS + 1];
 	unsigned long		last_overflow_check;
 	unsigned long		overflow_period;
+#ifdef CONFIG_RATELIMIT
+	u8			lst_of_prios;
+	u8			num_rl_prios;
+#endif
 };
 
 

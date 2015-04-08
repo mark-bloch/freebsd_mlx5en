@@ -48,9 +48,16 @@
 #include <linux/netdevice.h>
 #include <linux/string.h>
 #include <linux/fs.h>
+#ifdef CONFIG_RATELIMIT
+#include <linux/kernel.h>
+#endif
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/doorbell.h>
+
+#ifdef CONFIG_RATELIMIT
+#include <asm/types.h>
+#endif
 
 #include "mlx4.h"
 #include "fw.h"
@@ -3825,6 +3832,51 @@ static int __init mlx4_verify_params(void)
 	}
 	return 0;
 }
+
+#ifdef CONFIG_RATELIMIT
+/* Parse the list of received prioroties and save the required priorities */
+u8 mlx4_parse_prios_for_rl(char *str, u8 *lst_of_prios, int max_num_prios)
+{
+	char *p;
+	size_t len;
+	size_t i;
+	int index;
+	u8 num_prios = 0;
+
+	p = str;
+	len = strlen(p);
+	if (len == 0) {
+		*lst_of_prios |= 1;
+		num_prios++;
+		return num_prios;
+	}
+	for (i = 0; i < len; i++) {
+		if (p[i] == ',') {
+			p[i] = '\0';
+		}
+	}
+	i = 0;
+	while (i < len) {
+		if (p[i] == '\0') {
+			i++;
+			continue;
+		}
+		index = (int)strtol(p + i, 0, 10);
+		if (index >= max_num_prios || index < 0) {
+			pr_warn("mlx4_en: Priority number is not valid, using priority 0 as default\n");
+			*lst_of_prios = 1;
+			num_prios = 1;
+			return num_prios;
+		}
+		i++;
+		if (*lst_of_prios & (1 << index))
+			continue;
+		num_prios++;
+		*lst_of_prios |= (1 << index);
+	}
+	return num_prios;
+}
+#endif
 
 static int __init mlx4_init(void)
 {
