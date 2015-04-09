@@ -560,6 +560,11 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 #define QUERY_DEV_CAP_ETS_CFG_OFFSET		0x9c
 #define QUERY_DEV_CAP_MAX_ICM_SZ_OFFSET		0xa0
 
+#ifdef CONFIG_RATELIMIT
+#define QUERY_DEV_CAP_QP_RATE_LIMIT_MAX_OFFSET	0xd8
+#define QUERY_DEV_CAP_QP_RATE_LIMIT_MIN_OFFSET	0xda
+#endif
+
 	dev_cap->flags2 = 0;
 	mailbox = mlx4_alloc_cmd_mailbox(dev);
 	if (IS_ERR(mailbox))
@@ -724,7 +729,19 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 	dev_cap->max_rq_sg = field;
 	MLX4_GET(size, outbox, QUERY_DEV_CAP_MAX_DESC_SZ_RQ_OFFSET);
 	dev_cap->max_rq_desc_sz = size;
+#ifdef CONFIG_RATELIMIT
+	MLX4_GET(size, outbox, QUERY_DEV_CAP_QP_RATE_LIMIT_MAX_OFFSET);
+	dev_cap->rl_caps.max_unit = size >> 14;
+	dev_cap->rl_caps.max_val = size & 0xfff;
 
+	if (dev_cap->rl_caps.max_val > 0) {
+		dev_cap->rl_caps.enable = 1;
+
+		MLX4_GET(size, outbox, QUERY_DEV_CAP_QP_RATE_LIMIT_MIN_OFFSET);
+		dev_cap->rl_caps.min_unit = size >> 14;
+		dev_cap->rl_caps.min_val = size & 0xfff;
+	}
+#endif
 	MLX4_GET(dev_cap->bmme_flags, outbox,
 		 QUERY_DEV_CAP_BMME_FLAGS_OFFSET);
 	MLX4_GET(dev_cap->reserved_lkey, outbox,

@@ -224,11 +224,14 @@ static void *mlx4_en_add(struct mlx4_dev *dev)
 		mlx4_err(mdev, "Bad module parameters, aborting.\n");
 		goto err_mr;
 	}
+
 #ifdef CONFIG_RATELIMIT
-	mdev->num_rl_prios = mlx4_parse_prios_for_rl(prios_for_rl, &mdev->lst_of_prios, MLX4_NUM_PRIORITIES);
-	for (i = 0; i < MLX4_NUM_PRIORITIES; i++)
-		if ((mdev->lst_of_prios & (1 << i)) != 0)
-			mlx4_info(mdev, "Rate limit supports priority: %d\n", i);
+	if (dev->caps.rl_caps.enable) {
+		mdev->num_rl_prios = mlx4_parse_prios_for_rl(prios_for_rl, &mdev->lst_of_prios, MLX4_NUM_PRIORITIES);
+		for (i = 0; i < MLX4_NUM_PRIORITIES; i++)
+			if ((mdev->lst_of_prios & (1 << i)) != 0)
+				mlx4_info(mdev, "Rate limit supports priority: %d\n", i);
+	}
 #endif
 
 	/* Configure which ports to start according to module parameters */

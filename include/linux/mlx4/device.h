@@ -423,6 +423,18 @@ struct mlx4_phys_caps {
 	u32			base_tunnel_sqpn;
 };
 
+#ifdef CONFIG_RATELIMIT
+struct mlx4_rate_limit_caps {
+	u8	enable;
+	u8	max_unit;
+	u8	min_unit;
+	u16	max_val;
+	u16	min_val;
+	u32	calc_max_val;
+	u32	calc_min_val;
+};
+#endif
+
 struct mlx4_caps {
 	u64			fw_ver;
 	u32			function;
@@ -520,7 +532,19 @@ struct mlx4_caps {
 	u32			max_basic_counters;
 	u32			max_extended_counters;
 	u8			def_counter_index[MLX4_MAX_PORTS + 1];
+#ifdef CONFIG_RATELIMIT
+	struct mlx4_rate_limit_caps rl_caps;
+#endif
 };
+
+#ifdef CONFIG_RATELIMIT
+enum { /* rl */
+	MLX4_QP_RATE_LIMIT_RESERVED	= 0x0,
+	MLX4_QP_RATE_LIMIT_KBPS		= 0x1,
+	MLX4_QP_RATE_LIMIT_MBPS		= 0x2,
+	MLX4_QP_RATE_LIMIT_GBPS		= 0x3,
+};
+#endif
 
 struct mlx4_buf_list {
 	void		       *buf;

@@ -599,6 +599,30 @@ static void mlx4_set_port_mask(struct mlx4_dev *dev)
 		dev->caps.port_mask[i] = dev->caps.port_type[i];
 }
 
+#ifdef CONFIG_RATELIMIT
+static u64 mlx4_calc_rl_supported_rate(u16 rate_val, u8 unit)
+{
+	u32 calc_rate = 0;
+	u32 rate = (u32)rate_val;
+
+	switch (unit) {
+	case MLX4_QP_RATE_LIMIT_KBPS:
+		calc_rate = rate * (u32)(1000);
+		break;
+	case MLX4_QP_RATE_LIMIT_MBPS:
+		calc_rate = rate * (u32)(1000*1000);
+		break;
+	case MLX4_QP_RATE_LIMIT_GBPS:
+		calc_rate = rate * (u32)(1000*1000*1000);
+		break;
+	default:
+		calc_rate = 0;
+	}
+
+	return calc_rate;
+}
+#endif
+
 static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 {
 	int err;
@@ -653,6 +677,26 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 		dev->caps.wavelength[i]     = dev_cap->wavelength[i];
 		dev->caps.trans_code[i]     = dev_cap->trans_code[i];
 	}
+
+#ifdef CONFIG_RATELIMIT
+	/* UNIT must be determined in order to have a valid max/min rate */
+	if (dev_cap->rl_caps.enable) {
+		dev->caps.rl_caps.max_unit	= dev_cap->rl_caps.max_unit;
+		dev->caps.rl_caps.max_val	= dev_cap->rl_caps.max_val;
+		dev->caps.rl_caps.min_unit	= dev_cap->rl_caps.min_unit;
+		dev->caps.rl_caps.min_val	= dev_cap->rl_caps.min_val;
+		dev->caps.rl_caps.calc_max_val = mlx4_calc_rl_supported_rate(dev->caps.rl_caps.max_val,
+				dev->caps.rl_caps.max_unit);
+		dev->caps.rl_caps.calc_min_val = mlx4_calc_rl_supported_rate(dev->caps.rl_caps.min_val,
+				dev->caps.rl_caps.min_unit);
+		if (!dev->caps.rl_caps.calc_max_val || !dev->caps.rl_caps.calc_min_val)
+			dev->caps.rl_caps.enable = 0;
+		else
+			dev->caps.rl_caps.enable = dev_cap->rl_caps.enable;
+	} else {
+		dev->caps.rl_caps.enable = 0;
+	}
+#endif
 
 	dev->caps.uar_page_size	     = PAGE_SIZE;
 	dev->caps.num_uars	     = dev_cap->uar_size / PAGE_SIZE;
