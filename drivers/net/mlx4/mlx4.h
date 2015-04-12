@@ -813,6 +813,13 @@ struct mlx4_counters {
 	struct mutex		mutex;
 };
 
+#ifdef CONFIG_RATELIMIT
+enum mlx4_qp_rlpp_opmod {
+	MLX4_ALLOCATE_RLPP_FOR_PORT,
+	MLX4_QUERY_RLPP_FOR_PORT,
+};
+#endif
+
 enum {
 	MLX4_NO_RR	= 0,
 	MLX4_USE_RR	= 1,

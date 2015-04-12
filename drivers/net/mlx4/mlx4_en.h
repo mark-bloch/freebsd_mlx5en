@@ -695,6 +695,7 @@ struct mlx4_en_priv {
 	struct mlx4_en_reuse_index_list_element reuse_index_list_array [MAX_TX_RINGS];
 	struct 		task rl_task;
 	struct 		taskqueue *rl_tq;
+	int		num_rates_per_prio;
 #endif
 };
 

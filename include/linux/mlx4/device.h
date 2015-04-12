@@ -64,6 +64,10 @@
 
 #define CORE_CLOCK_MASK 0xffffffffffffULL
 
+#ifdef CONFIG_RATELIMIT
+#define MLX4_NUM_PRIOS_TOTAL	15
+#endif
+
 enum {
 	MLX4_FLAG_MSI_X		= 1 << 0,
 	MLX4_FLAG_OLD_PORT_CMDS	= 1 << 1,
@@ -1253,6 +1257,51 @@ struct _rule_hw {
 	};
 };
 
+#ifdef CONFIG_RATELIMIT
+struct mlx4_hw_num_of_rates {
+	__be16	reserved1;
+	__be16	available_RPP;
+	u8	reserved2[3];
+	u8	RPP_prio_0;
+	u8	reserved3[3];
+	u8	RPP_prio_1;
+	u8	reserved4[3];
+	u8	RPP_prio_2;
+	u8	reserved5[3];
+	u8	RPP_prio_3;
+	u8	reserved6[3];
+	u8	RPP_prio_4;
+	u8	reserved7[3];
+	u8	RPP_prio_5;
+	u8	reserved8[3];
+	u8	RPP_prio_6;
+	u8	reserved9[3];
+	u8	RPP_prio_7;
+	/* For IB Prios */
+	u8	reserved10[3];
+	u8	RPP_prio_8;
+	u8	reserved11[3];
+	u8	RPP_prio_9;
+	u8	reserved12[3];
+	u8	RPP_prio_10;
+	u8	reserved13[3];
+	u8	RPP_prio_11;
+	u8	reserved14[3];
+	u8	RPP_prio_12;
+	u8	reserved15[3];
+	u8	RPP_prio_13;
+	u8	reserved16[3];
+	u8	RPP_prio_14;
+	u8	reserved17[3];
+	u8	RPP_prio_15;
+};
+
+struct mlx4_num_of_rates {
+	u16	available_RPP;
+	u8	RPP_per_prio[MLX4_NUM_PRIOS_TOTAL];
+};
+#endif
+
 int mlx4_flow_steer_promisc_add(struct mlx4_dev *dev, u8 port, u32 qpn,
 				enum mlx4_net_trans_promisc_mode mode);
 int mlx4_flow_steer_promisc_remove(struct mlx4_dev *dev, u8 port,
@@ -1292,6 +1341,10 @@ int mlx4_query_diag_counters(struct mlx4_dev *mlx4_dev, int array_length,
 			     u32 counter_out[]);
 
 #ifdef CONFIG_RATELIMIT
+int mlx4_query_num_of_rates(struct mlx4_dev *dev, u8 port,
+			    struct mlx4_num_of_rates *all_num_rates);
+int mlx4_allocate_num_of_rates(struct mlx4_dev *dev, u8 port,
+			       struct mlx4_num_of_rates *all_num_rates);
 u8 mlx4_parse_prios_for_rl(char *str, u8 *lst_of_prios, int max_num_prios);
 #endif
 

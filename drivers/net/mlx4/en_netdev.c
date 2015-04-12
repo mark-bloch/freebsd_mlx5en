@@ -1994,6 +1994,9 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	uint8_t dev_addr[ETHER_ADDR_LEN];
 	int err;
 	int i;
+#ifdef CONFIG_RATELIMIT
+	struct mlx4_num_of_rates all_num_rates;
+#endif
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	dev = priv->dev = if_alloc(IFT_ETHER);
@@ -2083,6 +2086,31 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	for (i = 0; i < MLX4_EN_MAC_HASH_SIZE; ++i)
 		INIT_HLIST_HEAD(&priv->mac_hash[i]);
 
+#ifdef CONFIG_RATELIMIT
+	if (mdev->dev->caps.rl_caps.enable) {
+		memset(&all_num_rates, 0, sizeof(all_num_rates));
+		/* Query total number of rates */
+		err = mlx4_query_num_of_rates(mdev->dev, port, &all_num_rates);
+		if (!err) {
+			/* Set number of rates per prioroty */
+			if (mdev->num_rl_prios)
+				priv->num_rates_per_prio = all_num_rates.available_RPP/mdev->num_rl_prios;
+			for (i = 0; i < MLX4_NUM_PRIORITIES; i++) {
+				if (mdev->lst_of_prios & (1 << i)) {
+					all_num_rates.RPP_per_prio[i] = priv->num_rates_per_prio;
+				}
+			}
+			err = mlx4_allocate_num_of_rates(mdev->dev, port, &all_num_rates);
+			if (err) {
+				en_err(priv, "Couldn't set available number of rates per prio for port %d\n", port);
+				mdev->dev->caps.rl_caps.enable = 0;
+			}
+		} else {
+			en_err(priv, "Couldn't read available number of rates for port %d\n", port);
+			mdev->dev->caps.rl_caps.enable = 0;
+		}
+	}
+#endif
 
 	/* Query for default mac and max mtu */
 	priv->max_mtu = mdev->dev->caps.eth_mtu_cap[priv->port];

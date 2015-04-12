@@ -2627,6 +2627,67 @@ void mlx4_counter_free(struct mlx4_dev *dev, u8 port, u32 idx)
 }
 EXPORT_SYMBOL_GPL(mlx4_counter_free);
 
+#ifdef CONFIG_RATELIMIT
+int mlx4_query_num_of_rates(struct mlx4_dev *dev, u8 port,
+			    struct mlx4_num_of_rates *all_num_rates)
+{
+	struct mlx4_hw_num_of_rates *hw_all_num_rates;
+	int err;
+	struct mlx4_cmd_mailbox *mailbox_out = NULL;
+	u64 mailbox_in_dma = 0;
+	u32 inmod = port;
+
+	mailbox_out = mlx4_alloc_cmd_mailbox(dev);
+	if (IS_ERR(mailbox_out))
+		return -ENOMEM;
+	hw_all_num_rates = (struct mlx4_hw_num_of_rates *) mailbox_out->buf;
+
+	err = mlx4_cmd_box(dev, mailbox_in_dma, mailbox_out->dma,
+			   inmod, MLX4_QUERY_RLPP_FOR_PORT,
+			   MLX4_CMD_QP_RLPP, MLX4_CMD_TIME_CLASS_C,
+			   MLX4_CMD_NATIVE);
+	if (!err)
+		all_num_rates->available_RPP = be16_to_cpu(hw_all_num_rates->available_RPP);
+
+	mlx4_free_cmd_mailbox(dev, mailbox_out);
+	return err;
+}
+
+int mlx4_allocate_num_of_rates(struct mlx4_dev *dev, u8 port,
+			       struct mlx4_num_of_rates *all_num_rates)
+{
+	/* initialize struct mlx4_hw_num_of_rates because prios 8-15 are not is use for now */
+	struct mlx4_hw_num_of_rates *hw_all_num_rates = {0};
+	int err;
+	struct mlx4_cmd_mailbox *mailbox_in = NULL;
+	u64 mailbox_in_dma = 0;
+	u32 inmod = port;
+
+	mailbox_in = mlx4_alloc_cmd_mailbox(dev);
+	if (IS_ERR(mailbox_in))
+		return -ENOMEM;
+
+	mailbox_in_dma = mailbox_in->dma;
+	hw_all_num_rates = (struct mlx4_hw_num_of_rates *) mailbox_in->buf;
+
+	hw_all_num_rates->RPP_prio_0 = all_num_rates->RPP_per_prio[0];
+	hw_all_num_rates->RPP_prio_1 = all_num_rates->RPP_per_prio[1];
+	hw_all_num_rates->RPP_prio_2 = all_num_rates->RPP_per_prio[2];
+	hw_all_num_rates->RPP_prio_3 = all_num_rates->RPP_per_prio[3];
+	hw_all_num_rates->RPP_prio_4 = all_num_rates->RPP_per_prio[4];
+	hw_all_num_rates->RPP_prio_5 = all_num_rates->RPP_per_prio[5];
+	hw_all_num_rates->RPP_prio_6 = all_num_rates->RPP_per_prio[6];
+	hw_all_num_rates->RPP_prio_7 = all_num_rates->RPP_per_prio[7];
+
+	err = mlx4_cmd(dev, mailbox_in_dma, inmod,
+		       MLX4_ALLOCATE_RLPP_FOR_PORT,
+		       MLX4_CMD_QP_RLPP, MLX4_CMD_TIME_CLASS_C,
+		       MLX4_CMD_NATIVE);
+	mlx4_free_cmd_mailbox(dev, mailbox_in);
+	return err;
+}
+#endif
+
 int __mlx4_clear_if_stat(struct mlx4_dev *dev,
 			 u8 counter_index)
 {
