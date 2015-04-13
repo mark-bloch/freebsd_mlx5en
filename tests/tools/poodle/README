@@ -1,0 +1,27 @@
+poodle is a client-server tool to run many tcp connections simultaneously.
+
+The client is the sending side. Use -h for help
+
+Build:
+c++ poodle.cpp -lpthread -o poodle -g -O2
+
+Build with PP kernel:
+c++ ./poodle.cpp -lpthread -o poodle -g -O2 -DUSE_PP
+
+
+Example:
+
+Server side(server is 11.11.11.2):
+poodle -s
+
+Client side that will open 20000 connections at 10kB/s per connection using 8 threads, ramping up 2000 connections  a second and renewing each connection after 3 minutes
+./poodle -c 11.11.11.2 -C 20000 -b 10 -r 8 -n 2000 -t 180
+
+Same client using PP(you must build first with PP kernel):
+poodle -c 11.11.11.2 -C 20000 -b 10 -r 8 -n 2000 -t 180 -P
+
+Enjoy and call me if you need assistance.
+
+Thanks
+Shahar
+
