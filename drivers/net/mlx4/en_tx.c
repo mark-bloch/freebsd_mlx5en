@@ -39,6 +39,10 @@
 #include <linux/vmalloc.h>
 #include <linux/moduleparam.h>
 
+#ifdef CONFIG_RATELIMIT
+#include <linux/delay.h>
+#endif
+
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
@@ -83,6 +87,10 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->size = size;
 	ring->size_mask = size - 1;
 	ring->stride = stride;
+#ifdef CONFIG_RATELIMIT
+	ring->rl_data.rate_limit_val = 0;
+	ring->rl_data.user_valid = true;
+#endif
 	ring->full_size = ring->size - HEADROOM - MAX_DESC_TXBBS;
 	ring->inline_thold = min(inline_thold, MAX_INLINE);
 	mtx_init(&ring->tx_lock.m, "mlx4 tx", NULL, MTX_DEF);
@@ -237,9 +245,6 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 }
 
 #ifdef CONFIG_RATELIMIT
-/* Return an available ring index, there are two options:
- * 1. Reused index from the reused list (diactivated ring)
- * 2. The next new ring index (empty reused list) */
 static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
 {
 	int		index = -1;
@@ -276,7 +281,6 @@ static uint32_t calculate_rate_limit(struct ifreq_hwtxring *rl_req)
 
 static void mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 				struct ifreq_hwtxring *rl_req,
-				int index,
 				enum mlx4_en_rl_operation opp)
 {
 	struct mlx4_en_rl_task_list_element     *rl_item;
@@ -286,9 +290,9 @@ static void mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 		en_err(priv, "Failed allocating rl_item\n");
 		return;
 	}
-
-	rl_item->hw_ring_req.txringid_max_rate = calculate_rate_limit(rl_req);
-	rl_item->hw_ring_req.txringid = index;
+	if (opp != MLX4_EN_RL_DEL)
+		rl_item->hw_ring_req.txringid_max_rate = calculate_rate_limit(rl_req);
+	rl_item->hw_ring_req.txringid = rl_req->txringid;
 	rl_item->operation = opp;
 
 	STAILQ_INSERT_TAIL(&priv->rl_op_list_head, rl_item, entry);
@@ -296,13 +300,11 @@ static void mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 	return;
 }
 
-/* Called by ioctl - it begins the rate limit creation
- * process where the actual creation is deferred */
 int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 				   struct ifreq_hwtxring *rl_req)
 {
-	int					err = 0;
-	int					index = 0;
+	int	err = 0;
+	int	index = 0;
 
 	/* Check for HW/FW support */
 	/* TODO add check for support here */
@@ -328,19 +330,62 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 	 * priv->tx_ring_num++;*/
 	mutex_unlock(&priv->tx_ring_index_lock);
 
-	/* Defer ring creation */
-	mlx4_en_defer_rl_op(priv, rl_req, index, MLX4_EN_RL_ADD);
-
 	rl_req->txringid = index;
+
+	/* Defer ring creation */
+	mlx4_en_defer_rl_op(priv, rl_req, MLX4_EN_RL_ADD);
+
 	return (0);
 }
 
-/* Creates all the required resources of the rl ring */
 static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
 					struct ifreq_hwtxring *rl_req)
 {
 	/* TODO Add creation process here */
-	return;
+}
+
+static void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
+                                    uint32_t ring_id)
+{
+	struct mlx4_en_reuse_index_list_element *reused_item;
+	struct mlx4_en_tx_ring *ring;
+	struct mlx4_en_dev *mdev = priv->mdev;
+
+	ring = priv->tx_ring[ring_id];
+
+	/* Index was validated, thus ring is not NULL */
+	spin_lock(&ring->tx_lock);
+	if (ring->rl_data.user_valid == false) {
+		en_err(priv, "ring %d doesn't exist\n", ring_id);
+		spin_unlock(&ring->tx_lock);
+		return;
+	} else {
+		ring->rl_data.user_valid = false;
+	}
+	spin_unlock(&ring->tx_lock);
+
+	/* Deactivate resources */
+	mutex_lock(&mdev->state_lock);
+	if (priv->port_up) {
+		mlx4_en_deactivate_tx_ring(priv, ring);
+		mlx4_en_deactivate_cq(priv, priv->tx_cq[ring_id]);
+		msleep(10);
+		mlx4_en_free_tx_buf(priv->dev, ring);
+	}
+	mutex_unlock(&mdev->state_lock);
+
+	/* clear statistics */
+	ring->bytes = 0;
+	ring->packets = 0;
+
+	/* TODO uncomment after adding statistcs */
+//	sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
+
+	/* Add index to re-use list */
+	reused_item = priv->reuse_index_list_array + ring_id;
+	mutex_lock(&priv->tx_ring_index_lock);
+	STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, reused_item, entry);
+	mutex_unlock(&priv->tx_ring_index_lock);
 }
 
 /* Called from the rl_task context, it acquires the first
@@ -374,7 +419,7 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 			mlx4_en_create_rl_res(priv, &rl_req);
 			break;
 		case MLX4_EN_RL_DEL:
-			pr_err("Not supported operation - DEL\n");
+			mlx4_en_destroy_rate_limit_tx_res(priv, rl_req.txringid);
 			break;
 		case MLX4_EN_RL_MOD:
 			pr_err("Not supported operation - MOD\n");
@@ -382,8 +427,23 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 		default:
 			pr_err("Not supported operation - %d \n", rl_operation);
 	}
+}
 
-        return;
+void mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv,
+				   struct ifreq_hwtxring *rl_req)
+{
+	uint32_t ring_id;
+
+	ring_id = rl_req->txringid;
+
+	/* Check that this is indeed a rate limit ring */
+	if (ring_id < priv->native_tx_ring_num || ring_id >= priv->tx_ring_num) {
+                en_err(priv, "Deleting ring %d: Permision denied: Not a rate limit ring\n", ring_id);
+                return;
+        }
+
+	/* Defer ring destruction */
+	mlx4_en_defer_rl_op(priv, rl_req, MLX4_EN_RL_DEL);
 }
 #endif
 

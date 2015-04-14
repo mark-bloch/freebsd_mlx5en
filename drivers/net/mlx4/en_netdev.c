@@ -1974,6 +1974,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
                 break;
         case SIOCDRATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;
+		mlx4_en_destroy_rate_limit_ring(priv, rl_req);
                 break;
 #endif
 	default:
@@ -2041,6 +2042,12 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 	priv->num_tx_rings_p_up = mdev->profile.num_tx_rings_p_up;
 	priv->tx_ring_num = prof->tx_ring_num;
+
+#ifdef CONFIG_RATELIMIT
+	/* Save number of non RL tx rings */
+	priv->native_tx_ring_num = priv->tx_ring_num;
+#endif
+
 	priv->tx_ring = kcalloc(MAX_TX_RINGS,
 				sizeof(struct mlx4_en_tx_ring *), GFP_KERNEL);
 	if (!priv->tx_ring) {

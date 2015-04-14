@@ -282,6 +282,13 @@ struct mlx4_en_tx_desc {
 #define MLX4_EN_CX3_LOW_ID	0x1000
 #define MLX4_EN_CX3_HIGH_ID	0x1005
 
+#ifdef CONFIG_RATELIMIT
+struct mlx4_en_rl_data {
+	bool user_valid;
+	uint32_t rate_limit_val;
+};
+#endif
+
 struct mlx4_en_tx_ring {
         spinlock_t tx_lock;
 	struct mlx4_hwq_resources wqres;
@@ -320,6 +327,9 @@ struct mlx4_en_tx_ring {
 	int full_size;
 	int inline_thold;
 	u64 watchdog_time;
+#ifdef CONFIG_RATELIMIT
+	struct mlx4_en_rl_data rl_data;
+#endif
 };
 
 struct mlx4_en_rx_desc {
@@ -607,6 +617,9 @@ struct mlx4_en_priv {
 	__be32 ctrl_flags;
 	u32 flags;
 	u8 num_tx_rings_p_up;
+#ifdef CONFIG_RATELIMIT
+	u32 native_tx_ring_num;
+#endif
 	u32 tx_ring_num;
 	u32 rx_ring_num;
 	u32 rx_mb_size;
@@ -842,6 +855,8 @@ void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 #ifdef CONFIG_RATELIMIT
 int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv, struct
                                 ifreq_hwtxring *rl_req);
+void mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv, struct
+				ifreq_hwtxring *rl_req);
 void mlx4_en_async_rl_operation(void *context, int index);
 #endif
 void mlx4_en_qflush(struct ifnet *dev);
