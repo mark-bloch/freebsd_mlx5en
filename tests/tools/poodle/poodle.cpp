@@ -38,13 +38,16 @@ unsigned long total_system_closed;
 bool is_server = false; 
 bool is_client = false; 
 char* g_buf;
-unsigned long g_bandwidth_in_bytes = 1024;
+bool g_modify_pace = false;
+unsigned long g_bandwidth_in_bytes = 100/8; //100Kbits is PP lower mark.
 bool is_PP_throttle = false;
 #define G_BUF_SIZE 1024*1024
 time_t sys_start;
 int old_somaxconn = 0;
 size_t old_somaxconn_size = sizeof(old_somaxconn);
 size_t new_somaxconn_new_size = 20000;
+
+
 
 double Time()
 {
@@ -61,7 +64,42 @@ bool should_run = true;
 
 class connection_group_thread_c;
 
+class pace_modify_data {
+	public:
+		static pace_modify_data *instance()
+		{
+			if (!s_instance)
+				s_instance = new pace_modify_data;
+			return s_instance;
+		}
+		int init(int modify_interval=5, int paces_size=60); //hard coded for fun
+		int get_next_pace() { return m_paces[m_current_pace_idx++%m_paces_size]; }
+		int get_modify_interval_in_secs() { return m_modify_interval_in_secs; }
+	private:
+		static pace_modify_data *s_instance;
+		int* m_paces;
+		int  m_paces_size;
+		int  m_modify_interval_in_secs;
+		int m_current_pace_idx;
+		pace_modify_data() {}
+};
+pace_modify_data *pace_modify_data::s_instance = 0;
 
+int pace_modify_data::init(int modify_interval, int paces_size)
+{
+	int start = 1*1024;
+
+	m_paces_size = paces_size;
+	m_paces = new int[m_paces_size];
+	m_current_pace_idx = 0;
+	for (int i=0; i<m_paces_size; i++)
+	{
+		m_paces[i] = (i+1)*start;
+	}
+	m_modify_interval_in_secs = modify_interval;
+
+	return 0;
+}
 
 class one_connection_c {
 	friend class connection_group_thread_c;
@@ -122,6 +160,7 @@ void connection_group_thread_c::main_loop()
 	int handled;
 	int closed;
 	time_t now;
+	time_t modify_interval_start = time(NULL);
 	double second_start;
 	int rc;
 	int sent_this_second;
@@ -142,16 +181,35 @@ void connection_group_thread_c::main_loop()
 	 *
 	 */
 
-#define TIME_TO_CLOSE(i) (now>conns[i].m_created+m_conn_active_time) 
+#define TIME_TO_CLOSE(i) (now > conns[i].m_created+m_conn_active_time)
 #define SECOND_NOT_OVER (Time()-second_start)<1000000
+#define TIME_TO_MODIFY (now - modify_interval_start) > pace_modify_data::instance()->get_modify_interval_in_secs()
 	while (should_run) {
 		rounds = 0;
 		second_start = Time();
 		conns_left_this_sec = m_conns_per_second;
 		now = time(NULL); 
+		// we arrive here once a sec
 		for ( int i = 0; i < m_load; i++ ) 
 			conns[i].zero_per_second_counters();
 		sent_this_second = 0;
+		if ( TIME_TO_MODIFY ) {
+			modify_interval_start = time(NULL);
+			int new_pace = pace_modify_data::instance()->get_next_pace();
+			if ( is_PP_throttle ) {
+#ifdef USE_PP
+				struct so_rate_ctl rate;
+				rate.flags = 0;
+				rate.max_pacing_rate = new_pace;
+				setsockopt(socket,SOL_SOCKET, SO_MAX_PACING_RATE, &rate, sizeof(rate));
+#endif
+			}
+			else {
+				for ( int i = 0; i < m_load; i++ ){
+					conns[i].m_byte_to_send_per_second = new_pace;
+				}
+			}
+		}
 		while (SECOND_NOT_OVER) {
 			rounds++;
 			for ( int i = 0; i < m_load; i++ ){
@@ -501,6 +559,7 @@ void usage(char *prog)
 			"	      -t active time per connection in seconds. The connection will be closed and a new connection will be created once time is up.\n"
 			"	      -T Total run time in secs, otherwise run forever or till killed \n"
 			"	      -r how many threads\n"
+			"	      -M Modify pace, currently hard-coded to 10 rates\n"
 			"	      -b bandwidth per conn (kbps) or \n"
 			"	      -B total bandwidth (kbps)\n\n"
 			, prog
@@ -565,7 +624,7 @@ int main(int argc, char* argv[])
 
 	srand(time(NULL));
 
-	const char *optstring = "c:p:r:C:n:t:b:B:T:hvsP";
+	const char *optstring = "c:p:r:C:n:t:b:B:T:hvsPM";
 	char c;
 
 
@@ -615,6 +674,9 @@ int main(int argc, char* argv[])
 			case 'T':
 				total_run_time = atoi(optarg);
 				break;
+			case 'M':
+				g_modify_pace = true;;
+				break;
 			case 'b':
 				bandwidth_per_conn = atoi(optarg);
 				g_bandwidth_in_bytes = bandwidth_per_conn*1024;
@@ -635,6 +697,12 @@ int main(int argc, char* argv[])
 
 	if ( is_server ) {
 		one_server(server_port);
+	}
+
+	if ( g_modify_pace )
+	{
+		pace_modify_data::instance()->init();
+		pace_modify_data::instance()->get_modify_interval_in_secs();
 	}
 
 	if ( total_bandwidth ) {
