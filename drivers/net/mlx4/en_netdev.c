@@ -50,6 +50,11 @@
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
 
+#ifdef CONFIG_RATELIMIT
+#include <sys/ctype.h>
+#include <sys/sbuf.h>
+#endif
+
 #include "mlx4_en.h"
 #include "en_port.h"
 
@@ -1812,6 +1817,9 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	if (priv->sysctl)
 		sysctl_ctx_free(&priv->conf_ctx);
 
+#ifdef CONFIG_RATELIMIT
+	kfree(priv->rate_limits);
+#endif
 	kfree(priv->tx_ring);
 	kfree(priv->tx_cq);
 
@@ -2081,6 +2089,9 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	 */
 	priv->counter_index = 0xff;
 	spin_lock_init(&priv->stats_lock);
+#ifdef CONFIG_RATELIMIT
+	mutex_init(&priv->rate_limit_table_lock);
+#endif
 	INIT_WORK(&priv->rx_mode_task, mlx4_en_do_set_rx_mode);
 	INIT_WORK(&priv->watchdog_task, mlx4_en_restart);
 	INIT_WORK(&priv->linkstate_task, mlx4_en_linkstate);
@@ -2156,6 +2167,9 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 			/* Set number of rates per prioroty */
 			if (mdev->num_rl_prios)
 				priv->num_rates_per_prio = all_num_rates.available_RPP/mdev->num_rl_prios;
+			/* Adding one to priv->num_rates_per_prio because index zero is used for the regular SQs,
+			 * Therefore FW can recieve 1-120 new different rates */
+			priv->rate_limits = (struct mlx4_en_rate_limit_indexes *) kzalloc((priv->num_rates_per_prio + 1) * sizeof(struct mlx4_en_rate_limit_indexes), GFP_KERNEL);
 			for (i = 0; i < MLX4_NUM_PRIORITIES; i++) {
 				if (mdev->lst_of_prios & (1 << i)) {
 					all_num_rates.RPP_per_prio[i] = priv->num_rates_per_prio;
@@ -2384,6 +2398,215 @@ static int mlx4_en_set_tx_ring_size(SYSCTL_HANDLER_ARGS)
 
         return (error);
 }
+#ifdef CONFIG_RATELIMIT
+#define RATE		0x0
+#define	BURST_SIZE	0x1
+
+/* Always call this function with a rate_limit_table_lock */
+static int mlx4_en_rl_locked_set(struct mlx4_en_priv *priv, u8 index,
+				u32 rate, u8 burst_size, int flag)
+{
+	int err = 0;
+	int i;
+	struct mlx4_qp_rl_index qp_rl_index;
+	u32 old_rate = priv->rate_limits[index].rate;
+	u8 old_burst = priv->rate_limits[index].burst_size;
+
+	switch (flag) {
+	case RATE:
+		if (rate > priv->mdev->dev->caps.rl_caps.calc_max_val ||
+		    (rate < priv->mdev->dev->caps.rl_caps.calc_min_val &&
+		     rate != 0))
+			return EINVAL;
+		priv->rate_limits[index].rate = rate;
+		break;
+	case BURST_SIZE:
+		priv->rate_limits[index].burst_size = burst_size;
+		/* If rate was not determined yet, not writing to FW */
+		if (!priv->rate_limits[index].rate)
+			return err;
+		break;
+	default:
+		return EINVAL;
+	}
+
+	memset(&qp_rl_index, 0, sizeof(qp_rl_index));
+	for (i = 0; i < MLX4_NUM_PRIORITIES; i++) {
+		if (priv->mdev->lst_of_prios & (1 << i)) {
+			/* FW expects to receive rates in Kb/sec */
+			qp_rl_index.rates[i] = ((priv->rate_limits[index].rate) / 1000);
+			qp_rl_index.burst_size[i] = priv->rate_limits[index].burst_size;
+		}
+	}
+	err = mlx4_set_rates_and_burst_size(priv->mdev->dev, priv->port, index, &qp_rl_index);
+	if (err) {
+		priv->rate_limits[index].rate = old_rate;
+		priv->rate_limits[index].burst_size = old_burst;
+		en_err(priv, "Couldn't set hardware with new rate/burst size, for port %d\n", priv->port);
+	}
+	return err;
+}
+
+static int mlx4_en_set_burst_for_index(SYSCTL_HANDLER_ARGS)
+{
+	struct mlx4_en_priv *priv = arg1;
+	int error;
+	u8 index = arg2;
+	u8 burst_size = 0;
+	char burst_buf[15] = "burst_low";
+
+	mutex_lock(&priv->rate_limit_table_lock);
+
+	if (priv->rate_limits[index].burst_size)
+		strlcpy(burst_buf, "burst_high", sizeof(burst_buf));
+	error = sysctl_handle_string(oidp, burst_buf, sizeof(burst_buf), req);
+	if (error != 0 || req->newptr == NULL) {
+		mutex_unlock(&priv->rate_limit_table_lock);
+		return (error);
+	}
+	if (strcmp(burst_buf, "burst_high") == 0)
+		burst_size = 1;
+	else if (strcmp(burst_buf, "burst_low") == 0)
+		burst_size = 0;
+	else {
+		mutex_unlock(&priv->rate_limit_table_lock);
+		en_err(priv, "Invalid value, value should be burst_high/burst_low\n");
+		return EINVAL;
+	}
+	if (burst_size != priv->rate_limits[index].burst_size)
+		error = mlx4_en_rl_locked_set(priv, index, 0, burst_size, BURST_SIZE);
+		if (error)
+			en_err(priv, "Couldn't set burst size %u, for port %d\n",burst_size, priv->port);
+
+	mutex_unlock(&priv->rate_limit_table_lock);
+	return error;
+}
+
+static int mlx4_en_set_rate_for_index(SYSCTL_HANDLER_ARGS)
+{
+	struct mlx4_en_priv *priv = arg1;
+	u8 index = arg2;
+	u32 rate;
+	int error;
+	u8 valid = 0;
+
+	mutex_lock(&priv->rate_limit_table_lock);
+	rate = priv->rate_limits[index].rate;
+	if (!rate) {
+		valid = 1;
+	}
+	error = sysctl_handle_int(oidp, &rate, 0, req);
+	if (error || !req->newptr) {
+		mutex_unlock(&priv->rate_limit_table_lock);
+		return error;
+	}
+	if (!valid) {
+		en_err(priv, "Rate for index %u already exists\n", index);
+		mutex_unlock(&priv->rate_limit_table_lock);
+		return error;
+	}
+	error = mlx4_en_rl_locked_set(priv, index, rate, 0, RATE);
+	if (error)
+		en_err(priv, "Couldn't set rate %u, at index %u for port %d\n",rate, index, priv->port);
+
+	mutex_unlock(&priv->rate_limit_table_lock);
+
+	return error;
+}
+
+/* This sysctl mib is not shown but only written to. that is why
+ * SYSCTL_IN is being used first - in order to read the user's data,
+ * and SYSCTL_OUT is at the end in order to show the user's update. */
+static int mlx4_en_set_rate_on_first_available_index(SYSCTL_HANDLER_ARGS)
+{
+	struct mlx4_en_priv *priv = arg1;
+	static u32 rate = 0;
+	int error = 0;
+	static int next_free_rl_index = 1;
+
+	mutex_lock(&priv->rate_limit_table_lock);
+
+	while (priv->rate_limits[next_free_rl_index].rate)
+		next_free_rl_index++;
+
+	if (req->newptr != NULL) {
+		SYSCTL_IN(req, &rate, sizeof(int));
+		if (next_free_rl_index > priv->num_rates_per_prio) {
+			en_err(priv, "No space left for new rates\n");
+			rate = 0;
+			mutex_unlock(&priv->rate_limit_table_lock);
+			return ENOSPC;
+		}
+		error = mlx4_en_rl_locked_set(priv, next_free_rl_index, rate, 0, RATE);
+		if (error) {
+			en_err(priv, "Couldn't set rate %u, for port %d\n",rate, priv->port);
+		}
+		else {
+			next_free_rl_index++;
+		}
+	}
+
+	SYSCTL_OUT(req, &rate, sizeof(int));
+	if (req->oldptr != NULL)
+		rate = 0;
+	mutex_unlock(&priv->rate_limit_table_lock);
+	return error;
+}
+
+static void add_commas(char *str, u32 rate)
+{
+	char buffer_old[30];
+	char buffer_tmp[30];
+	int i, len;
+	int j = 0;
+	int cnt = 0;
+
+	sprintf(buffer_old, "%u", rate);
+	len = strlen(buffer_old);
+	for (i=len-1; i>=0; i--){
+		cnt++;
+		j++;
+		if (((cnt%3)==0) && (i!=0)) {
+			strcpy(&buffer_tmp[j-1],&buffer_old[i]);
+			strcpy(&buffer_tmp[j], ",");
+			j++;
+		} else {
+			strcpy(&buffer_tmp[j-1], &buffer_old[i]);
+		}
+	}
+	buffer_tmp[j] = '\0';
+	len = strlen(buffer_tmp);
+	for (i=0; i<len; i++)
+		strcpy(&str[i],&buffer_tmp[(len-1)-i]);
+	str[len] = '\0';
+}
+
+static int mlx4_en_show_rate_table(SYSCTL_HANDLER_ARGS)
+{
+	struct mlx4_en_priv *priv = arg1;
+	struct sbuf sbuf;
+	int error, i;
+	char rate_buf[30];
+
+	error = sysctl_wire_old_buffer(req, 0);
+	if (error != 0)
+		return (error);
+
+	sbuf_new_for_sysctl(&sbuf, NULL, 128 * priv->num_rates_per_prio, req);
+	sbuf_printf(&sbuf,"\n\n	INDEX	CURRENTLY USED	BURST	RATE [bit/s]\n"
+			  "	----------------------------------------------------\n");
+	mutex_lock(&priv->rate_limit_table_lock);
+	for (i = 1; i <= priv->num_rates_per_prio; i++) {
+		add_commas((char *)&rate_buf, priv->rate_limits[i].rate);
+		sbuf_printf(&sbuf,"	%3d	%d		%s	%s\n", i, priv->rate_limits[i].ref,
+			    (priv->rate_limits[i].burst_size ? "HIGH": "LOW"), rate_buf);
+	}
+	error = sbuf_finish(&sbuf);
+	sbuf_delete(&sbuf);
+	mutex_unlock(&priv->rate_limit_table_lock);
+	return (error);
+}
+#endif
 
 static int mlx4_en_get_module_info(struct net_device *dev,
                                    struct mlx4_eeprom_modinfo *modinfo)
@@ -2621,7 +2844,11 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         struct sysctl_oid *coal;
         struct sysctl_oid_list *coal_list;
 	const char *pnameunit;
-
+#ifdef CONFIG_RATELIMIT
+	u8 i;
+	char rate_index_name[30];
+	char rate_index_desc[40];
+#endif
         dev = priv->dev;
         ctx = &priv->conf_ctx;
 	pnameunit = device_get_nameunit(priv->mdev->pdev->dev.bsddev);
@@ -2660,7 +2887,31 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "device_name",
 	    CTLFLAG_RD, __DECONST(void *, pnameunit), 0,
 	    "PCI device name");
-
+#ifdef CONFIG_RATELIMIT
+	if (priv->mdev->dev->caps.rl_caps.enable) {
+		SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "num_rates",
+				CTLFLAG_RD, &priv->num_rates_per_prio, 0,
+				"number of rates supported");
+		for (i = 1; i <= priv->num_rates_per_prio; i++) {
+			sprintf(rate_index_name, "rate_limit_%d", i);
+			sprintf(rate_index_desc, "set the rate for index %d", i);
+			SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, rate_index_name,
+					CTLTYPE_UINT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, i,
+					mlx4_en_set_rate_for_index, "I", rate_index_desc);
+			sprintf(rate_index_name, "burst_size_%d", i);
+			sprintf(rate_index_desc, "set the burst_size for index %d", i);
+			SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, rate_index_name,
+					CTLTYPE_STRING | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, i,
+					mlx4_en_set_burst_for_index, "A", rate_index_desc);
+		}
+		SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "add_rate",
+				CTLTYPE_UINT | CTLFLAG_WR | CTLFLAG_MPSAFE | CTLFLAG_SKIP, priv, 0,
+				mlx4_en_set_rate_on_first_available_index, "I", "add rate to an available index");
+		SYSCTL_ADD_OID(ctx, node_list, OID_AUTO, "rate_limit_show",
+			       CTLTYPE_STRING | CTLFLAG_RD, priv, 0, mlx4_en_show_rate_table,
+			       "A", "presentation of rate table");
+	}
+#endif
         /* Add coalescer configuration. */
         coal = SYSCTL_ADD_NODE(ctx, node_list, OID_AUTO,
             "coalesce", CTLFLAG_RD, NULL, "Interrupt coalesce configuration");

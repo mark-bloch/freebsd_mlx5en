@@ -2686,6 +2686,55 @@ int mlx4_allocate_num_of_rates(struct mlx4_dev *dev, u8 port,
 	mlx4_free_cmd_mailbox(dev, mailbox_in);
 	return err;
 }
+
+int mlx4_set_rates_and_burst_size(struct mlx4_dev *dev, u8 port, u8 index,
+				  struct mlx4_qp_rl_index *qp_rl_index)
+{
+	struct mlx4_cmd_mailbox *mailbox_in = NULL;
+	/* initialize struct mlx4_hw_num_of_rates because prios 8-15 are not is use for now */
+	struct mlx4_hw_qp_rl_index *hw_qp_rl_index = {0};
+	int err = 0;
+	u64 mailbox_in_dma = 0;
+	u32 inmod = port | (index << 8);
+
+	mailbox_in = mlx4_alloc_cmd_mailbox(dev);
+	if (IS_ERR(mailbox_in))
+		return -ENOMEM;
+	mailbox_in_dma = mailbox_in->dma;
+	hw_qp_rl_index = (struct mlx4_hw_qp_rl_index *) mailbox_in->buf;
+
+	hw_qp_rl_index->rate_prio_0 = cpu_to_be32(qp_rl_index->rates[0]);
+	hw_qp_rl_index->burst_size_prio_0 |= (qp_rl_index->burst_size[0] & 1);
+
+	hw_qp_rl_index->rate_prio_1 = cpu_to_be32(qp_rl_index->rates[1]);
+	hw_qp_rl_index->burst_size_prio_1 |= (qp_rl_index->burst_size[1] & 1);
+
+	hw_qp_rl_index->rate_prio_2 = cpu_to_be32(qp_rl_index->rates[2]);
+	hw_qp_rl_index->burst_size_prio_2 |= (qp_rl_index->burst_size[2] & 1);
+
+	hw_qp_rl_index->rate_prio_3 = cpu_to_be32(qp_rl_index->rates[3]);
+	hw_qp_rl_index->burst_size_prio_3 |= (qp_rl_index->burst_size[3] & 1);
+
+	hw_qp_rl_index->rate_prio_4 = cpu_to_be32(qp_rl_index->rates[4]);
+	hw_qp_rl_index->burst_size_prio_4 |= (qp_rl_index->burst_size[4] & 1);
+
+	hw_qp_rl_index->rate_prio_5 = cpu_to_be32(qp_rl_index->rates[5]);
+	hw_qp_rl_index->burst_size_prio_5 |= (qp_rl_index->burst_size[5] & 1);
+
+	hw_qp_rl_index->rate_prio_6 = cpu_to_be32(qp_rl_index->rates[6]);
+	hw_qp_rl_index->burst_size_prio_6 |= (qp_rl_index->burst_size[6] & 1);
+
+	hw_qp_rl_index->rate_prio_7 = cpu_to_be32(qp_rl_index->rates[7]);
+	hw_qp_rl_index->burst_size_prio_7 |= (qp_rl_index->burst_size[7] & 1);
+
+	err = mlx4_cmd(dev, mailbox_in_dma, inmod,
+		       MLX4_ALLOCATE_RL_PROPERTIES,
+		       MLX4_CMD_QP_RL_INDEX,
+		       MLX4_CMD_TIME_CLASS_C,
+		       MLX4_CMD_NATIVE);
+	mlx4_free_cmd_mailbox(dev, mailbox_in);
+	return err;
+}
 #endif
 
 int __mlx4_clear_if_stat(struct mlx4_dev *dev,

@@ -161,6 +161,7 @@ enum {
 
 #ifdef CONFIG_RATELIMIT
 	MLX4_CMD_QP_RLPP	= 0x83,
+	MLX4_CMD_QP_RL_INDEX	= 0x84,
 #endif
 };
 

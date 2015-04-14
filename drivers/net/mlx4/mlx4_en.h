@@ -287,7 +287,6 @@ struct mlx4_en_tx_desc {
 #ifdef CONFIG_RATELIMIT
 struct mlx4_en_rl_data {
 	bool user_valid;
-	uint32_t rate_limit_val;
 	u8 rate_index;
 };
 #endif
@@ -575,6 +574,12 @@ struct mlx4_en_rl_task_list_element {
 	enum mlx4_en_rl_operation			operation;
 	u8						rate_index;
 };
+
+struct mlx4_en_rate_limit_indexes {
+	u32	rate;
+	u_int	ref;
+	u8	burst_size;
+};
 #endif
 
 struct mlx4_en_priv {
@@ -700,6 +705,8 @@ struct mlx4_en_priv {
 	struct 		task rl_task;
 	struct 		taskqueue *rl_tq;
 	int		num_rates_per_prio;
+	struct mlx4_en_rate_limit_indexes	*rate_limits;
+	struct mutex rate_limit_table_lock;
 #endif
 };
 

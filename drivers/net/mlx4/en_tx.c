@@ -89,7 +89,7 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->size_mask = size - 1;
 	ring->stride = stride;
 #ifdef CONFIG_RATELIMIT
-	ring->rl_data.rate_limit_val = 0;
+	ring->rl_data.rate_index = 0;
 	/* User_valid should be false in a rate_limit ring until the
 	 * creation process of the ring is done, after the activation. */
 	if (queue_idx < priv->native_tx_ring_num)
@@ -251,7 +251,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 				ring->cqn, user_prio, &ring->context);
 
 #ifdef CONFIG_RATELIMIT
-	if (ring->rl_data.rate_limit_val) {
+	if (ring->rl_data.rate_index) {
                 ring->context.rate_limit_index = ring->rl_data.rate_index;
         }
 #endif
@@ -290,7 +290,7 @@ static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
 static int mlx4_en_validate_rate_ctl_req(struct mlx4_en_priv *priv,
 					 struct ifreq_hwtxring *rl_req, u8 *rate_index)
 {
-//	int i;
+	int i;
 	u32 rate;
 
 	/* Kernel passes rate in bytes and the driver converts it to bits in order
@@ -300,20 +300,21 @@ static int mlx4_en_validate_rate_ctl_req(struct mlx4_en_priv *priv,
 
 	if (rate > priv->mdev->dev->caps.rl_caps.calc_max_val ||
 	    (rate < priv->mdev->dev->caps.rl_caps.calc_min_val &&
-	     rate != 0))
+	     rate != 0)) {
+		en_err(priv, "Not valid rate limit : %u Bps %d\n",rate / BITS_PER_BYTE, priv->port);
 		return (EINVAL);
+	}
 
-//TODO After pushing the commit handeling the rate limits table, need to uncomment!
-/*
-	for (i = 0; i < priv->num_rates_per_prio; i++)
+	/* Searching for the requested rate in the rate table */
+	for (i = 0; i < priv->num_rates_per_prio; i++) {
 		if (priv->rate_limits[i].rate == rate) {
 			*rate_index = i;
 			return (0);
 		}
-*/
-	*rate_index = 0;
-//	return (EINVAL);
-	return (0);
+	}
+
+	en_err(priv, "Not existing rate limit %u Bps %d\n",rate / BITS_PER_BYTE, priv->port);
+	return (EINVAL);
 }
 
 void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id)
@@ -341,7 +342,6 @@ static int mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 
 	/* Saving recieved data from kernel in order to use it later in
 	 * the defer function */
-	rl_item->hw_ring_req.txringid_max_rate = rl_req->txringid_max_rate;
 	rl_item->hw_ring_req.txringid = rl_req->txringid;
 	rl_item->rate_index = rate_index;
 	rl_item->operation = opp;
@@ -363,11 +363,8 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 	en_warn(priv, "No support examination - Need to be added\n");
 
 	/* Validate rate limit request */
-	err = mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index);
-	if (err) {
-		en_err(priv, "Illegal Rate limit value %u KBps\n", priv->rate_limits[rate_index].rate / BITS_PER_BYTE);
-		return (err);
-	}
+	if(mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index))
+		return (EINVAL);
 
 	/* Find available ring index */
 	spin_lock(&priv->tx_ring_index_lock);
@@ -396,11 +393,8 @@ int mlx4_en_modify_rate_limit_ring(struct mlx4_en_priv *priv,
 	int	err = 0;
 
 	/* Validate rate limit request */
-	err = mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index);
-	if (err) {
-		en_err(priv, "Illegal Rate limit value %u KBps\n", priv->rate_limits[rate_index].rate / BITS_PER_BYTE);
+	if(mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index))
 		return (err);
-	}
 
 	/* Validation for ring index occurs at the deffered function
 	 * in order to prevent failure when creation was not completed
@@ -479,7 +473,6 @@ static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
 
 activate:
 
-        tx_ring->rl_data.rate_limit_val = rl_req->txringid_max_rate;
 	tx_ring->rl_data.rate_index = rate_index;
 
         /* Default moderation */
@@ -550,7 +543,6 @@ err_create_cq:
 static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
                                     uint32_t ring_id)
 {
-	struct mlx4_en_reuse_index_list_element *reused_item;
 	struct mlx4_en_tx_ring *ring;
 	struct mlx4_en_dev *mdev = priv->mdev;
 
@@ -605,7 +597,6 @@ void mlx4_en_async_rl_operation(void *context, int pending)
         /* Check for availble operation in the operation list
 	 * Locking is not necessary since only one thread handles this list */
         if ((rl_item = STAILQ_FIRST(&priv->rl_op_list_head))) {
-		rl_req.txringid_max_rate = rl_item->hw_ring_req.txringid_max_rate;
 		rl_req.txringid = rl_item->hw_ring_req.txringid;
 		rl_operation = rl_item->operation;
 		rate_index = rl_item->rate_index;

@@ -1311,6 +1311,64 @@ struct mlx4_num_of_rates {
 	u16	available_RPP;
 	u8	RPP_per_prio[MLX4_NUM_PRIOS_TOTAL];
 };
+
+struct mlx4_hw_qp_rl_index {
+	__be32	reserved1;
+	__be32	rate_prio_0;
+	u8	reserved2[3];
+	u8	burst_size_prio_0;
+	__be32	rate_prio_1;
+	u8	reserved3[3];
+	u8	burst_size_prio_1;
+	__be32	rate_prio_2;
+	u8	reserved4[3];
+	u8	burst_size_prio_2;
+	__be32	rate_prio_3;
+	u8	reserved5[3];
+	u8	burst_size_prio_3;
+	__be32	rate_prio_4;
+	u8	reserved6[3];
+	u8	burst_size_prio_4;
+	__be32	rate_prio_5;
+	u8	reserved7[3];
+	u8	burst_size_prio_5;
+	__be32	rate_prio_6;
+	u8	reserved8[3];
+	u8	burst_size_prio_6;
+	__be32	rate_prio_7;
+	u8	reserved9[3];
+	u8	burst_size_prio_7;
+	/* For IB Prios */
+	__be32  rate_prio_8;
+	u8	reserved10[3];
+	u8	burst_size_prio_8;
+	__be32  rate_prio_9;
+	u8	reserved11[3];
+	u8	burst_size_prio_9;
+	__be32  rate_prio_10;
+	u8	reserved12[3];
+	u8	burst_size_prio_10;
+	__be32  rate_prio_11;
+	u8	reserved13[3];
+	u8	burst_size_prio_11;
+	__be32  rate_prio_12;
+	u8	reserved14[3];
+	u8	burst_size_prio_12;
+	__be32  rate_prio_13;
+	u8	reserved15[3];
+	u8	burst_size_prio_13;
+	__be32  rate_prio_14;
+	u8	reserved16[3];
+	u8	burst_size_prio_14;
+	__be32  rate_prio_15;
+	u8	reserved17[3];
+	u8	burst_size_prio_15;
+};
+
+struct mlx4_qp_rl_index {
+	u32	rates[MLX4_NUM_PRIOS_TOTAL];
+	u8	burst_size[MLX4_NUM_PRIOS_TOTAL];
+};
 #endif
 
 int mlx4_flow_steer_promisc_add(struct mlx4_dev *dev, u8 port, u32 qpn,
@@ -1356,6 +1414,8 @@ int mlx4_query_num_of_rates(struct mlx4_dev *dev, u8 port,
 			    struct mlx4_num_of_rates *all_num_rates);
 int mlx4_allocate_num_of_rates(struct mlx4_dev *dev, u8 port,
 			       struct mlx4_num_of_rates *all_num_rates);
+int mlx4_set_rates_and_burst_size(struct mlx4_dev *dev, u8 port, u8 index,
+				  struct mlx4_qp_rl_index *qp_rl_index);
 u8 mlx4_parse_prios_for_rl(char *str, u8 *lst_of_prios, int max_num_prios);
 #endif
 

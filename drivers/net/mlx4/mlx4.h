@@ -818,6 +818,11 @@ enum mlx4_qp_rlpp_opmod {
 	MLX4_ALLOCATE_RLPP_FOR_PORT,
 	MLX4_QUERY_RLPP_FOR_PORT,
 };
+
+enum mlx4_rl_index_opmod {
+	MLX4_ALLOCATE_RL_PROPERTIES,
+	MLX4_QUERY_RL_PROPERTIES,
+};
 #endif
 
 enum {
