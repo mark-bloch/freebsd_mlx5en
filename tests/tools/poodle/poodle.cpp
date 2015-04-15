@@ -195,17 +195,16 @@ void connection_group_thread_c::main_loop()
 		sent_this_second = 0;
 		if ( TIME_TO_MODIFY ) {
 			modify_interval_start = time(NULL);
-			int new_pace = pace_modify_data::instance()->get_next_pace();
-			if ( is_PP_throttle ) {
+			unsigned int new_pace = pace_modify_data::instance()->get_next_pace();
+			for (int i = 0; i < m_load; i++) {
+				if ( is_PP_throttle ) {
 #ifdef USE_PP
-				struct so_rate_ctl rate;
-				rate.flags = 0;
-				rate.max_pacing_rate = new_pace;
-				setsockopt(socket,SOL_SOCKET, SO_MAX_PACING_RATE, &rate, sizeof(rate));
+					setsockopt(conns[i].socket, SOL_SOCKET,
+						   SO_MAX_PACING_RATE,
+						   &new_pace, sizeof(new_pace));
 #endif
-			}
-			else {
-				for ( int i = 0; i < m_load; i++ ){
+				}
+				else {
 					conns[i].m_byte_to_send_per_second = new_pace;
 				}
 			}
@@ -359,10 +358,9 @@ int one_connection_c::connect()
 #ifdef USE_PP
 	// packet pacing
 	if ( is_PP_throttle ) {
-		struct so_rate_ctl rate;
-		rate.flags = 0;
-		rate.max_pacing_rate = m_byte_to_send_per_second;
-		setsockopt(socket,SOL_SOCKET, SO_MAX_PACING_RATE, &rate, sizeof(rate));
+		setsockopt(socket, SOL_SOCKET, SO_MAX_PACING_RATE,
+                                &m_byte_to_send_per_second,
+                                sizeof(m_byte_to_send_per_second));
 	}
 
 #endif

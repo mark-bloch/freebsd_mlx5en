@@ -1,0 +1,27 @@
+You will need a kernel with PP changes installed
+
+How to compile:
+
+Run this command:
+
+CPPFLAGS="-I/path_to_sys_dir_in_kernel_with_pp_patch" make all
+CPPFLAGS="-I/path_to_sys_dir_in_kernel_with_pp_patch" make install
+
+Exmaple:
+
+CPPFLAGS="-I/home/momo/local/kernel/freebsd-10-stable/sys" make all
+CPPFLAGS="-I/home/momo/local/kernel/freebsd-10-stable/sys" make install
+
+
+How to run :
+server: iperf -s
+
+client: iperf -c $SERVER_IP -H 2015
+
+this will create one socket with rate limit=2015Bytes per second.
+
+
+Client: iperf -c $SERVER_IP -H 2015 -P 200
+
+
+this will create 200 sockets with rate limit=2015Bytes per second.

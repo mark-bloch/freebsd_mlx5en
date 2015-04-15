@@ -1,0 +1,81 @@
+diff --git include/Settings.hpp include/Settings.hpp
+index 31de506..367e76b 100644
+--- include/Settings.hpp
++++ include/Settings.hpp
+@@ -125,6 +125,7 @@ typedef struct thread_Settings {
+     int mBufLen;                    // -l
+     int mMSS;                       // -M
+     int mTCPWin;                    // -w
++    unsigned int mOutRate;	    // -H
+     /*   flags is a BitMask of old bools
+         bool   mBufLenSet;              // -l
+         bool   mCompat;                 // -C
+diff --git src/Locale.c src/Locale.c
+index b5d42b1..eb75f5e 100644
+--- src/Locale.c
++++ src/Locale.c
+@@ -82,6 +82,7 @@ Client/Server:\n\
+   -m, --print_mss          print TCP maximum segment size (MTU - TCP/IP header)\n\
+   -o, --output    <filename> output the report or error message to this specified file\n\
+   -p, --port      #        server port to listen on/connect to\n\
++  -H, --hwtxring  #	   Hardware pacing rate\n\
+   -u, --udp                use UDP rather than TCP\n\
+   -w, --window    #[KM]    TCP window size (socket buffer size)\n\
+   -B, --bind      <host>   bind to <host>, an interface or multicast address\n\
+diff --git src/PerfSocket.cpp src/PerfSocket.cpp
+index 3ecdbe0..88cbca7 100644
+--- src/PerfSocket.cpp
++++ src/PerfSocket.cpp
+@@ -73,7 +73,7 @@
+ #define HEADERS()
+ 
+ #include "headers.h"
+-
++#include <sys/socketvar.h>
+ #include "PerfSocket.hpp"
+ #include "SocketAddr.h"
+ #include "util.h"
+@@ -90,6 +90,11 @@ void SetSocketOptions( thread_Settings *inSettings ) {
+     setsock_tcp_windowsize( inSettings->mSock, inSettings->mTCPWin,
+                             (inSettings->mThreadMode == kMode_Client ? 1 : 0) );
+ 
++    if (inSettings->mThreadMode == kMode_Client) {
++	setsockopt(inSettings->mSock, SOL_SOCKET, SO_MAX_PACING_RATE,
++		   &inSettings->mOutRate, sizeof(inSettings->mOutRate));
++    }
++
+     if ( isCongestionControl( inSettings ) ) {
+ #ifdef TCP_CONGESTION
+ 	Socklen_t len = strlen( inSettings->mCongestion ) + 1;
+diff --git src/Settings.cpp src/Settings.cpp
+index 6a5f092..406cf5d 100644
+--- src/Settings.cpp
++++ src/Settings.cpp
+@@ -101,6 +101,7 @@ const struct option long_options[] =
+ {"udp",              no_argument, NULL, 'u'},
+ {"version",          no_argument, NULL, 'v'},
+ {"window",     required_argument, NULL, 'w'},
++{"hwtxring",   required_argument, NULL, 'H'},
+ {"reportexclude", required_argument, NULL, 'x'},
+ {"reportstyle",required_argument, NULL, 'y'},
+ 
+@@ -169,7 +170,7 @@ const struct option env_options[] =
+ 
+ #define SHORT_OPTIONS()
+ 
+-const char short_options[] = "1b:c:df:hi:l:mn:o:p:rst:uvw:x:y:B:CDF:IL:M:NP:RS:T:UVWZ:";
++const char short_options[] = "1b:c:df:H:hi:l:mn:o:p:rst:uvw:x:y:B:CDF:IL:M:NP:RS:T:UVWZ:";
+ 
+ /* -------------------------------------------------------------------
+  * defaults
+@@ -380,6 +381,10 @@ void Settings_Interpret( char option, const char *optarg, thread_Settings *mExtS
+             exit(1);
+             break;
+ 
++	case 'H':
++	    mExtSettings->mOutRate = atoi(optarg);
++	    break;
++
+         case 'i': // specify interval between periodic bw reports
+             mExtSettings->mInterval = atof( optarg );
+             if ( mExtSettings->mInterval < 0.5 ) {
