@@ -288,6 +288,7 @@ struct mlx4_en_tx_desc {
 struct mlx4_en_rl_data {
 	bool user_valid;
 	uint32_t rate_limit_val;
+	u8 rate_index;
 };
 #endif
 
@@ -572,6 +573,7 @@ struct mlx4_en_rl_task_list_element {
 	STAILQ_ENTRY(mlx4_en_rl_task_list_element)	entry;
 	struct ifreq_hwtxring				hw_ring_req;
 	enum mlx4_en_rl_operation			operation;
+	u8						rate_index;
 };
 #endif
 
@@ -623,9 +625,6 @@ struct mlx4_en_priv {
 	__be32 ctrl_flags;
 	u32 flags;
 	u8 num_tx_rings_p_up;
-#ifdef CONFIG_RATELIMIT
-	u32 native_tx_ring_num;
-#endif
 	u32 tx_ring_num;
 	u32 rx_ring_num;
 #ifdef CONFIG_RATELIMIT
@@ -863,10 +862,12 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring);
 #ifdef CONFIG_RATELIMIT
-int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv, struct
-                                ifreq_hwtxring *rl_req);
-void mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv, struct
-				ifreq_hwtxring *rl_req);
+int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
+				   struct ifreq_hwtxring *rl_req);
+int mlx4_en_modify_rate_limit_ring(struct mlx4_en_priv *priv,
+				   struct ifreq_hwtxring *rl_req);
+int mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv,
+				     struct ifreq_hwtxring *rl_req);
 void mlx4_en_async_rl_operation(void *context, int index);
 void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id);
 #endif

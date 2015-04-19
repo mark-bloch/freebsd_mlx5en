@@ -2030,6 +2030,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		break;
 	case SIOCSRATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;
+		error = mlx4_en_modify_rate_limit_ring(priv, rl_req);
                 break;
         case SIOCDRATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;

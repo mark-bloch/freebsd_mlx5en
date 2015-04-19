@@ -41,6 +41,7 @@
 
 #ifdef CONFIG_RATELIMIT
 #include <linux/delay.h>
+#include <linux/bitops.h>
 #endif
 
 #include <netinet/in_systm.h>
@@ -251,8 +252,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 
 #ifdef CONFIG_RATELIMIT
 	if (ring->rl_data.rate_limit_val) {
-		/* TODO  Add to ring->context rate limit vals before qp_to_ready
-                ring->context.rate_limit_params = cpu_to_be16(((qp_rl.unit) << 14) | qp_rl.val);*/
+                ring->context.rate_limit_index = ring->rl_data.rate_index;
         }
 #endif
 
@@ -285,19 +285,35 @@ static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
 	return index;
 }
 
-static int mlx4_en_validate_rate_ctl_req(struct ifreq_hwtxring *rl_req)
+/* Check whether the requested rate is valid.
+ * If so, retrieve the relevant rate index. */
+static int mlx4_en_validate_rate_ctl_req(struct mlx4_en_priv *priv,
+					 struct ifreq_hwtxring *rl_req, u8 *rate_index)
 {
-	uint64_t rate;
+//	int i;
+	u32 rate;
 
-	/* TODO STUB - add content */
+	/* Kernel passes rate in bytes and the driver converts it to bits in order
+	 * to communicate with the hardware. */
+	rl_req->txringid_max_rate = rl_req->txringid_max_rate * BITS_PER_BYTE;
 	rate = rl_req->txringid_max_rate;
-	return (0);
-}
 
-static uint32_t calculate_rate_limit(struct ifreq_hwtxring *rl_req)
-{
-	/* TODO STUB - add content */
-	return rl_req->txringid_max_rate;
+	if (rate > priv->mdev->dev->caps.rl_caps.calc_max_val ||
+	    (rate < priv->mdev->dev->caps.rl_caps.calc_min_val &&
+	     rate != 0))
+		return (EINVAL);
+
+//TODO After pushing the commit handeling the rate limits table, need to uncomment!
+/*
+	for (i = 0; i < priv->num_rates_per_prio; i++)
+		if (priv->rate_limits[i].rate == rate) {
+			*rate_index = i;
+			return (0);
+		}
+*/
+	*rate_index = 0;
+//	return (EINVAL);
+	return (0);
 }
 
 void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id)
@@ -310,8 +326,9 @@ void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id)
         spin_unlock(&priv->tx_ring_index_lock);
 }
 
-static void mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
+static int mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 				struct ifreq_hwtxring *rl_req,
+				u8 rate_index,
 				enum mlx4_en_rl_operation opp)
 {
 	struct mlx4_en_rl_task_list_element     *rl_item;
@@ -319,16 +336,19 @@ static void mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 	rl_item = kmalloc(sizeof(struct mlx4_en_rl_task_list_element), GFP_KERNEL);
 	if (!rl_item) {
 		en_err(priv, "Failed allocating rl_item\n");
-		return;
+		return (ENOMEM);
 	}
-	if (opp != MLX4_EN_RL_DEL)
-		rl_item->hw_ring_req.txringid_max_rate = calculate_rate_limit(rl_req);
+
+	/* Saving recieved data from kernel in order to use it later in
+	 * the defer function */
+	rl_item->hw_ring_req.txringid_max_rate = rl_req->txringid_max_rate;
 	rl_item->hw_ring_req.txringid = rl_req->txringid;
+	rl_item->rate_index = rate_index;
 	rl_item->operation = opp;
 
 	STAILQ_INSERT_TAIL(&priv->rl_op_list_head, rl_item, entry);
 	taskqueue_enqueue(priv->rl_tq, &priv->rl_task);
-	return;
+	return (0);
 }
 
 int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
@@ -336,15 +356,16 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 {
 	int	err = 0;
 	int	index = 0;
+	u8	rate_index;
 
 	/* Check for HW/FW support */
-	/* TODO add check for support here */
+	/* TODO add dev_caps check for support here */
 	en_warn(priv, "No support examination - Need to be added\n");
 
 	/* Validate rate limit request */
-	err = mlx4_en_validate_rate_ctl_req(rl_req);
+	err = mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index);
 	if (err) {
-		en_err(priv, "Illegal Rate limit value\n");
+		en_err(priv, "Illegal Rate limit value %u KBps\n", priv->rate_limits[rate_index].rate / BITS_PER_BYTE);
 		return (err);
 	}
 
@@ -363,13 +384,59 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 	rl_req->txringid = index;
 
 	/* Defer ring creation */
-	mlx4_en_defer_rl_op(priv, rl_req, MLX4_EN_RL_ADD);
+	err = mlx4_en_defer_rl_op(priv, rl_req, rate_index, MLX4_EN_RL_ADD);
 
-	return (0);
+	return err;
+}
+
+int mlx4_en_modify_rate_limit_ring(struct mlx4_en_priv *priv,
+				   struct ifreq_hwtxring *rl_req)
+{
+	u8	rate_index;
+	int	err = 0;
+
+	/* Validate rate limit request */
+	err = mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index);
+	if (err) {
+		en_err(priv, "Illegal Rate limit value %u KBps\n", priv->rate_limits[rate_index].rate / BITS_PER_BYTE);
+		return (err);
+	}
+
+	/* Validation for ring index occurs at the deffered function
+	 * in order to prevent failure when creation was not completed
+	 * yet (defered actions are executed by one thread) */
+
+	/* Defer ring modification */
+	err = mlx4_en_defer_rl_op(priv, rl_req, rate_index, MLX4_EN_RL_MOD);
+
+	return (err);
+}
+
+int mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv,
+				   struct ifreq_hwtxring *rl_req)
+{
+	uint32_t ring_id;
+	int err = 0;
+
+	ring_id = rl_req->txringid;
+
+	/* Check that this is indeed a rate limit ring */
+	if (ring_id < priv->native_tx_ring_num || ring_id >= priv->tx_ring_num) {
+                en_err(priv, "Deleting ring %d: Permision denied: Not a rate limit ring\n", ring_id);
+                return (EINVAL);
+        }
+
+	/* Defer ring destruction */
+	/* There is no handling with new rate index when destroying a ring
+	 * therefor, sending zero as a rate index. */
+	err = mlx4_en_defer_rl_op(priv, rl_req, 0, MLX4_EN_RL_DEL);
+
+	return err;
 }
 
 static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
-					struct ifreq_hwtxring *rl_req)
+				  struct ifreq_hwtxring *rl_req,
+				  u8 rate_index)
 {
 	struct mlx4_en_cq 	*cq;
 	struct mlx4_en_tx_ring 	*tx_ring;
@@ -413,6 +480,7 @@ static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
 activate:
 
         tx_ring->rl_data.rate_limit_val = rl_req->txringid_max_rate;
+	tx_ring->rl_data.rate_index = rate_index;
 
         /* Default moderation */
         cq = priv->tx_cq[rl_req->txringid];
@@ -479,7 +547,7 @@ err_create_cq:
 	mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
 }
 
-static void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
+static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
                                     uint32_t ring_id)
 {
 	struct mlx4_en_reuse_index_list_element *reused_item;
@@ -530,6 +598,7 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 	struct mlx4_en_rl_task_list_element	*rl_item;
 	struct ifreq_hwtxring			rl_req;
 	enum mlx4_en_rl_operation		rl_operation;
+	u8					rate_index;
 
         priv = context;
 
@@ -539,6 +608,7 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 		rl_req.txringid_max_rate = rl_item->hw_ring_req.txringid_max_rate;
 		rl_req.txringid = rl_item->hw_ring_req.txringid;
 		rl_operation = rl_item->operation;
+		rate_index = rl_item->rate_index;
                 STAILQ_REMOVE_HEAD(&priv->rl_op_list_head, entry);
 		kfree(rl_item);
         }
@@ -549,10 +619,10 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 
 	switch (rl_operation){
 		case MLX4_EN_RL_ADD:
-			mlx4_en_create_rl_res(priv, &rl_req);
+			mlx4_en_create_rl_res(priv, &rl_req, rate_index);
 			break;
 		case MLX4_EN_RL_DEL:
-			mlx4_en_destroy_rate_limit_tx_res(priv, rl_req.txringid);
+			mlx4_en_destroy_rl_res(priv, rl_req.txringid);
 			break;
 		case MLX4_EN_RL_MOD:
 			pr_err("Not supported operation - MOD\n");
@@ -560,23 +630,6 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 		default:
 			pr_err("Not supported operation - %d \n", rl_operation);
 	}
-}
-
-void mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv,
-				   struct ifreq_hwtxring *rl_req)
-{
-	uint32_t ring_id;
-
-	ring_id = rl_req->txringid;
-
-	/* Check that this is indeed a rate limit ring */
-	if (ring_id < priv->native_tx_ring_num || ring_id >= priv->tx_ring_num) {
-                en_err(priv, "Deleting ring %d: Permision denied: Not a rate limit ring\n", ring_id);
-                return;
-        }
-
-	/* Defer ring destruction */
-	mlx4_en_defer_rl_op(priv, rl_req, MLX4_EN_RL_DEL);
 }
 #endif
 
