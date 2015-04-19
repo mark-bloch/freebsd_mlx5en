@@ -1250,7 +1250,10 @@ mlx4_en_tx_que(void *context, int pending)
 		mlx4_en_xmit_poll(priv, tx_ind);
 		spin_lock(&ring->tx_lock);
                 if (!drbr_empty(dev, ring->br))
-			mlx4_en_transmit_locked(dev, tx_ind, NULL);
+#ifdef CONFIG_RATELIMIT
+			if (ring->rl_data.user_valid)
+#endif
+				mlx4_en_transmit_locked(dev, tx_ind, NULL);
 		spin_unlock(&ring->tx_lock);
 	}
 }
@@ -1263,16 +1266,38 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	struct mlx4_en_cq *cq;
 	int i = 0, err = 0;
 
-	/* Which queue to use */
+#ifdef CONFIG_RATELIMIT
+	/*Check mbuf if this is a rate limit packet*/
+	if (M_HASHTYPE_TEST(m, M_HASHTYPE_HWTXRING)) {
+		/*make sure the ring is allocated*/
+		if ( priv->tx_ring[m->m_pkthdr.flowid] )
+			i = m->m_pkthdr.flowid;
+		else
+			i = mlx4_en_select_queue(dev, m);
+	}
+	else
+#endif
 	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
 		i = m->m_pkthdr.flowid % (priv->tx_ring_num - 1);
 	}
 	else {
 		i = mlx4_en_select_queue(dev, m);
 	}
-	ring = priv->tx_ring[i];
 
+#ifdef CONFIG_RATELIMIT
+lock_and_transmit:
+#endif
+	ring = priv->tx_ring[i];
 	if (spin_trylock(&ring->tx_lock)) {
+#ifdef CONFIG_RATELIMIT
+		if (ring->rl_data.user_valid == false) {
+			/* Rate limit ring is not active */
+			spin_unlock(&ring->tx_lock);
+			i = mlx4_en_select_queue(dev, m);
+			goto lock_and_transmit;
+
+		}
+#endif
 		err = mlx4_en_transmit_locked(dev, i, m);
 		spin_unlock(&ring->tx_lock);
 		/* Poll CQ here */
