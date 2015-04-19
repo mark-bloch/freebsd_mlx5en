@@ -183,7 +183,7 @@ void connection_group_thread_c::main_loop()
 
 #define TIME_TO_CLOSE(i) (now > conns[i].m_created+m_conn_active_time)
 #define SECOND_NOT_OVER (Time()-second_start)<1000000
-#define TIME_TO_MODIFY (now - modify_interval_start) > pace_modify_data::instance()->get_modify_interval_in_secs()
+#define TIME_TO_MODIFY (g_modify_pace && (now - modify_interval_start) > pace_modify_data::instance()->get_modify_interval_in_secs())
 	while (should_run) {
 		rounds = 0;
 		second_start = Time();
