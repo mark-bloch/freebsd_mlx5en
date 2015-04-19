@@ -160,6 +160,8 @@ enum {
 #define MLX4_EN_NUM_UP			1
 
 #ifdef CONFIG_RATELIMIT
+#define MLX4_EN_DEF_RL_TX_RING_SIZE     128
+#define MLX4_EN_DEF_RL_USER_PRIO        0
 #define MLX4_EN_DEF_MAX_RL_TX_RINGS     45000
 #else
 #define MLX4_EN_DEF_MAX_RL_TX_RINGS     0
@@ -626,6 +628,10 @@ struct mlx4_en_priv {
 #endif
 	u32 tx_ring_num;
 	u32 rx_ring_num;
+#ifdef CONFIG_RATELIMIT
+	u32 native_tx_ring_num;
+	u32 rate_limit_tx_ring_num;
+#endif
 	u32 rx_mb_size;
         struct mlx4_en_frag_info frag_info[MLX4_EN_MAX_RX_FRAGS];
 	u16 rx_alloc_order;
@@ -687,9 +693,8 @@ struct mlx4_en_priv {
 	u64 if_counters_rx_errors;
 	u64 if_counters_rx_no_buffer;
 
-	/* Rate limit support */
 #ifdef CONFIG_RATELIMIT
-	struct mutex tx_ring_index_lock;
+	spinlock_t tx_ring_index_lock;
 	STAILQ_HEAD(, mlx4_en_reuse_index_list_element) reuse_index_list_head;
 	STAILQ_HEAD(, mlx4_en_rl_task_list_element) rl_op_list_head;
 	struct mlx4_en_reuse_index_list_element reuse_index_list_array [MAX_TX_RINGS];
@@ -863,6 +868,7 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv, struct
 void mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv, struct
 				ifreq_hwtxring *rl_req);
 void mlx4_en_async_rl_operation(void *context, int index);
+void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id);
 #endif
 void mlx4_en_qflush(struct ifnet *dev);
 
@@ -966,6 +972,11 @@ enum {
         NETIF_MSG_WOL           = 0x4000,
 };
 
+#ifdef CONFIG_RATELIMIT
+#define TX_RING_USER_VALID(ring_index)				\
+	(priv->tx_ring[ring_index] &&				\
+		priv->tx_ring[ring_index]->rl_data.user_valid)
+#endif
 
 /*
  * printk / logging functions

@@ -218,7 +218,14 @@ struct mlx4_qp_context {
 	u8			reserved4[2];
 	u8			mtt_base_addr_h;
 	__be32			mtt_base_addr_l;
-	u32			reserved5[10];
+#ifdef CONFIG_RATELIMIT
+	u32			reserved5[2];
+	u8			reserved6[3];
+	u8			rate_limit_index;
+	u32			reserved7[7];
+#else
+	u32                     reserved5[10];
+#endif
 };
 
 struct mlx4_update_qp_context {

@@ -89,7 +89,12 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->stride = stride;
 #ifdef CONFIG_RATELIMIT
 	ring->rl_data.rate_limit_val = 0;
-	ring->rl_data.user_valid = true;
+	/* User_valid should be false in a rate_limit ring until the
+	 * creation process of the ring is done, after the activation. */
+	if (queue_idx < priv->native_tx_ring_num)
+		ring->rl_data.user_valid = true;
+	else
+		ring->rl_data.user_valid = false;
 #endif
 	ring->full_size = ring->size - HEADROOM - MAX_DESC_TXBBS;
 	ring->inline_thold = min(inline_thold, MAX_INLINE);
@@ -219,8 +224,8 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 			     struct mlx4_en_tx_ring *ring,
 			     int cq, int user_prio)
 {
-	struct mlx4_en_dev *mdev = priv->mdev;
-	int err;
+	struct mlx4_en_dev	*mdev = priv->mdev;
+	int			err;
 
 	ring->cqn = cq;
 	ring->prod = 0;
@@ -234,8 +239,23 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 	ring->qp_state = MLX4_QP_STATE_RST;
 	ring->doorbell_qpn = ring->qp.qpn << 8;
 
+#ifdef CONFIG_RATELIMIT
+	if (ring->rl_data.rate_index) {
+                /* Force rate limit user priority */
+                user_prio = MLX4_EN_DEF_RL_USER_PRIO;
+        }
+#endif
+
 	mlx4_en_fill_qp_context(priv, ring->size, ring->stride, 1, 0, ring->qpn,
 				ring->cqn, user_prio, &ring->context);
+
+#ifdef CONFIG_RATELIMIT
+	if (ring->rl_data.rate_limit_val) {
+		/* TODO  Add to ring->context rate limit vals before qp_to_ready
+                ring->context.rate_limit_params = cpu_to_be16(((qp_rl.unit) << 14) | qp_rl.val);*/
+        }
+#endif
+
 	if (ring->bf_enabled)
 		ring->context.usr_page = cpu_to_be32(ring->bf.uar->index);
 
@@ -247,8 +267,8 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 #ifdef CONFIG_RATELIMIT
 static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
 {
-	int		index = -1;
-	struct		mlx4_en_reuse_index_list_element *reused_item;
+	int					index = -1;
+	struct mlx4_en_reuse_index_list_element	*reused_item;
 
 	/* Check for availble index in re-use list */
 	if ((reused_item = STAILQ_FIRST(&priv->reuse_index_list_head))) {
@@ -258,9 +278,9 @@ static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
 	}
 	else if (priv->tx_ring_num < MAX_TX_RINGS) {
 		index = priv->tx_ring_num;
-	} else { /* Reached max resources capacity */
+		priv->tx_ring_num++;
+	} else /* Reached max resources capacity */
 		index = -1;
-	}
 
 	return index;
 }
@@ -269,14 +289,25 @@ static int mlx4_en_validate_rate_ctl_req(struct ifreq_hwtxring *rl_req)
 {
 	uint64_t rate;
 
+	/* TODO STUB - add content */
 	rate = rl_req->txringid_max_rate;
-
 	return (0);
 }
 
 static uint32_t calculate_rate_limit(struct ifreq_hwtxring *rl_req)
 {
+	/* TODO STUB - add content */
 	return rl_req->txringid_max_rate;
+}
+
+void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id)
+{
+	struct mlx4_en_reuse_index_list_element *reused_item;
+
+        reused_item = priv->reuse_index_list_array + ring_id;
+        spin_lock(&priv->tx_ring_index_lock);
+        STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, reused_item, entry);
+        spin_unlock(&priv->tx_ring_index_lock);
 }
 
 static void mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
@@ -318,17 +349,16 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 	}
 
 	/* Find available ring index */
-	mutex_lock(&priv->tx_ring_index_lock);
+	spin_lock(&priv->tx_ring_index_lock);
 	index = mlx4_en_find_available_tx_ring_index(priv);
+
 	if (index < 0) {
 		en_err(priv, "Failed to create Rate limit resources, "
 					"Max capacity reached\n");
 		return (EINVAL);
 	}
-	/* TODO Uncomment and move to the right place after ring
-	 * creation would be added.
-	 * priv->tx_ring_num++;*/
-	mutex_unlock(&priv->tx_ring_index_lock);
+
+	spin_unlock(&priv->tx_ring_index_lock);
 
 	rl_req->txringid = index;
 
@@ -341,7 +371,112 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
 					struct ifreq_hwtxring *rl_req)
 {
-	/* TODO Add creation process here */
+	struct mlx4_en_cq 	*cq;
+	struct mlx4_en_tx_ring 	*tx_ring;
+	struct mlx4_en_dev	*mdev = priv->mdev;
+	int 			err = 0;
+	int			node = 0;
+	int			j;
+
+
+	if (priv->tx_ring[rl_req->txringid]) {
+                /* Ring already exists, needs activation */
+                /* Make sure drbr queue has no left overs from before */
+                tx_ring = priv->tx_ring[rl_req->txringid];
+                if (!drbr_empty(priv->dev, tx_ring->br)) {
+                        struct mbuf *m;
+                        spin_lock(&tx_ring->tx_lock);
+                        while ((m = buf_ring_dequeue_sc(tx_ring->br)) != NULL) {
+                                m_freem(m);
+                        }
+                        spin_unlock(&tx_ring->tx_lock);
+                }
+                goto activate;
+        }
+
+	err = mlx4_en_create_cq(priv, &priv->tx_cq[rl_req->txringid],
+                MLX4_EN_DEF_RL_TX_RING_SIZE, rl_req->txringid, TX, node);
+        if (err) {
+                en_err(priv, "Failed to create rate limit tx CQ, ring index %u\n", rl_req->txringid);
+                goto err_create_cq;
+        }
+
+        err = mlx4_en_create_tx_ring(priv, &priv->tx_ring[rl_req->txringid],
+                MLX4_EN_DEF_RL_TX_RING_SIZE, TXBB_SIZE, node, rl_req->txringid);
+        if (err) {
+                en_err(priv, "Failed to create rate limited tx ring %u\n", rl_req->txringid);
+                goto err_create_ring;
+        }
+
+	tx_ring = priv->tx_ring[rl_req->txringid];
+
+activate:
+
+        tx_ring->rl_data.rate_limit_val = rl_req->txringid_max_rate;
+
+        /* Default moderation */
+        cq = priv->tx_cq[rl_req->txringid];
+        cq->moder_cnt = priv->tx_frames;
+        cq->moder_time = priv->tx_usecs;
+
+        mutex_lock(&mdev->state_lock);
+        if (!priv->port_up) {
+                /* No need activating resources, start_port will take care of that */
+                mutex_unlock(&mdev->state_lock);
+		tx_ring->rl_data.user_valid = true;
+                return;
+        }
+
+        /* Activate resources */
+        err = mlx4_en_activate_cq(priv, cq, rl_req->txringid);
+        if (err) {
+                en_err(priv, "Failed activating Rate Limit Tx CQ\n");
+                goto err_activate_resources;
+        }
+
+	err = mlx4_en_set_cq_moder(priv, cq);
+        if (err) {
+                en_err(priv, "Failed setting cq moderation parameters");
+                mlx4_en_deactivate_cq(priv, cq);
+                goto err_activate_resources;
+        }
+        en_dbg(DRV, priv, "Resetting index of CQ:%d to -1\n", rl_req->txringid);
+        cq->buf->wqe_index = cpu_to_be16(0xffff);
+
+        err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
+                                               MLX4_EN_DEF_RL_USER_PRIO);
+        if (err) {
+                en_err(priv, "Failed activating rate limit TX ring\n");
+                mlx4_en_deactivate_cq(priv, cq);
+                goto err_activate_resources;
+        }
+
+        /* Arm CQ for TX completions */
+        mlx4_en_arm_cq(priv, cq);
+
+        /* Set initial ownership of all Tx TXBBs to SW (1) */
+        for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
+                *((u32 *) (tx_ring->buf + j)) = 0xffffffff;
+
+	mutex_unlock(&mdev->state_lock);
+
+	/* Set ring as valid */
+        tx_ring->rl_data.user_valid = true;
+	priv->rate_limit_tx_ring_num++;
+	return;
+
+err_activate_resources:
+	priv->tx_ring[rl_req->txringid]->rl_data.user_valid = false;
+        mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
+        mutex_unlock(&mdev->state_lock);
+        return;
+
+err_create_ring:
+        if (priv->tx_cq[rl_req->txringid])
+                mlx4_en_destroy_cq(priv, &priv->tx_cq[rl_req->txringid]);
+
+err_create_cq:
+	mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
 }
 
 static void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
@@ -382,10 +517,8 @@ static void mlx4_en_destroy_rate_limit_tx_res(struct mlx4_en_priv *priv,
 //	sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
 
 	/* Add index to re-use list */
-	reused_item = priv->reuse_index_list_array + ring_id;
-	mutex_lock(&priv->tx_ring_index_lock);
-	STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, reused_item, entry);
-	mutex_unlock(&priv->tx_ring_index_lock);
+	priv->rate_limit_tx_ring_num--;
+	mlx4_en_rl_reused_index_insert(priv, ring_id);
 }
 
 /* Called from the rl_task context, it acquires the first
@@ -1323,6 +1456,10 @@ mlx4_en_qflush(struct ifnet *dev)
 
 	for (int i = 0; i < priv->tx_ring_num; i++) {
 		ring = priv->tx_ring[i];
+#ifdef CONFIG_RATELIMIT
+		if (!ring)
+			continue;
+#endif
 		spin_lock(&ring->tx_lock);
 		while ((m = buf_ring_dequeue_sc(ring->br)) != NULL)
 			m_freem(m);
