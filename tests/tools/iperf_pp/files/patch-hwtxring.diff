@@ -79,3 +79,14 @@ index 6a5f092..406cf5d 100644
          case 'i': // specify interval between periodic bw reports
              mExtSettings->mInterval = atof( optarg );
              if ( mExtSettings->mInterval < 0.5 ) {
+--- src/Listener.cpp.bak        2015-04-19 11:43:18.926477000 +0300
++++ src/Listener.cpp    2015-04-19 11:43:30.585794000 +0300
+@@ -338,7 +338,7 @@ void Listener::Listen( ) {
+     // listen for connections (TCP only).
+     // default backlog traditionally 5
+     if ( !isUDP( mSettings ) ) {
+-        rc = listen( mSettings->mSock, 5 );
++        rc = listen( mSettings->mSock, 100 );
+         WARN_errno( rc == SOCKET_ERROR, "listen" );
+     }
+
