@@ -240,6 +240,9 @@ struct mlx4_update_qp_context {
 enum {
 	MLX4_UPD_QP_MASK_PM_STATE	= 32,
 	MLX4_UPD_QP_MASK_VSD		= 33,
+#ifdef CONFIG_RATELIMIT
+	MLX4_UPD_QP_MASK_RATE_LIMIT	= 39,
+#endif
 };
 
 enum {
@@ -436,7 +439,12 @@ enum mlx4_update_qp_attr {
 	MLX4_UPDATE_QP_SMAC			= 1 << 0,
 	MLX4_UPDATE_QP_ETH_SRC_CHECK_MC_LB	= 1 << 1,
 	MLX4_UPDATE_QP_VSD			= 1 << 2,
-	MLX4_UPDATE_QP_SUPPORTED_ATTRS		= (1 << 3) - 1
+#ifdef CONFIG_RATELIMIT
+	MLX4_UPDATE_QP_RATE_LIMIT		= 1 << 3,
+	MLX4_UPDATE_QP_SUPPORTED_ATTRS		= (1 << 4) - 1
+#else
+	MLX4_UPDATE_QP_SUPPORTED_ATTRS          = (1 << 3) - 1
+#endif
 };
 
 enum mlx4_update_qp_params_flags {
@@ -447,6 +455,9 @@ enum mlx4_update_qp_params_flags {
 struct mlx4_update_qp_params {
 	u8	smac_index;
 	u32	flags;
+#ifdef CONFIG_RATELIMIT
+	u8	rl_index;
+#endif
 };
 
 int mlx4_update_qp(struct mlx4_dev *dev, u32 qpn,

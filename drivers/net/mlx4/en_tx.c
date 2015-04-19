@@ -540,6 +540,35 @@ err_create_cq:
 	mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
 }
 
+static void mlx4_en_modify_rl_res(struct mlx4_en_priv *priv,
+			   struct ifreq_hwtxring *rl_req, u8 rate_index)
+{
+	struct mlx4_en_tx_ring *tx_ring;
+	struct mlx4_update_qp_params update_params;
+	int err;
+
+	tx_ring = priv->tx_ring[rl_req->txringid];
+
+	/* Ring validation */
+	if(!TX_RING_USER_VALID(rl_req->txringid)) {
+		en_err(priv, "Failed modifying new rate, ring %d doesn't exist\n", rl_req->txringid);
+		return;
+	}
+
+	if (priv->rate_limits[tx_ring->rl_data.rate_index].rate !=
+				priv->rate_limits[rate_index].rate) {
+		update_params.rl_index = rate_index;
+		err = mlx4_update_qp(priv->mdev->dev, tx_ring->qpn, MLX4_UPDATE_QP_RATE_LIMIT,
+				     &update_params);
+		if (err) {
+			en_err(priv, "Failed updating ring %d with new rate %uBytes/sec, err: %d\n",
+			       rl_req->txringid, (priv->rate_limits[rate_index].rate/8), err);
+			return;
+		}
+		tx_ring->rl_data.rate_index = rate_index;
+	}
+}
+
 static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
                                     uint32_t ring_id)
 {
@@ -616,7 +645,7 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 			mlx4_en_destroy_rl_res(priv, rl_req.txringid);
 			break;
 		case MLX4_EN_RL_MOD:
-			pr_err("Not supported operation - MOD\n");
+			mlx4_en_modify_rl_res(priv, &rl_req, rate_index);
 			break;
 		default:
 			pr_err("Not supported operation - %d \n", rl_operation);
