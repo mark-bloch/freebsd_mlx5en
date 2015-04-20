@@ -376,6 +376,7 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 		return (EINVAL);
 	}
 
+	atomic_add_int(&priv->rate_limits[rate_index].ref, 1);
 	spin_unlock(&priv->tx_ring_index_lock);
 
 	rl_req->txringid = index;
@@ -395,6 +396,8 @@ int mlx4_en_modify_rate_limit_ring(struct mlx4_en_priv *priv,
 	/* Validate rate limit request */
 	if(mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index))
 		return (err);
+
+	atomic_add_int(&priv->rate_limits[rate_index].ref, 1);
 
 	/* Validation for ring index occurs at the deffered function
 	 * in order to prevent failure when creation was not completed
@@ -529,6 +532,7 @@ activate:
 err_activate_resources:
 	priv->tx_ring[rl_req->txringid]->rl_data.user_valid = false;
         mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
+	atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
         mutex_unlock(&mdev->state_lock);
         return;
 
@@ -538,6 +542,7 @@ err_create_ring:
 
 err_create_cq:
 	mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
+	atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
 }
 
 static void mlx4_en_modify_rl_res(struct mlx4_en_priv *priv,
@@ -552,6 +557,9 @@ static void mlx4_en_modify_rl_res(struct mlx4_en_priv *priv,
 	/* Ring validation */
 	if(!TX_RING_USER_VALID(rl_req->txringid)) {
 		en_err(priv, "Failed modifying new rate, ring %d doesn't exist\n", rl_req->txringid);
+		/* If the modified ring does not exist, no need to add one
+		 * to the reference count of the requested rate */
+		atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
 		return;
 	}
 
@@ -563,10 +571,12 @@ static void mlx4_en_modify_rl_res(struct mlx4_en_priv *priv,
 		if (err) {
 			en_err(priv, "Failed updating ring %d with new rate %uBytes/sec, err: %d\n",
 			       rl_req->txringid, (priv->rate_limits[rate_index].rate/8), err);
+			atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
 			return;
 		}
-		tx_ring->rl_data.rate_index = rate_index;
 	}
+	atomic_subtract_int(&priv->rate_limits[tx_ring->rl_data.rate_index].ref, 1);
+	tx_ring->rl_data.rate_index = rate_index;
 }
 
 static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
@@ -587,6 +597,7 @@ static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
 		ring->rl_data.user_valid = false;
 	}
 	spin_unlock(&ring->tx_lock);
+	atomic_subtract_int(&priv->rate_limits[ring->rl_data.rate_index].ref, 1);
 
 	/* Deactivate resources */
 	mutex_lock(&mdev->state_lock);
