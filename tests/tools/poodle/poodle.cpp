@@ -47,6 +47,21 @@ int old_somaxconn = 0;
 size_t old_somaxconn_size = sizeof(old_somaxconn);
 size_t new_somaxconn_new_size = 20000;
 
+int num_CPU()
+{
+	int mib[4];
+	int numCPU;
+	size_t len = sizeof(numCPU);
+
+	/* set the mib for hw.ncpu */
+	mib[0] = CTL_HW;
+	mib[1] = HW_NCPU;  
+
+	/* get the number of CPUs from the system */
+	sysctl(mib, 2, &numCPU, &len, NULL, 0);
+
+	return numCPU;
+}
 
 
 double Time()
@@ -556,11 +571,11 @@ void usage(char *prog)
 			"	      -n conn created per second\n"
 			"	      -t active time per connection in seconds. The connection will be closed and a new connection will be created once time is up.\n"
 			"	      -T Total run time in secs, otherwise run forever or till killed \n"
-			"	      -r how many threads\n"
+			"	      -r how many threads. (This box has %d cores available)\n"
 			"	      -M Modify pace, currently hard-coded to 10 rates\n"
 			"	      -b bandwidth per conn (kbps) or \n"
 			"	      -B total bandwidth (kbps)\n\n"
-			, prog
+			, prog, num_CPU()
 	      );
 	exit(0);
 }
