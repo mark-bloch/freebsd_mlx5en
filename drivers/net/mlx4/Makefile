@@ -12,6 +12,10 @@ SRCS+=	pd.c port.c profile.c qp.c reset.c sense.c srq.c resource_tracker.c sys_t
 CFLAGS+= -I${.CURDIR}/../../../drivers/net/mlx4
 CFLAGS+= -I${.CURDIR}/../../../include
 
+.if defined(CONFIG_RATELIMIT)
+CFLAGS += -DCONFIG_RATELIMIT=1
+.endif
+
 .if !defined(KERNBUILDDIR)
 .if ${MK_INET_SUPPORT} != "no"
 opt_inet.h:
