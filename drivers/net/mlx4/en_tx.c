@@ -334,7 +334,7 @@ static int mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 {
 	struct mlx4_en_rl_task_list_element     *rl_item;
 
-	rl_item = kmalloc(sizeof(struct mlx4_en_rl_task_list_element), GFP_KERNEL);
+	rl_item = kmalloc(sizeof(struct mlx4_en_rl_task_list_element), M_NOWAIT);
 	if (!rl_item) {
 		en_err(priv, "Failed allocating rl_item\n");
 		return (ENOMEM);
@@ -634,32 +634,35 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 
         priv = context;
 
-        /* Check for availble operation in the operation list
-	 * Locking is not necessary since only one thread handles this list */
-        if ((rl_item = STAILQ_FIRST(&priv->rl_op_list_head))) {
-		rl_req.txringid = rl_item->hw_ring_req.txringid;
-		rl_operation = rl_item->operation;
-		rate_index = rl_item->rate_index;
-                STAILQ_REMOVE_HEAD(&priv->rl_op_list_head, entry);
-		kfree(rl_item);
-        }
-	else {
-		pr_err("No avaliable rate limit item \n");
-		return;
-	}
+	while(pending){
+	        /* Check for availble operation in the operation list
+		 * Locking is not necessary since only one thread handles this list */
+	        if ((rl_item = STAILQ_FIRST(&priv->rl_op_list_head))) {
+			rl_req.txringid = rl_item->hw_ring_req.txringid;
+			rl_operation = rl_item->operation;
+			rate_index = rl_item->rate_index;
+	                STAILQ_REMOVE_HEAD(&priv->rl_op_list_head, entry);
+			kfree(rl_item);
+		}
+		else {
+			pr_err("No avaliable rate limit item \n");
+			return;
+		}
 
-	switch (rl_operation){
-		case MLX4_EN_RL_ADD:
-			mlx4_en_create_rl_res(priv, &rl_req, rate_index);
-			break;
-		case MLX4_EN_RL_DEL:
-			mlx4_en_destroy_rl_res(priv, rl_req.txringid);
-			break;
-		case MLX4_EN_RL_MOD:
-			mlx4_en_modify_rl_res(priv, &rl_req, rate_index);
-			break;
-		default:
-			pr_err("Not supported operation - %d \n", rl_operation);
+		switch (rl_operation){
+			case MLX4_EN_RL_ADD:
+				mlx4_en_create_rl_res(priv, &rl_req, rate_index);
+				break;
+			case MLX4_EN_RL_DEL:
+				mlx4_en_destroy_rl_res(priv, rl_req.txringid);
+				break;
+			case MLX4_EN_RL_MOD:
+				mlx4_en_modify_rl_res(priv, &rl_req, rate_index);
+				break;
+			default:
+				pr_err("Not supported operation - %d \n", rl_operation);
+		}
+		pending--;
 	}
 }
 #endif

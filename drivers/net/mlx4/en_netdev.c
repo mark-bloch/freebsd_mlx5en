@@ -2034,7 +2034,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 #ifdef CONFIG_RATELIMIT
 	case SIOCARATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;
-		mlx4_en_create_rate_limit_ring(priv, rl_req);
+		error = mlx4_en_create_rate_limit_ring(priv, rl_req);
 		break;
 	case SIOCSRATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;
@@ -2042,7 +2042,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
                 break;
         case SIOCDRATECTL:
                 rl_req = (struct ifreq_hwtxring *)data;
-		mlx4_en_destroy_rate_limit_ring(priv, rl_req);
+		error = mlx4_en_destroy_rate_limit_ring(priv, rl_req);
                 break;
 #endif
 	default:
@@ -2222,6 +2222,13 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	TASK_INIT(&priv->rl_task, 0, mlx4_en_async_rl_operation, priv);
 	taskqueue_start_threads(&priv->rl_tq, 1, PI_NET, "%s priv rl task",
 		if_name(priv->dev));
+
+	for (i = priv->native_tx_ring_num; i < MAX_TX_RINGS; i++) {
+                struct mlx4_en_reuse_index_list_element *reused_item;
+                reused_item = priv->reuse_index_list_array + i;
+                reused_item->val = i;
+        }
+
 #endif
 
 	/* Allocate page for receive rings */
@@ -2241,6 +2248,10 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	dev->if_capabilities |= IFCAP_VLAN_HWCSUM | IFCAP_VLAN_HWFILTER;
 	dev->if_capabilities |= IFCAP_LINKSTATE | IFCAP_JUMBO_MTU;
 	dev->if_capabilities |= IFCAP_LRO;
+#ifdef CONFIG_RATELIMIT
+	if (priv->mdev->dev->caps.rl_caps.enable)
+		dev->if_capabilities |= IFCAP_HWTXRINGS;
+#endif
 
 	if (mdev->LSO_support)
 		dev->if_capabilities |= IFCAP_TSO4 | IFCAP_TSO6 | IFCAP_VLAN_HWTSO;
