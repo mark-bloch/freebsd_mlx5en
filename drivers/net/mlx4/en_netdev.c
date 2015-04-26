@@ -2728,7 +2728,7 @@ struct mlx4_en_pkt_stats {
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_packets", CTLFLAG_RD,
 	    &priv->pkstats.tx_packets, "TX packets");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_bytes", CTLFLAG_RD,
-	    &priv->pkstats.tx_packets, "TX Bytes");
+	    &priv->pkstats.tx_bytes, "TX Bytes");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_multicast_packets", CTLFLAG_RD,
 	    &priv->pkstats.tx_multicast_packets, "TX Multicast Packets");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_broadcast_packets", CTLFLAG_RD,
