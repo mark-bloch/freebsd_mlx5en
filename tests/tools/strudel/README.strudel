@@ -1,0 +1,11 @@
+The strudel ustility displays traffic statistics on Mellanox ethernet NICs.
+The stats are based on the driver rx and tx reports to the sysctl.
+
+Build:
+cc strudel.c -lcurses -o strudel
+
+Usage: ./strudel [-i report interval]
+
+Thanks
+Shahar
+
