@@ -26,6 +26,8 @@
 #define MAX_FDS 300000
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
+#define KILO 1000
+
 class  reporter_c;
 
 reporter_c* p_reporter_for_sig_handling;
@@ -102,7 +104,7 @@ pace_modify_data *pace_modify_data::s_instance = 0;
 
 int pace_modify_data::init(int modify_interval, int paces_size)
 {
-	int start = 1*1024;
+	int start = 1*KILO;
 
 	m_paces_size = paces_size;
 	m_paces = new int[m_paces_size];
@@ -449,7 +451,7 @@ void reporter_c::main_loop()
 		for (int i=0; i<m_num_threads; i++) {
 			last_second_all_bytes += m_current_load[i].get_last_second_sent();
 		}
-		printf("Transmited %.2f KB per second\n", (double)last_second_all_bytes/1024);
+		printf("Transmited %.2f KB per second\n", (double)last_second_all_bytes/KILO);
 		last_second_all_bytes = 0;
 	}
 }
@@ -469,7 +471,7 @@ int one_server(int server_port)
 	bool rest;
 	int total;
 	unsigned long reads, read_from_start;
-	double start, passed, actual_bandwith;
+	double start, passed, actual_bandwidth;
 
 	getrlimit (RLIMIT_NOFILE, &my_limit);
 	printf ( "Current limit of open files is %ld.\n", my_limit.rlim_cur);
@@ -549,9 +551,9 @@ int one_server(int server_port)
 			passed = Time() - start;
 			if ( passed > 1000000 ) {
 				start = Time();
-				actual_bandwith = (read_from_start*(1000000/passed)/1024);
+				actual_bandwidth = (read_from_start*(1000000/passed)/KILO);
 				if (read_from_start>0)
-					printf("Actual B/W = %.2f KiloBytesPerSecond \n", actual_bandwith);
+					printf("Actual B/W = %.2f KiloBytesPerSecond \n", actual_bandwidth);
 				read_from_start = 0;
 			}
 		}
@@ -649,7 +651,7 @@ int main(int argc, char* argv[])
 	int threads = 1;
 	unsigned long conn_active_time = 999999999;
 	int total_run_time = 0;
-	unsigned long bandwidth_per_conn = 10*1024;
+	unsigned long bandwidth_per_conn = 10*KILO;
 	unsigned long total_bandwidth = 0;
 	int total_conn_per_sec = 0;
 	unsigned long total_cons = 0;
@@ -692,7 +694,7 @@ int main(int argc, char* argv[])
 				break;
 			case 'b':
 				bandwidth_per_conn = atoi(optarg);
-				g_bandwidth_in_bytes = bandwidth_per_conn*1024;
+				g_bandwidth_in_bytes = bandwidth_per_conn*KILO;
 				break;
 			case 'B':
 				total_bandwidth = atoi(optarg);
@@ -719,7 +721,7 @@ int main(int argc, char* argv[])
 	}
 
 	if ( total_bandwidth ) {
-		g_bandwidth_in_bytes = (total_bandwidth*1024/total_conns);
+		g_bandwidth_in_bytes = (total_bandwidth*KILO)/total_conns;
 	}
 
 	connection_group_thread_c *loader = new connection_group_thread_c[threads];
