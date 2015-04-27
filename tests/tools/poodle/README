@@ -6,7 +6,7 @@ Build:
 c++ poodle.cpp -lpthread -o poodle -g -O2
 
 Build with PP kernel:
-c++ ./poodle.cpp -lpthread -o poodle -g -O2 -DUSE_PP
+c++ ./poodle.cpp -lpthread -o poodle -g -O2 -DUSE_PP -I{PP kernel sys dir}
 
 
 Example:
