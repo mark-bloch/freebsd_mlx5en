@@ -286,8 +286,9 @@ struct mlx4_en_tx_desc {
 
 #ifdef CONFIG_RATELIMIT
 struct mlx4_en_rl_data {
-	bool user_valid;
-	u8 rate_index;
+	bool			user_valid;
+	u8			rate_index;
+	struct sysctl_ctx_list	rl_stats_ctx;
 };
 #endif
 
@@ -580,6 +581,8 @@ struct mlx4_en_rate_limit_indexes {
 	u_int	ref;
 	u8	burst_size;
 };
+
+extern int show_rl_sysctl_info;
 #endif
 
 struct mlx4_en_priv {
@@ -676,6 +679,9 @@ struct mlx4_en_priv {
         struct ifmedia media;
 	volatile int blocked;
 	struct sysctl_oid *sysctl;
+#ifdef CONFIG_RATELIMIT
+	struct sysctl_oid *sysctl_stat;
+#endif
 	struct sysctl_ctx_list conf_ctx;
 	struct sysctl_ctx_list stat_ctx;
 #define MLX4_EN_MAC_HASH_IDX 5
@@ -877,6 +883,8 @@ int mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv,
 				     struct ifreq_hwtxring *rl_req);
 void mlx4_en_async_rl_operation(void *context, int index);
 void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id);
+void mlx4_en_invalidate_rl_ring(struct mlx4_en_priv *priv,
+				uint32_t ring_id);
 #endif
 void mlx4_en_qflush(struct ifnet *dev);
 

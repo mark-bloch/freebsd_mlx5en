@@ -1332,7 +1332,7 @@ int mlx4_en_start_port(struct net_device *dev)
 #ifdef CONFIG_RATELIMIT
 			if (i >= priv->native_tx_ring_num) {
                                 /* Rate limit ring - no need for err flow*/
-				priv->tx_ring[i]->rl_data.user_valid = false;
+				mlx4_en_invalidate_rl_ring(priv, i);
                                 mlx4_en_rl_reused_index_insert(priv, i);
                                 ++tx_index;
                                 continue;
@@ -1681,15 +1681,19 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 static void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv)
 {
         int i;
+	struct mlx4_en_tx_ring *ring;
 
         for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
                 if (priv->tx_ring && priv->tx_ring[i]) {
-			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
+                        ring = priv->tx_ring[i];
+			if (ring->rl_data.user_valid == true) {
+				sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
+			}
+                        mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
                 }
                 if (priv->tx_cq && priv->tx_cq[i])
                         mlx4_en_destroy_cq(priv, &priv->tx_cq[i]);
         }
-
 }
 #endif
 
@@ -2877,9 +2881,18 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
         SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rx_rings",
             CTLFLAG_RD, &priv->rx_ring_num, 0,
             "Number of receive rings");
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "tx_rings",
-            CTLFLAG_RD, &priv->tx_ring_num, 0,
-            "Number of transmit rings");
+#ifdef CONFIG_RATELIMIT
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "native_tx_rings",
+            CTLFLAG_RD, &priv->native_tx_ring_num, 0,
+            "Number of native transmit rings");
+        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rate_limit_tx_rings",
+            CTLFLAG_RD, &priv->rate_limit_tx_ring_num, 0,
+            "Number of rate limit transmit rings");
+#else
+	SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "tx_rings",
+	    CTLFLAG_RD, &priv->tx_ring_num, 0,
+	    "Number of transmit rings");
+#endif
         SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "rx_size",
             CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
             mlx4_en_set_rx_ring_size, "I", "Receive ring size");
@@ -2973,6 +2986,9 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	sysctl_ctx_init(ctx);
 	node = SYSCTL_ADD_NODE(ctx, SYSCTL_CHILDREN(priv->sysctl), OID_AUTO,
 	    "stat", CTLFLAG_RD, NULL, "Statistics");
+#ifdef CONFIG_RATELIMIT
+	priv->sysctl_stat = node;
+#endif
 	node_list = SYSCTL_CHILDREN(node);
 
 #ifdef MLX4_EN_PERF_STAT

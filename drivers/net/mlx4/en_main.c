@@ -76,6 +76,10 @@ MLX4_EN_PARM_INT(pfcrx, 0, "Priority based Flow Control policy on RX[7:0]."
 #define PRIOS_BUFF_SIZE	(MLX4_NUM_PRIORITIES * 3)
 static char prios_for_rl[PRIOS_BUFF_SIZE] = {0};
 TUNABLE_STR("hw.mlx4_en.config_prios_for_rl_rings", prios_for_rl, sizeof(prios_for_rl));
+
+/* Sysctl rate limit ring info will be shown if this variable was set */
+int show_rl_sysctl_info = 0;
+TUNABLE_INT("rate.limit.debug", &show_rl_sysctl_info);
 #endif
 
 static int mlx4_en_get_profile(struct mlx4_en_dev *mdev)

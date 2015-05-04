@@ -317,6 +317,12 @@ static int mlx4_en_validate_rate_ctl_req(struct mlx4_en_priv *priv,
 	return (EINVAL);
 }
 
+void mlx4_en_invalidate_rl_ring(struct mlx4_en_priv *priv, uint32_t ring_id)
+{
+	priv->tx_ring[ring_id]->rl_data.user_valid = false;
+	sysctl_ctx_free(&priv->tx_ring[ring_id]->rl_data.rl_stats_ctx);
+}
+
 void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id)
 {
 	struct mlx4_en_reuse_index_list_element *reused_item;
@@ -325,6 +331,30 @@ void mlx4_en_rl_reused_index_insert(struct mlx4_en_priv *priv, uint32_t ring_id)
         spin_lock(&priv->tx_ring_index_lock);
         STAILQ_INSERT_TAIL(&priv->reuse_index_list_head, reused_item, entry);
         spin_unlock(&priv->tx_ring_index_lock);
+}
+
+static void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int ring_id)
+{
+	struct mlx4_en_tx_ring *tx_ring;
+	struct sysctl_ctx_list *ctx;
+	struct sysctl_oid_list *head_node;
+	struct sysctl_oid *ring_node;
+	struct sysctl_oid_list *ring_list;
+	char namebuf[128];
+
+	tx_ring = priv->tx_ring[ring_id];
+	ctx = &tx_ring->rl_data.rl_stats_ctx;
+	snprintf(namebuf, sizeof(namebuf), "tx_ring%d", ring_id);
+	head_node = SYSCTL_CHILDREN(priv->sysctl_stat);
+	ring_node = SYSCTL_ADD_NODE(ctx, head_node, OID_AUTO, namebuf,
+			CTLFLAG_RD, NULL, "TX Ring");
+	ring_list = SYSCTL_CHILDREN(ring_node);
+	SYSCTL_ADD_UINT(ctx, ring_list, OID_AUTO, "rate_limit_val",
+			CTLFLAG_RD, &priv->rate_limits[tx_ring->rl_data.rate_index].rate, 0, "Rate Limit value");
+	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "packets",
+			CTLFLAG_RD, &tx_ring->packets, "TX packets");
+	SYSCTL_ADD_ULONG(ctx, ring_list, OID_AUTO, "bytes",
+			CTLFLAG_RD, &tx_ring->bytes, "TX bytes");
 }
 
 static int mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
@@ -359,8 +389,10 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 	u8	rate_index;
 
 	/* Check for HW/FW support */
-	/* TODO add dev_caps check for support here */
-	en_warn(priv, "No support examination - Need to be added\n");
+	if (!priv->mdev->dev->caps.rl_caps.enable) {
+		en_err(priv, "No HW/FW support for rate limit rings\n");
+		return (ENODEV);
+	}
 
 	/* Validate rate limit request */
 	if(mlx4_en_validate_rate_ctl_req(priv, rl_req, &rate_index))
@@ -476,6 +508,7 @@ static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
 
 activate:
 
+	sysctl_ctx_init(&tx_ring->rl_data.rl_stats_ctx);
 	tx_ring->rl_data.rate_index = rate_index;
 
         /* Default moderation */
@@ -527,10 +560,14 @@ activate:
 	/* Set ring as valid */
         tx_ring->rl_data.user_valid = true;
 	priv->rate_limit_tx_ring_num++;
+
+	/* Add rate limit statistics to sysctl if debug option was enabled */
+	if (show_rl_sysctl_info)
+		mlx4_en_rate_limit_sysctl_stat(priv, rl_req->txringid);
 	return;
 
 err_activate_resources:
-	priv->tx_ring[rl_req->txringid]->rl_data.user_valid = false;
+	mlx4_en_invalidate_rl_ring(priv, rl_req->txringid);
         mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
 	atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
         mutex_unlock(&mdev->state_lock);
@@ -613,8 +650,7 @@ static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
 	ring->bytes = 0;
 	ring->packets = 0;
 
-	/* TODO uncomment after adding statistcs */
-//	sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
+	sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
 
 	/* Add index to re-use list */
 	priv->rate_limit_tx_ring_num--;
