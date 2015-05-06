@@ -2503,6 +2503,7 @@ static int mlx4_en_set_rate_for_index(SYSCTL_HANDLER_ARGS)
 	struct mlx4_en_priv *priv = arg1;
 	u8 index = arg2;
 	u32 rate;
+	int i;
 	int error;
 	u8 valid = 0;
 
@@ -2515,6 +2516,13 @@ static int mlx4_en_set_rate_for_index(SYSCTL_HANDLER_ARGS)
 	if (error || !req->newptr) {
 		mutex_unlock(&priv->rate_limit_table_lock);
 		return error;
+	}
+	for (i = 0; i <= priv->num_rates_per_prio; i++) {
+		if (priv->rate_limits[i].rate == rate) {
+			en_err(priv, "Rate already exists in index %d\n", i);
+			mutex_unlock(&priv->rate_limit_table_lock);
+			return error;
+		}
 	}
 	if (!valid) {
 		en_err(priv, "Rate for index %u already exists\n", index);
@@ -2553,6 +2561,14 @@ static int mlx4_en_set_rate_on_first_available_index(SYSCTL_HANDLER_ARGS)
 			rate = 0;
 			mutex_unlock(&priv->rate_limit_table_lock);
 			return ENOSPC;
+		}
+		for (i = 0; i <= priv->num_rates_per_prio; i++) {
+			if (priv->rate_limits[i].rate == rate) {
+				en_err(priv, "Rate already exists in index %d\n", i);
+				rate = 0;
+				mutex_unlock(&priv->rate_limit_table_lock);
+				return error;
+			}
 		}
 		error = mlx4_en_rl_locked_set(priv, priv->next_free_rl_index, rate, 0, RATE);
 		if (error) {
