@@ -2125,6 +2125,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	/* Save number of non RL tx rings */
 	priv->native_tx_ring_num = priv->tx_ring_num;
 	priv->rate_limit_tx_ring_num = 0;
+	priv->next_free_rl_index = 1;
 #endif
 
 	priv->tx_ring = kcalloc(MAX_TX_RINGS,
@@ -2537,27 +2538,28 @@ static int mlx4_en_set_rate_on_first_available_index(SYSCTL_HANDLER_ARGS)
 	struct mlx4_en_priv *priv = arg1;
 	static u32 rate = 0;
 	int error = 0;
-	static int next_free_rl_index = 1;
+	int i;
 
 	mutex_lock(&priv->rate_limit_table_lock);
 
-	while (priv->rate_limits[next_free_rl_index].rate)
-		next_free_rl_index++;
+	while ((priv->next_free_rl_index <= priv->num_rates_per_prio) &&
+		priv->rate_limits[priv->next_free_rl_index].rate)
+		priv->next_free_rl_index++;
 
 	if (req->newptr != NULL) {
 		SYSCTL_IN(req, &rate, sizeof(int));
-		if (next_free_rl_index > priv->num_rates_per_prio) {
+		if (priv->next_free_rl_index > priv->num_rates_per_prio) {
 			en_err(priv, "No space left for new rates\n");
 			rate = 0;
 			mutex_unlock(&priv->rate_limit_table_lock);
 			return ENOSPC;
 		}
-		error = mlx4_en_rl_locked_set(priv, next_free_rl_index, rate, 0, RATE);
+		error = mlx4_en_rl_locked_set(priv, priv->next_free_rl_index, rate, 0, RATE);
 		if (error) {
 			en_err(priv, "Couldn't set rate %u, for port %d\n",rate, priv->port);
 		}
 		else {
-			next_free_rl_index++;
+			priv->next_free_rl_index++;
 		}
 	}
 

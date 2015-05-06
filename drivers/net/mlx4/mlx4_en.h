@@ -713,6 +713,7 @@ struct mlx4_en_priv {
 	int		num_rates_per_prio;
 	struct mlx4_en_rate_limit_indexes	*rate_limits;
 	struct mutex rate_limit_table_lock;
+	int next_free_rl_index;
 #endif
 };
 
