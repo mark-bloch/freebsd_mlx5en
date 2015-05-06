@@ -571,7 +571,7 @@ struct mlx4_en_reuse_index_list_element {
 
 struct mlx4_en_rl_task_list_element {
 	STAILQ_ENTRY(mlx4_en_rl_task_list_element)	entry;
-	struct ifreq_hwtxring				hw_ring_req;
+	int						ring_id;
 	enum mlx4_en_rl_operation			operation;
 	u8						rate_index;
 };

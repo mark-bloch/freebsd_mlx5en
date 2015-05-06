@@ -358,8 +358,7 @@ static void mlx4_en_rate_limit_sysctl_stat(struct mlx4_en_priv *priv, int ring_i
 }
 
 static int mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
-				struct ifreq_hwtxring *rl_req,
-				u8 rate_index,
+				int ring_id, u8 rate_index,
 				enum mlx4_en_rl_operation opp)
 {
 	struct mlx4_en_rl_task_list_element     *rl_item;
@@ -372,7 +371,7 @@ static int mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 
 	/* Saving recieved data from kernel in order to use it later in
 	 * the defer function */
-	rl_item->hw_ring_req.txringid = rl_req->txringid;
+	rl_item->ring_id = ring_id;
 	rl_item->rate_index = rate_index;
 	rl_item->operation = opp;
 
@@ -414,7 +413,7 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 	rl_req->txringid = index;
 
 	/* Defer ring creation */
-	err = mlx4_en_defer_rl_op(priv, rl_req, rate_index, MLX4_EN_RL_ADD);
+	err = mlx4_en_defer_rl_op(priv, rl_req->txringid, rate_index, MLX4_EN_RL_ADD);
 
 	return err;
 }
@@ -436,7 +435,7 @@ int mlx4_en_modify_rate_limit_ring(struct mlx4_en_priv *priv,
 	 * yet (defered actions are executed by one thread) */
 
 	/* Defer ring modification */
-	err = mlx4_en_defer_rl_op(priv, rl_req, rate_index, MLX4_EN_RL_MOD);
+	err = mlx4_en_defer_rl_op(priv, rl_req->txringid, rate_index, MLX4_EN_RL_MOD);
 
 	return (err);
 }
@@ -458,14 +457,13 @@ int mlx4_en_destroy_rate_limit_ring(struct mlx4_en_priv *priv,
 	/* Defer ring destruction */
 	/* There is no handling with new rate index when destroying a ring
 	 * therefor, sending zero as a rate index. */
-	err = mlx4_en_defer_rl_op(priv, rl_req, 0, MLX4_EN_RL_DEL);
+	err = mlx4_en_defer_rl_op(priv, rl_req->txringid, 0, MLX4_EN_RL_DEL);
 
 	return err;
 }
 
 static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
-				  struct ifreq_hwtxring *rl_req,
-				  u8 rate_index)
+				  int ring_id, u8 rate_index)
 {
 	struct mlx4_en_cq 	*cq;
 	struct mlx4_en_tx_ring 	*tx_ring;
@@ -475,10 +473,10 @@ static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
 	int			j;
 
 
-	if (priv->tx_ring[rl_req->txringid]) {
+	if (priv->tx_ring[ring_id]) {
                 /* Ring already exists, needs activation */
                 /* Make sure drbr queue has no left overs from before */
-                tx_ring = priv->tx_ring[rl_req->txringid];
+                tx_ring = priv->tx_ring[ring_id];
                 if (!drbr_empty(priv->dev, tx_ring->br)) {
                         struct mbuf *m;
                         spin_lock(&tx_ring->tx_lock);
@@ -490,21 +488,21 @@ static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
                 goto activate;
         }
 
-	err = mlx4_en_create_cq(priv, &priv->tx_cq[rl_req->txringid],
-                MLX4_EN_DEF_RL_TX_RING_SIZE, rl_req->txringid, TX, node);
+	err = mlx4_en_create_cq(priv, &priv->tx_cq[ring_id],
+                MLX4_EN_DEF_RL_TX_RING_SIZE, ring_id, TX, node);
         if (err) {
-                en_err(priv, "Failed to create rate limit tx CQ, ring index %u\n", rl_req->txringid);
+                en_err(priv, "Failed to create rate limit tx CQ, ring index %u\n", ring_id);
                 goto err_create_cq;
         }
 
-        err = mlx4_en_create_tx_ring(priv, &priv->tx_ring[rl_req->txringid],
-                MLX4_EN_DEF_RL_TX_RING_SIZE, TXBB_SIZE, node, rl_req->txringid);
+        err = mlx4_en_create_tx_ring(priv, &priv->tx_ring[ring_id],
+                MLX4_EN_DEF_RL_TX_RING_SIZE, TXBB_SIZE, node, ring_id);
         if (err) {
-                en_err(priv, "Failed to create rate limited tx ring %u\n", rl_req->txringid);
+                en_err(priv, "Failed to create rate limited tx ring %u\n", ring_id);
                 goto err_create_ring;
         }
 
-	tx_ring = priv->tx_ring[rl_req->txringid];
+	tx_ring = priv->tx_ring[ring_id];
 
 activate:
 
@@ -512,7 +510,7 @@ activate:
 	tx_ring->rl_data.rate_index = rate_index;
 
         /* Default moderation */
-        cq = priv->tx_cq[rl_req->txringid];
+        cq = priv->tx_cq[ring_id];
         cq->moder_cnt = priv->tx_frames;
         cq->moder_time = priv->tx_usecs;
 
@@ -525,7 +523,7 @@ activate:
         }
 
         /* Activate resources */
-        err = mlx4_en_activate_cq(priv, cq, rl_req->txringid);
+        err = mlx4_en_activate_cq(priv, cq, ring_id);
         if (err) {
                 en_err(priv, "Failed activating Rate Limit Tx CQ\n");
                 goto err_activate_resources;
@@ -537,7 +535,7 @@ activate:
                 mlx4_en_deactivate_cq(priv, cq);
                 goto err_activate_resources;
         }
-        en_dbg(DRV, priv, "Resetting index of CQ:%d to -1\n", rl_req->txringid);
+        en_dbg(DRV, priv, "Resetting index of CQ:%d to -1\n", ring_id);
         cq->buf->wqe_index = cpu_to_be16(0xffff);
 
         err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
@@ -563,37 +561,37 @@ activate:
 
 	/* Add rate limit statistics to sysctl if debug option was enabled */
 	if (show_rl_sysctl_info)
-		mlx4_en_rate_limit_sysctl_stat(priv, rl_req->txringid);
+		mlx4_en_rate_limit_sysctl_stat(priv, ring_id);
 	return;
 
 err_activate_resources:
-	mlx4_en_invalidate_rl_ring(priv, rl_req->txringid);
-        mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
+	mlx4_en_invalidate_rl_ring(priv, ring_id);
+        mlx4_en_rl_reused_index_insert(priv, ring_id);
 	atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
         mutex_unlock(&mdev->state_lock);
         return;
 
 err_create_ring:
-        if (priv->tx_cq[rl_req->txringid])
-                mlx4_en_destroy_cq(priv, &priv->tx_cq[rl_req->txringid]);
+        if (priv->tx_cq[ring_id])
+                mlx4_en_destroy_cq(priv, &priv->tx_cq[ring_id]);
 
 err_create_cq:
-	mlx4_en_rl_reused_index_insert(priv, rl_req->txringid);
+	mlx4_en_rl_reused_index_insert(priv, ring_id);
 	atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
 }
 
 static void mlx4_en_modify_rl_res(struct mlx4_en_priv *priv,
-			   struct ifreq_hwtxring *rl_req, u8 rate_index)
+			   int ring_id, u8 rate_index)
 {
 	struct mlx4_en_tx_ring *tx_ring;
 	struct mlx4_update_qp_params update_params;
 	int err;
 
-	tx_ring = priv->tx_ring[rl_req->txringid];
+	tx_ring = priv->tx_ring[ring_id];
 
 	/* Ring validation */
-	if(!TX_RING_USER_VALID(rl_req->txringid)) {
-		en_err(priv, "Failed modifying new rate, ring %d doesn't exist\n", rl_req->txringid);
+	if(!TX_RING_USER_VALID(ring_id)) {
+		en_err(priv, "Failed modifying new rate, ring %d doesn't exist\n", ring_id);
 		/* If the modified ring does not exist, no need to add one
 		 * to the reference count of the requested rate */
 		atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
@@ -607,7 +605,7 @@ static void mlx4_en_modify_rl_res(struct mlx4_en_priv *priv,
 				     &update_params);
 		if (err) {
 			en_err(priv, "Failed updating ring %d with new rate %uBytes/sec, err: %d\n",
-			       rl_req->txringid, (priv->rate_limits[rate_index].rate/8), err);
+			       ring_id, (priv->rate_limits[rate_index].rate/8), err);
 			atomic_subtract_int(&priv->rate_limits[rate_index].ref, 1);
 			return;
 		}
@@ -617,7 +615,7 @@ static void mlx4_en_modify_rl_res(struct mlx4_en_priv *priv,
 }
 
 static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
-                                    uint32_t ring_id)
+                                    int ring_id)
 {
 	struct mlx4_en_tx_ring *ring;
 	struct mlx4_en_dev *mdev = priv->mdev;
@@ -664,8 +662,8 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 {
         struct mlx4_en_priv			*priv;
 	struct mlx4_en_rl_task_list_element	*rl_item;
-	struct ifreq_hwtxring			rl_req;
 	enum mlx4_en_rl_operation		rl_operation;
+	int					ring_id;
 	u8					rate_index;
 
         priv = context;
@@ -674,7 +672,7 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 	        /* Check for availble operation in the operation list
 		 * Locking is not necessary since only one thread handles this list */
 	        if ((rl_item = STAILQ_FIRST(&priv->rl_op_list_head))) {
-			rl_req.txringid = rl_item->hw_ring_req.txringid;
+			ring_id = rl_item->ring_id;
 			rl_operation = rl_item->operation;
 			rate_index = rl_item->rate_index;
 	                STAILQ_REMOVE_HEAD(&priv->rl_op_list_head, entry);
@@ -687,13 +685,13 @@ void mlx4_en_async_rl_operation(void *context, int pending)
 
 		switch (rl_operation){
 			case MLX4_EN_RL_ADD:
-				mlx4_en_create_rl_res(priv, &rl_req, rate_index);
+				mlx4_en_create_rl_res(priv, ring_id, rate_index);
 				break;
 			case MLX4_EN_RL_DEL:
-				mlx4_en_destroy_rl_res(priv, rl_req.txringid);
+				mlx4_en_destroy_rl_res(priv, ring_id);
 				break;
 			case MLX4_EN_RL_MOD:
-				mlx4_en_modify_rl_res(priv, &rl_req, rate_index);
+				mlx4_en_modify_rl_res(priv, ring_id, rate_index);
 				break;
 			default:
 				pr_err("Not supported operation - %d \n", rl_operation);
