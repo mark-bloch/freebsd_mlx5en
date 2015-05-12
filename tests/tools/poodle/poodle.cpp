@@ -27,6 +27,7 @@
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
 #define KILO 1000
+#define BITS_IN_BYTE 8
 
 class  reporter_c;
 
@@ -451,7 +452,7 @@ void reporter_c::main_loop()
 		for (int i=0; i<m_num_threads; i++) {
 			last_second_all_bytes += m_current_load[i].get_last_second_sent();
 		}
-		printf("Transmited %.2f KB per second\n", (double)last_second_all_bytes/KILO);
+		printf("Transmited %.2f bits per second (%.1f Mbits/s )\n", (double)last_second_all_bytes*BITS_IN_BYTE, (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO));
 		last_second_all_bytes = 0;
 	}
 }
@@ -551,9 +552,9 @@ int one_server(int server_port)
 			passed = Time() - start;
 			if ( passed > 1000000 ) {
 				start = Time();
-				actual_bandwidth = (read_from_start*(1000000/passed)/KILO);
+				actual_bandwidth = (read_from_start*(1000000/passed)*BITS_IN_BYTE);
 				if (read_from_start>0)
-					printf("Actual B/W = %.2f KiloBytesPerSecond \n", actual_bandwidth);
+					printf("Recieved %.2f bitsPerSecond (%.1f Mbits/s) \n", actual_bandwidth, actual_bandwidth/(KILO*KILO));
 				read_from_start = 0;
 			}
 		}
