@@ -477,14 +477,6 @@ static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
                 /* Ring already exists, needs activation */
                 /* Make sure drbr queue has no left overs from before */
                 tx_ring = priv->tx_ring[ring_id];
-                if (!drbr_empty(priv->dev, tx_ring->br)) {
-                        struct mbuf *m;
-                        spin_lock(&tx_ring->tx_lock);
-                        while ((m = buf_ring_dequeue_sc(tx_ring->br)) != NULL) {
-                                m_freem(m);
-                        }
-                        spin_unlock(&tx_ring->tx_lock);
-                }
                 goto activate;
         }
 
@@ -630,6 +622,12 @@ static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
 		return;
 	} else {
 		ring->rl_data.user_valid = false;
+	}
+	if (!drbr_empty(priv->dev, ring->br)) {
+		struct mbuf *m;
+		while ((m = buf_ring_dequeue_sc(ring->br)) != NULL) {
+			m_freem(m);
+		}
 	}
 	spin_unlock(&ring->tx_lock);
 	atomic_subtract_int(&priv->rate_limits[ring->rl_data.rate_index].ref, 1);
@@ -1557,6 +1555,16 @@ lock_and_transmit:
 		/* Poll CQ here */
 		mlx4_en_xmit_poll(priv, i);
 	} else {
+#ifdef CONFIG_RATELIMIT
+		/* This is the only place where we check user_valid without tx_lock
+		 * It is ok because the design is that destroy and transmit will not happen in parallel on the same ring (tcp_output code).
+		 */
+		if (ring->rl_data.user_valid == false) {
+			/* Rate limit ring is not active */
+			i = mlx4_en_select_queue(dev, m);
+			goto lock_and_transmit;
+		}
+#endif
 		err = drbr_enqueue(dev, ring->br, m);
 		cq = priv->tx_cq[i];
 		taskqueue_enqueue(cq->tq, &cq->cq_task);
