@@ -65,6 +65,7 @@ usage()
         printf "Options:\n"
         printf "\t-i                            : Install modules.\n"
         printf "\t-c                            : Run 'make clean cleandepend' before build.\n"
+        printf "\t-p                            : Enable ratelimit capability"
         printf "\t-m <en|ib|en_ib|ib_ipoib|all> : Modules to load.\n"
         printf "\t      \t en       :\tmlx4,mlxen.\n"
         printf "\t      \t ib       :\tmlx4,ibcore,mlx4ib.\n"
@@ -76,7 +77,7 @@ usage()
 
 read_args()
 {
-        while getopts :m:ihc FLAG; do
+        while getopts :m:ihpc FLAG; do
                 case ${FLAG} in
                         h) usage
                            exit
@@ -99,6 +100,9 @@ read_args()
                            ;;
                         c) CLEAN=true
                            ;;
+                        p) _MODULES_BUILD_FLAGS[mlx4]="${_MODULES_BUILD_FLAGS[mlx4]} CONFIG_RATELIMIT=yes"
+                           _MODULES_BUILD_FLAGS[mlxen]="${_MODULES_BUILD_FLAGS[mlxen]} CONFIG_RATELIMIT=yes"
+                          ;;
                         \?)exit
                 esac
         done
@@ -134,7 +138,6 @@ build_load()
                                 make -m ${MAKEFILES_TO_INCLUDE_PATH} ${_MODULES_BUILD_FLAGS[${_MODULES_ORDER[i]}]} clean cleandepend
                         fi
                         make -m ${MAKEFILES_TO_INCLUDE_PATH} ${_MODULES_BUILD_FLAGS[${_MODULES_ORDER[$i]}]}
-
                         if ${INSTALL}; then
                                 make -m ${MAKEFILES_TO_INCLUDE_PATH} ${_MODULES_BUILD_FLAGS[${_MODULES_ORDER[i]}]} install
                         fi
