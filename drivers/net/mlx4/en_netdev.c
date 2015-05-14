@@ -2417,6 +2417,7 @@ static int mlx4_en_set_tx_ring_size(SYSCTL_HANDLER_ARGS)
 #ifdef CONFIG_RATELIMIT
 #define RATE		0x0
 #define	BURST_SIZE	0x1
+#define	RL_RINGS_BUFFER_LENGTH	(25 * MLX4_EN_DEF_MAX_RL_TX_RINGS)
 
 /* Always call this function with a rate_limit_table_lock */
 static int mlx4_en_rl_locked_set(struct mlx4_en_priv *priv, u8 index,
@@ -2638,6 +2639,48 @@ static int mlx4_en_show_rate_table(SYSCTL_HANDLER_ARGS)
 	sbuf_delete(&sbuf);
 	mutex_unlock(&priv->rate_limit_table_lock);
 	return (error);
+}
+
+/* Shows all rate limit rings, their qp number and rate.
+ * Choose one for csv display - to dump to a file,
+ * Choose two for table display. */
+static int show_rate_limit_rings_list(SYSCTL_HANDLER_ARGS)
+{
+	static char buf[RL_RINGS_BUFFER_LENGTH] = {0};
+	struct mlx4_en_priv *priv;
+	size_t len;
+	int i, ret_head, ret = 0;
+	priv = arg1;
+
+	if (req->newptr != NULL) {
+		len = req->newlen - req->newidx;
+		SYSCTL_IN(req, buf, len);
+		if (strcmp(buf, "1") == 0) {
+			ret_head = sprintf(buf, "\nCurrent number of rate limit rings: %d", priv->rate_limit_tx_ring_num);
+			for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
+				if (priv->tx_ring[i] && priv->tx_ring[i]->rl_data.user_valid == true) {
+					ret = ret + sprintf(buf+ret_head+ret, "\n%d,%d,%u", i, priv->tx_ring[i]->qpn, priv->rate_limits[priv->tx_ring[i]->rl_data.rate_index].rate);
+				}
+			}
+			buf[strlen(buf)] = '\0';
+		} else if (strcmp(buf, "2") == 0) {
+			ret_head = sprintf(buf, "\nCurrent number of rate limit rings: %d", priv->rate_limit_tx_ring_num);
+			ret_head = ret_head + sprintf(buf+ret_head, "\nRing ID		QPN	Rate");
+			for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
+				if (priv->tx_ring[i] && priv->tx_ring[i]->rl_data.user_valid == true) {
+					ret = ret + sprintf(buf+ret_head+ret, "\n%d		%d	%u", i, priv->tx_ring[i]->qpn, priv->rate_limits[priv->tx_ring[i]->rl_data.rate_index].rate);
+				}
+			}
+			buf[strlen(buf)] = '\0';
+		} else {
+			memset(&buf, 0, sizeof(buf));
+		}
+	}
+	SYSCTL_OUT(req, buf, strlen(buf)+1);
+	if (req->oldptr != NULL) {
+		memset(&buf, 0, sizeof(buf));
+	}
+	return (0);
 }
 #endif
 
@@ -2952,6 +2995,9 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
 		SYSCTL_ADD_OID(ctx, node_list, OID_AUTO, "rate_limit_show",
 			       CTLTYPE_STRING | CTLFLAG_RD, priv, 0, mlx4_en_show_rate_table,
 			       "A", "presentation of rate table");
+		SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "dump_rate_limit_rings",
+				CTLTYPE_STRING | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+				show_rate_limit_rings_list, "A", "list of all rate limit rings and rates");
 	}
 #endif
         /* Add coalescer configuration. */
