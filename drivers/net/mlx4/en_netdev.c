@@ -2220,6 +2220,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 #ifdef CONFIG_RATELIMIT
 	spin_lock_init(&priv->tx_ring_index_lock);
+	spin_lock_init(&priv->rl_op_lock);
 	STAILQ_INIT(&priv->reuse_index_list_head);
 	STAILQ_INIT(&priv->rl_op_list_head);
 	priv->rl_tq = taskqueue_create_fast("mlx4_en_rl_operation", M_NOWAIT,

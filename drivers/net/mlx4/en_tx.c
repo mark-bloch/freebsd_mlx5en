@@ -386,7 +386,9 @@ static int mlx4_en_defer_rl_op(struct mlx4_en_priv *priv,
 	rl_item->rate_index = rate_index;
 	rl_item->operation = opp;
 
+	spin_lock(&priv->rl_op_lock);
 	STAILQ_INSERT_TAIL(&priv->rl_op_list_head, rl_item, entry);
+	spin_unlock(&priv->rl_op_lock);
 	taskqueue_enqueue(priv->rl_tq, &priv->rl_task);
 	return (0);
 }
@@ -675,16 +677,18 @@ void mlx4_en_async_rl_operation(void *context, int pending)
         priv = context;
 
 	while(pending){
-	        /* Check for availble operation in the operation list
-		 * Locking is not necessary since only one thread handles this list */
+	        /* Check for availble operation in the operation list */
+		spin_lock(&priv->rl_op_lock);
 	        if ((rl_item = STAILQ_FIRST(&priv->rl_op_list_head))) {
 			ring_id = rl_item->ring_id;
 			rl_operation = rl_item->operation;
 			rate_index = rl_item->rate_index;
 	                STAILQ_REMOVE_HEAD(&priv->rl_op_list_head, entry);
+			spin_unlock(&priv->rl_op_lock);
 			kfree(rl_item);
 		}
 		else {
+			spin_unlock(&priv->rl_op_lock);
 			pr_err("No avaliable rate limit item \n");
 			return;
 		}

@@ -705,6 +705,7 @@ struct mlx4_en_priv {
 
 #ifdef CONFIG_RATELIMIT
 	spinlock_t tx_ring_index_lock;
+	spinlock_t rl_op_lock;
 	STAILQ_HEAD(, mlx4_en_reuse_index_list_element) reuse_index_list_head;
 	STAILQ_HEAD(, mlx4_en_rl_task_list_element) rl_op_list_head;
 	struct mlx4_en_reuse_index_list_element reuse_index_list_array [MAX_TX_RINGS];
