@@ -447,6 +447,8 @@ struct mlx4_rate_limit_caps {
 	u16	min_val;
 	u32	calc_max_val;
 	u32	calc_min_val;
+	char    min_val_str[32];
+	char    max_val_str[32];
 };
 #endif
 
@@ -825,6 +827,9 @@ struct mlx4_dev {
 	int			oper_log_mgm_entry_size;
 	u64			regid_promisc_array[MLX4_MAX_PORTS + 1];
 	u64			regid_allmulti_array[MLX4_MAX_PORTS + 1];
+#ifdef CONFIG_RATELIMIT
+	struct sysctl_ctx_list  rl_ctx;
+#endif
 };
 
 struct mlx4_clock_params {

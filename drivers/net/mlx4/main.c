@@ -1880,6 +1880,10 @@ static void unmap_internal_clock(struct mlx4_dev *dev)
 
 static void mlx4_close_hca(struct mlx4_dev *dev)
 {
+#ifdef CONFIG_RATELIMIT
+	if (dev->caps.rl_caps.enable)
+		sysctl_ctx_free(&dev->rl_ctx);
+#endif
 	unmap_internal_clock(dev);
 	unmap_bf_area(dev);
 	if (mlx4_is_slave(dev)) {
@@ -2037,6 +2041,68 @@ static void choose_steering_mode(struct mlx4_dev *dev,
 		 dev->oper_log_mgm_entry_size, mlx4_log_num_mgm_entry_size);
 }
 
+#ifdef CONFIG_RATELIMIT
+static char* mlx4_sysctl_rate_limit_unit_str(u8 val)
+{
+	char *unit_str = NULL;
+
+	switch (val) {
+	case MLX4_QP_RATE_LIMIT_KBPS:
+		unit_str = "Kbps";
+		break;
+	case MLX4_QP_RATE_LIMIT_MBPS:
+		unit_str = "Mbps";
+		break;
+	case MLX4_QP_RATE_LIMIT_GBPS:
+		unit_str = "Gbps";
+		break;
+	default:
+		break;
+	}
+	return unit_str;
+}
+
+static void mlx4_sysctl_rate_limit_caps(struct mlx4_dev *dev)
+{
+	struct sysctl_ctx_list	*ctx;
+	struct sysctl_oid	*node;
+	struct sysctl_oid_list	*node_list;
+	char		*min_unit_str;
+	char		*max_unit_str;
+	char		*min_namebuf;
+	char		*max_namebuf;
+	int		min_namebuf_size;
+	int		max_namebuf_size;
+
+	min_namebuf = dev->caps.rl_caps.min_val_str;
+	min_namebuf_size = sizeof(dev->caps.rl_caps.min_val_str);
+	max_namebuf = dev->caps.rl_caps.max_val_str;
+	max_namebuf_size = sizeof(dev->caps.rl_caps.max_val_str);
+
+	ctx = &dev->rl_ctx;
+	sysctl_ctx_init(ctx);
+	node = SYSCTL_ADD_NODE(ctx, SYSCTL_CHILDREN(dev->pdev->dev.kobj.oidp),
+		OID_AUTO, "rate_limit_caps" , CTLFLAG_RD, 0, "rate limit capabilitiess");
+	node_list = SYSCTL_CHILDREN(node);
+
+	if ((min_unit_str = mlx4_sysctl_rate_limit_unit_str(dev->caps.rl_caps.min_unit))) {
+		snprintf(min_namebuf, min_namebuf_size,
+		"%d %s", dev->caps.rl_caps.min_val, min_unit_str);
+	}
+	if ((max_unit_str = mlx4_sysctl_rate_limit_unit_str(dev->caps.rl_caps.max_unit))) {
+		snprintf(max_namebuf, max_namebuf_size,
+		"%d %s", dev->caps.rl_caps.max_val, max_unit_str);
+	}
+
+	SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "min_value",
+		CTLFLAG_RD, min_namebuf, 0,
+		"Min rate limit value supported [bits/second]");
+	SYSCTL_ADD_STRING(ctx, node_list, OID_AUTO, "max_value",
+		CTLFLAG_RD, max_namebuf, 0,
+		"Max rate limit value supported [bits/second]");
+}
+#endif
+
 static int mlx4_init_hca(struct mlx4_dev *dev)
 {
 	struct mlx4_priv	  *priv = mlx4_priv(dev);
@@ -2082,6 +2148,11 @@ static int mlx4_init_hca(struct mlx4_dev *dev)
 			mlx4_err(dev, "QUERY_DEV_CAP command failed, aborting.\n");
 			goto err_stop_fw;
 		}
+
+#ifdef CONFIG_RATELIMIT
+		if (dev->caps.rl_caps.enable)
+			mlx4_sysctl_rate_limit_caps(dev);
+#endif
 
 		choose_steering_mode(dev, dev_cap);
 
