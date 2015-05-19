@@ -14,6 +14,10 @@ SRCS+= cm.c fmr_pool.c mad_rmpp.c ucm.c cma.c
 SRCS+= linux_compat.c linux_radix.c linux_idr.c
 SRCS+= vnode_if.h device_if.h bus_if.h pci_if.h opt_inet.h opt_inet6.h
 
+.if defined(CONFIG_RATELIMIT)
+CFLAGS += -DCONFIG_RATELIMIT=1
+.endif
+
 CFLAGS+= -I${.CURDIR}/../../../drivers/infiniband/core
 CFLAGS+= -I${.CURDIR}/../../../include
 CFLAGS+= -DINET6 -DINET -DOFED

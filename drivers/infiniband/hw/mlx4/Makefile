@@ -10,6 +10,10 @@ SRCS+=	alias_GUID.c mcg.c sysfs.c ah.c cq.c doorbell.c mad.c main.c mr.c qp.c sr
 SRCS+= linux_compat.c linux_radix.c linux_idr.c 
 SRCS+=	opt_inet.h opt_inet6.h
 
+.if defined(CONFIG_RATELIMIT)
+CFLAGS += -DCONFIG_RATELIMIT=1
+.endif
+
 CFLAGS+= -I${.CURDIR}/../../../../drivers/infiniband/hw/mlx4
 CFLAGS+= -I${.CURDIR}/../../../../include
 CFLAGS+= -DCONFIG_INFINIBAND_USER_MEM
