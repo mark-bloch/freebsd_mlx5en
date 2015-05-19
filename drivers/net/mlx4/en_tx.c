@@ -1466,10 +1466,12 @@ mlx4_en_transmit_locked(struct ifnet *dev, int tx_ind, struct mbuf *m)
 	}
 
 	enqueued = 0;
-	if (m != NULL) {
-		if ((err = drbr_enqueue(dev, ring->br, m)) != 0)
-			return (err);
-	}
+	if (m != NULL)
+		/* If we can't insert mbuf into drbr, try to xmit anyway.
+		 * We keep the error we got so we could return that after xmit.
+		 */
+		err = drbr_enqueue(dev, ring->br, m);
+
 	/* Process the queue */
 	while ((next = drbr_peek(dev, ring->br)) != NULL) {
 		if (mlx4_en_xmit(dev, tx_ind, &next) != 0) {
