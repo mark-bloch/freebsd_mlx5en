@@ -39,6 +39,28 @@
 
 #define MLX4_INVALID_LKEY	0x100
 
+#define	DS_SIZE_ALIGNMENT	16
+
+#ifdef CONFIG_WQE_FORMAT_1
+#define WQE_FORMAT_1_MASK      cpu_to_be32(0xbfffffff)
+#define SET_BYTE_COUNT(byte_count) (cpu_to_be32(byte_count) | owner_bit)
+#define SET_LSO_MSS(mss_hdr_size) (cpu_to_be32(mss_hdr_size) | owner_bit)
+
+/* The +8 is for mss_header and inline header */
+#define GET_LSO_SEG_SIZE(lso_header_size)			\
+	(((lso_header_size) > 60) ?				\
+	 ALIGN((lso_header_size) + 8, DS_SIZE_ALIGNMENT) :	\
+	 ALIGN((lso_header_size) + 4, DS_SIZE_ALIGNMENT))
+
+#define	DS_BYTE_COUNT_MASK	cpu_to_be32(0x3fffffff)
+#else
+#define SET_BYTE_COUNT(byte_count) cpu_to_be32(byte_count)
+#define SET_LSO_MSS(mss_hdr_size) cpu_to_be32(mss_hdr_size)
+#define GET_LSO_SEG_SIZE(lso_header_size)			\
+	ALIGN(lso_header_size + 4, DS_SIZE_ALIGNMENT)
+#define DS_BYTE_COUNT_MASK       cpu_to_be32(0x7fffffff)
+#endif
+
 enum ib_m_qp_attr_mask {
 	IB_M_EXT_CLASS_1 = 1 << 28,
 	IB_M_EXT_CLASS_2 = 1 << 29,
@@ -276,7 +298,15 @@ enum { /* param3 */
 #define MLX4_FW_VER_WQE_CTRL_NEC mlx4_fw_ver(2, 2, 232)
 
 enum {
+#ifdef CONFIG_WQE_FORMAT_1
+	MLX4_WQE_CTRL_NEC		= 1 << 31,
+	MLX4_WQE_CTRL_OWN		= 1 << 30,
+	MLX4_WQE_CTRL_RR		= 0,
+#else
+	MLX4_WQE_CTRL_OWN		= 1 << 31,
 	MLX4_WQE_CTRL_NEC		= 1 << 29,
+	MLX4_WQE_CTRL_RR		= 1 << 6,
+#endif
 	MLX4_WQE_CTRL_FENCE		= 1 << 6,
 	MLX4_WQE_CTRL_CQ_UPDATE		= 3 << 2,
 	MLX4_WQE_CTRL_SOLICITED		= 1 << 1,

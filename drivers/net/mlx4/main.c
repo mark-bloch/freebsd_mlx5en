@@ -654,6 +654,10 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 			 (unsigned long long) pci_resource_len(dev->pdev, 2));
 		return -ENODEV;
 	}
+#ifdef CONFIG_WQE_FORMAT_1
+	if ((dev_cap->bmme_flags & MLX4_BMME_FLAG_WQE_FORMAT))
+		dev_cap->flags2 |= MLX4_DEV_CAP_FLAG2_WQE_FORMAT;
+#endif
 
 	dev->caps.num_ports	     = dev_cap->num_ports;
 	dev->phys_caps.num_phys_eqs  = MLX4_MAX_EQ_NUM;
@@ -1136,6 +1140,10 @@ static int mlx4_slave_cap(struct mlx4_dev *dev)
 		dev->caps.cqe_size   = 32;
 	}
 
+#ifdef CONFIG_WQE_FORMAT_1
+	if (dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_WQE_FORMAT)
+		dev->caps.userspace_caps |= MLX4_USER_DEV_CAP_WQE_FORMAT;
+#endif
 	dev->caps.flags2 &= ~MLX4_DEV_CAP_FLAG2_TS;
 	mlx4_warn(dev, "Timestamping is not supported in slave mode.\n");
 

@@ -1346,7 +1346,7 @@ int mlx4_en_start_port(struct net_device *dev)
 
 		/* Set initial ownership of all Tx TXBBs to SW (1) */
 		for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
-			*((u32 *) (tx_ring->buf + j)) = 0xffffffff;
+			*((u32 *) (tx_ring->buf + j)) = INIT_OWNER_BIT;
 		++tx_index;
 	}
 

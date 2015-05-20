@@ -203,6 +203,7 @@ enum {
 	MLX4_DEV_CAP_FLAG2_EQE_STRIDE		= 1LL <<  23,
 	MLX4_DEV_CAP_FLAG2_UPDATE_QP_SRC_CHECK_LB = 1LL << 24,
 	MLX4_DEV_CAP_FLAG2_RX_CSUM_MODE		= 1LL <<  25,
+	MLX4_DEV_CAP_FLAG2_WQE_FORMAT		= 1ULL << 35,
 };
 
 /* bit enums for an 8-bit flags field indicating special use
@@ -231,6 +232,10 @@ enum {
 };
 
 enum {
+	MLX4_USER_DEV_CAP_WQE_FORMAT	= 1L << 1
+};
+
+enum {
 	MLX4_FUNC_CAP_64B_EQE_CQE	= 1L << 0
 };
 
@@ -244,6 +249,7 @@ enum {
 	MLX4_BMME_FLAG_TYPE_2_WIN	= 1 <<  9,
 	MLX4_BMME_FLAG_RESERVED_LKEY	= 1 << 10,
 	MLX4_BMME_FLAG_FAST_REG_WR	= 1 << 11,
+	MLX4_BMME_FLAG_WQE_FORMAT	= 1 << 17,
 };
 
 enum mlx4_event {

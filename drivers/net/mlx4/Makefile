@@ -14,6 +14,7 @@ CFLAGS+= -I${.CURDIR}/../../../include
 
 .if defined(CONFIG_RATELIMIT)
 CFLAGS += -DCONFIG_RATELIMIT=1
+CFLAGS += -DCONFIG_WQE_FORMAT_1=1
 .endif
 
 .if !defined(KERNBUILDDIR)

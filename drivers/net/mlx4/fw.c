@@ -1407,6 +1407,18 @@ int mlx4_INIT_HCA(struct mlx4_dev *dev, struct mlx4_init_hca_param *param)
 	/* Check port for UD address vector: */
 	*(inbox + INIT_HCA_FLAGS_OFFSET / 4) |= cpu_to_be32(1);
 
+#ifdef CONFIG_WQE_FORMAT_1
+	/* Set wqe_format to be 1 */
+	if (dev->caps.flags2 & MLX4_DEV_CAP_FLAG2_WQE_FORMAT) {
+		*(inbox + INIT_HCA_FLAGS_OFFSET / 4) |= cpu_to_be32(1 << 8);
+		dev->caps.userspace_caps |= MLX4_USER_DEV_CAP_WQE_FORMAT;
+	} else {
+		mlx4_err(dev, "INIT_HCA failed: WQE_FORMAT 1 not supported by FW\n");
+		mlx4_free_cmd_mailbox(dev, mailbox);
+		return -ENOSYS;
+	}
+#endif
+
 	/* Enable IPoIB checksumming if we can: */
 	if (dev->caps.flags & MLX4_DEV_CAP_FLAG_IPOIB_CSUM)
 		*(inbox + INIT_HCA_FLAGS_OFFSET / 4) |= cpu_to_be32(1 << 3);
@@ -1525,7 +1537,6 @@ int mlx4_INIT_HCA(struct mlx4_dev *dev, struct mlx4_init_hca_param *param)
 
 	if (err)
 		mlx4_err(dev, "INIT_HCA returns %d\n", err);
-
 	mlx4_free_cmd_mailbox(dev, mailbox);
 	return err;
 }

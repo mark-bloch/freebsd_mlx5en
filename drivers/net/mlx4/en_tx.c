@@ -552,8 +552,8 @@ activate:
         mlx4_en_arm_cq(priv, cq);
 
         /* Set initial ownership of all Tx TXBBs to SW (1) */
-        for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
-                *((u32 *) (tx_ring->buf + j)) = 0xffffffff;
+	for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
+		*((u32 *) (tx_ring->buf + j)) = INIT_OWNER_BIT;
 
 	mutex_unlock(&mdev->state_lock);
 
@@ -720,6 +720,38 @@ void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 		       MLX4_QP_STATE_RST, NULL, 0, 0, &ring->qp);
 }
 
+#ifdef CONFIG_WQE_FORMAT_1
+#define COPY_LSO_HEADER_EN(dst, src, hdr_sz)				\
+	copy_lso_header(dst, src, hdr_sz, owner_bit)
+static inline void copy_lso_header(__be32 *dst, void *src, int hdr_sz,
+				   __be32 owner_bit) {
+	/* In WQE_FORMAT = 1 we need to split segments larger
+	 * than 64 bytes, in this case: 64 - sizeof(ctrl) -
+	 * sizeof(lso->mss_hdr_size) = 44
+	 */
+	if (likely(hdr_sz > 44)) {
+		memcpy(dst, src, 44);
+
+		/* Writing the rest of the header and leaving 4 byte
+		 * for the inline header
+		 */
+		memcpy((dst + 12), src + 44, hdr_sz - 44);
+
+		/* Make sure we write the rest of the segment before
+		 * setting ownership bit to HW
+		 */
+		wmb();
+
+		*(dst + 11) =
+			cpu_to_be32((1 << 31) |
+				    (hdr_sz - 44)) |
+			owner_bit;
+	} else {
+		memcpy(dst, src, hdr_sz);
+	}
+}
+#else
+#define COPY_LSO_HEADER_EN(dst, src, hdr_sz)	memcpy(dst, src, hdr_sz)
 static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
 		       struct mlx4_en_tx_ring *ring,
 		       int index, u8 owner)
@@ -749,6 +781,7 @@ static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
 			}
 		}
 }
+#endif
 
 static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
 				struct mlx4_en_tx_ring *ring,
@@ -834,7 +867,9 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 	u16 index;
 	u16 new_index, ring_index, stamp_index;
 	u32 txbbs_skipped = 0;
+#ifndef CONFIG_WQE_FORMAT_1
 	u32 txbbs_stamp = 0;
+#endif
 	u32 cons_index = mcq->cons_index;
 	int size = cq->size;
 	u32 size_mask = ring->size_mask;
@@ -882,11 +917,13 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 					priv, ring, ring_index,
 					!!((ring->cons + txbbs_skipped) &
 					ring->size), timestamp);
+#ifndef CONFIG_WQE_FORMAT_1
 			mlx4_en_stamp_wqe(priv, ring, stamp_index,
 					  !!((ring->cons + txbbs_stamp) &
 						ring->size));
 			stamp_index = ring_index;
 			txbbs_stamp = txbbs_skipped;
+#endif
 			packets++;
 			bytes += ring->tx_info[ring_index].nr_bytes;
 		} while (ring_index != new_index);
@@ -963,10 +1000,20 @@ static struct mlx4_en_tx_desc *mlx4_en_bounce_to_desc(struct mlx4_en_priv *priv,
 {
 	u32 copy = (ring->size - index) * TXBB_SIZE;
 	int i;
-
+#ifdef CONFIG_WQE_FORMAT_1
+	__be32 owner_bit = (ring->prod & ring->size) ?
+		cpu_to_be32(MLX4_EN_BIT_DESC_OWN) : 0;
+#endif
 	for (i = desc_size - copy - 4; i >= 0; i -= 4) {
-		if ((i & (TXBB_SIZE - 1)) == 0)
+		if ((i & (TXBB_SIZE - 1)) == 0) {
 			wmb();
+#ifdef CONFIG_WQE_FORMAT_1
+			*((u32 *) (ring->buf + i)) =
+				(*((u32 *) (ring->bounce_buf + copy + i)) &
+				 WQE_FORMAT_1_MASK) | owner_bit;
+			continue;
+#endif
+		}
 
 		*((u32 *) (ring->buf + i)) =
 			*((u32 *) (ring->bounce_buf + copy + i));
@@ -1095,7 +1142,7 @@ static int get_real_size(struct mbuf *mb, struct net_device *dev, int *p_n_segs,
                                 nr_segs--;
                         *p_n_segs = nr_segs;
                         return CTRL_SIZE + nr_segs * DS_SIZE +
-                            ALIGN(*lso_header_size + 4, DS_SIZE);
+				GET_LSO_SEG_SIZE(*lso_header_size);
                 }
         } else
                 *lso_header_size = 0;
@@ -1128,7 +1175,10 @@ static struct mbuf *mb_copy(struct mbuf *mb, int *offp, char *data, int len)
 }
 
 static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct mbuf *mb,
-                             int real_size, u16 *vlan_tag, int tx_ind)
+			     int real_size,
+			     u16 *vlan_tag,
+			     int tx_ind,
+			     __be32 owner_bit)
 {
 	struct mlx4_wqe_inline_seg *inl = &tx_desc->inl;
 	int spc = MLX4_INLINE_ALIGN - CTRL_SIZE - sizeof *inl;
@@ -1138,19 +1188,19 @@ static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct mbuf *mb,
 	off = 0;
 	len = mb->m_pkthdr.len;
 	if (len <= spc) {
-		inl->byte_count = cpu_to_be32(1 << 31 |
+		inl->byte_count = SET_BYTE_COUNT(1 << 31 |
 				(max_t(typeof(len), len, MIN_PKT_LEN)));
 		mb_copy(mb, &off, (void *)(inl + 1), len);
 		if (len < MIN_PKT_LEN)
                         memset(((void *)(inl + 1)) + len, 0,
                                MIN_PKT_LEN - len);
 	} else {
-		inl->byte_count = cpu_to_be32(1 << 31 | spc);
+		inl->byte_count = SET_BYTE_COUNT(1 << 31 | spc);
 		mb = mb_copy(mb, &off, (void *)(inl + 1), spc);
 		inl = (void *) (inl + 1) + spc;
 		mb_copy(mb, &off, (void *)(inl + 1), len - spc);
 		wmb();
-		inl->byte_count = cpu_to_be32(1 << 31 | (len - spc));
+		inl->byte_count = SET_BYTE_COUNT(1 << 31 | (len - spc));
 	}
 	tx_desc->ctrl.vlan_tag = cpu_to_be16(*vlan_tag);
 	tx_desc->ctrl.ins_vlan = MLX4_WQE_CTRL_INS_VLAN * !!(*vlan_tag);
@@ -1226,12 +1276,17 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	struct mbuf *mb;
 	mb = *mbp;
 	int defrag = 1;
+	__be32 owner_bit;
 
 	if (!priv->port_up)
 		goto tx_drop;
 
 	ring = priv->tx_ring[tx_ind];
 	ring_size = ring->size;
+
+	owner_bit = (ring->prod & ring->size) ?
+		cpu_to_be32(MLX4_EN_BIT_DESC_OWN) : 0;
+
 	inl = is_inline(mb, ring->inline_thold);
 
 retry:
@@ -1308,9 +1363,10 @@ retry:
 	tx_info->nr_segs = nr_segs;
 
 	if (lso_header_size) {
-		memcpy(tx_desc->lso.header, mb->m_data, lso_header_size);
-		data = ((void *)&tx_desc->lso + ALIGN(lso_header_size + 4,
-						      DS_SIZE));
+		COPY_LSO_HEADER_EN(tx_desc->lso.header, mb->m_data,
+				   lso_header_size);
+		data = ((void *)&tx_desc->lso +
+			GET_LSO_SEG_SIZE(lso_header_size));
 		/* lso header is part of m_data.
 		 * need to omit when mapping DMA */
 		mb->m_data += lso_header_size;
@@ -1335,7 +1391,7 @@ retry:
                         data->addr = cpu_to_be64(dma);
                         data->lkey = cpu_to_be32(mdev->mr.key);
                         wmb();
-                        data->byte_count = cpu_to_be32(m->m_len);
+			data->byte_count = SET_BYTE_COUNT(m->m_len);
                         data++;
                 }
                 if (lso_header_size) {
@@ -1384,9 +1440,7 @@ retry:
 	if (lso_header_size) {
 		int segsz;
 		/* Mark opcode as LSO */
-		op_own = cpu_to_be32(MLX4_OPCODE_LSO | (1 << 6)) |
-			((ring->prod & ring_size) ?
-				cpu_to_be32(MLX4_EN_BIT_DESC_OWN) : 0);
+		op_own = cpu_to_be32(MLX4_OPCODE_LSO | MLX4_WQE_CTRL_RR);
 
 		/* Fill in the LSO prefix */
 		tx_desc->lso.mss_hdr_size = cpu_to_be32(
@@ -1399,9 +1453,7 @@ retry:
                 ring->packets += i;
 	} else {
 		/* Normal (Non LSO) packet */
-		op_own = cpu_to_be32(MLX4_OPCODE_SEND) |
-			((ring->prod & ring_size) ?
-			 cpu_to_be32(MLX4_EN_BIT_DESC_OWN) : 0);
+		op_own = cpu_to_be32(MLX4_OPCODE_SEND);
 		tx_info->nr_bytes = max(mb->m_pkthdr.len,
                     (unsigned int)ETHER_MIN_LEN - ETHER_CRC_LEN);
 		ring->packets++;
@@ -1411,10 +1463,11 @@ retry:
 	AVG_PERF_COUNTER(priv->pstats.tx_pktsz_avg, mb->m_pkthdr.len);
 
 	if (tx_info->inl) {
-		build_inline_wqe(tx_desc, mb, real_size, &vlan_tag, tx_ind);
+		build_inline_wqe(tx_desc, mb, real_size, &vlan_tag, tx_ind,
+				 owner_bit);
 		tx_info->inl = 1;
 	}
-
+	op_own |= owner_bit;
 	ring->prod += nr_txbb;
 
 

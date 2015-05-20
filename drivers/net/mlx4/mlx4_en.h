@@ -73,7 +73,15 @@
 #define MAX_RX_RINGS		128
 #define MIN_RX_RINGS		4
 #define TXBB_SIZE		64
+
+#ifdef CONFIG_WQE_FORMAT_1
+#define HEADROOM		0
+#define INIT_OWNER_BIT		cpu_to_be32(1 << 30)
+#else
 #define HEADROOM		(2048 / TXBB_SIZE + 1)
+#define INIT_OWNER_BIT		0xffffffff
+#endif
+
 #define STAMP_STRIDE		64
 #define STAMP_DWORDS		(STAMP_STRIDE / 4)
 #define STAMP_SHIFT		31
@@ -260,8 +268,12 @@ struct mlx4_en_tx_info {
 #endif
 };
 
-
+#ifdef CONFIG_WQE_FORMAT_1
+#define MLX4_EN_BIT_DESC_OWN	0x40000000
+#else
 #define MLX4_EN_BIT_DESC_OWN	0x80000000
+#endif
+
 #define CTRL_SIZE	sizeof(struct mlx4_wqe_ctrl_seg)
 #define MLX4_EN_MEMTYPE_PAD	0x100
 #define DS_SIZE		sizeof(struct mlx4_wqe_data_seg)
