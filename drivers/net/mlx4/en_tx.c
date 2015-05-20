@@ -270,6 +270,7 @@ static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
 	int					index = -1;
 	struct mlx4_en_reuse_index_list_element	*reused_item;
 
+	spin_lock(&priv->tx_ring_index_lock);
 	/* Check for availble index in re-use list */
 	if ((reused_item = STAILQ_FIRST(&priv->reuse_index_list_head))) {
 		index = reused_item->val;
@@ -281,6 +282,7 @@ static int mlx4_en_find_available_tx_ring_index(struct mlx4_en_priv *priv)
 		priv->tx_ring_num++;
 	} else /* Reached max resources capacity */
 		index = -1;
+	spin_unlock(&priv->tx_ring_index_lock);
 
 	return index;
 }
@@ -398,7 +400,6 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 		return (EINVAL);
 
 	/* Find available ring index */
-	spin_lock(&priv->tx_ring_index_lock);
 	index = mlx4_en_find_available_tx_ring_index(priv);
 
 	if (index < 0) {
@@ -408,8 +409,6 @@ int mlx4_en_create_rate_limit_ring(struct mlx4_en_priv *priv,
 	}
 
 	atomic_add_int(&priv->rate_limits[rate_index].ref, 1);
-	spin_unlock(&priv->tx_ring_index_lock);
-
 	rl_req->txringid = index;
 
 	/* Defer ring creation */
