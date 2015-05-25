@@ -727,6 +727,7 @@ struct mlx4_en_priv {
 	struct mlx4_en_rate_limit_indexes	*rate_limits;
 	struct mutex rate_limit_table_lock;
 	int next_free_rl_index;
+	u32 new_rate_for_avail_index;
 #endif
 };
 

@@ -2126,6 +2126,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	priv->native_tx_ring_num = priv->tx_ring_num;
 	priv->rate_limit_tx_ring_num = 0;
 	priv->next_free_rl_index = 1;
+	priv->new_rate_for_avail_index = 0;
 #endif
 
 	priv->tx_ring = kcalloc(MAX_TX_RINGS,
@@ -2546,7 +2547,6 @@ static int mlx4_en_set_rate_for_index(SYSCTL_HANDLER_ARGS)
 static int mlx4_en_set_rate_on_first_available_index(SYSCTL_HANDLER_ARGS)
 {
 	struct mlx4_en_priv *priv = arg1;
-	static u32 rate = 0;
 	int error = 0;
 	int i;
 
@@ -2557,34 +2557,34 @@ static int mlx4_en_set_rate_on_first_available_index(SYSCTL_HANDLER_ARGS)
 		priv->next_free_rl_index++;
 
 	if (req->newptr != NULL) {
-		SYSCTL_IN(req, &rate, sizeof(int));
+		SYSCTL_IN(req, &priv->new_rate_for_avail_index, sizeof(int));
 		if (priv->next_free_rl_index > priv->num_rates_per_prio) {
 			en_err(priv, "No space left for new rates\n");
-			rate = 0;
+			priv->new_rate_for_avail_index = 0;
 			mutex_unlock(&priv->rate_limit_table_lock);
 			return ENOSPC;
 		}
 		for (i = 0; i <= priv->num_rates_per_prio; i++) {
-			if (priv->rate_limits[i].rate == rate) {
+			if (priv->rate_limits[i].rate == priv->new_rate_for_avail_index) {
 				en_err(priv, "Rate already exists in index %d\n", i);
-				rate = 0;
+				priv->new_rate_for_avail_index = 0;
 				mutex_unlock(&priv->rate_limit_table_lock);
 				return error;
 			}
 		}
-		error = mlx4_en_rl_locked_set(priv, priv->next_free_rl_index, rate, 0, RATE);
+		error = mlx4_en_rl_locked_set(priv, priv->next_free_rl_index, priv->new_rate_for_avail_index, 0, RATE);
 		if (error) {
-			en_err(priv, "Couldn't set rate %u, for port %d\n",rate, priv->port);
-			rate = 0;
+			en_err(priv, "Couldn't set rate %u, for port %d\n",priv->new_rate_for_avail_index, priv->port);
+			priv->new_rate_for_avail_index = 0;
 		}
 		else {
 			priv->next_free_rl_index++;
 		}
 	}
 
-	SYSCTL_OUT(req, &rate, sizeof(int));
+	SYSCTL_OUT(req, &priv->new_rate_for_avail_index, sizeof(int));
 	if (req->oldptr != NULL)
-		rate = 0;
+		priv->new_rate_for_avail_index = 0;
 	mutex_unlock(&priv->rate_limit_table_lock);
 	return error;
 }
