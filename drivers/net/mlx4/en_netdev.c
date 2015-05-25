@@ -2575,6 +2575,7 @@ static int mlx4_en_set_rate_on_first_available_index(SYSCTL_HANDLER_ARGS)
 		error = mlx4_en_rl_locked_set(priv, priv->next_free_rl_index, rate, 0, RATE);
 		if (error) {
 			en_err(priv, "Couldn't set rate %u, for port %d\n",rate, priv->port);
+			rate = 0;
 		}
 		else {
 			priv->next_free_rl_index++;
