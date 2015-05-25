@@ -317,7 +317,7 @@ static int mlx4_en_validate_rate_ctl_req(struct mlx4_en_priv *priv,
 	}
 
 	/* Searching for the requested rate in the rate table */
-	for (i = 0; i < priv->num_rates_per_prio; i++) {
+	for (i = 0; i <= priv->num_rates_per_prio; i++) {
 		if (priv->rate_limits[i].rate == rate) {
 			*rate_index = i;
 			return (0);
