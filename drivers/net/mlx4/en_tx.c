@@ -108,7 +108,7 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 		ring->br = buf_ring_alloc(MLX4_EN_DEF_TX_QUEUE_SIZE, M_DEVBUF,
 					  M_WAITOK, &ring->tx_lock.m);
 	else
-		ring->br = buf_ring_alloc(2 * size, M_DEVBUF, M_WAITOK,
+		ring->br = buf_ring_alloc(size / 2, M_DEVBUF, M_WAITOK,
 					  &ring->tx_lock.m);
 #else
 	ring->br = buf_ring_alloc(MLX4_EN_DEF_TX_QUEUE_SIZE, M_DEVBUF,
@@ -1324,11 +1324,21 @@ retry:
 	 * stopping the queue
 	 */
 	if (unlikely((int)(ring->prod - ring->cons) > ring->full_size)) {
+#ifdef CONFIG_RATELIMIT
+		if (tx_ind < priv->native_tx_ring_num) {
+			/* every full native Tx ring stops queue */
+			if (ring->blocked == 0)
+				atomic_add_int(&priv->blocked, 1);
+			/* Set HW-queue-is-full flag */
+			atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
+		}
+#else
 		/* every full Tx ring stops queue */
 		if (ring->blocked == 0)
-                        atomic_add_int(&priv->blocked, 1);
+			atomic_add_int(&priv->blocked, 1);
 		/* Set HW-queue-is-full flag */
 		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
+#endif
 		ring->blocked = 1;
 		priv->port_stats.queue_stopped++;
 		ring->queue_stopped++;
@@ -1515,8 +1525,14 @@ mlx4_en_transmit_locked(struct ifnet *dev, int tx_ind, struct mbuf *m)
 	int enqueued, err = 0;
 
 	ring = priv->tx_ring[tx_ind];
+
+#ifdef CONFIG_RATELIMIT
+	if ((dev->if_drv_flags & (IFF_DRV_RUNNING | IFF_DRV_OACTIVE)) !=
+	    IFF_DRV_RUNNING || priv->port_up == 0 || ring->blocked == 1) {
+#else
 	if ((dev->if_drv_flags & (IFF_DRV_RUNNING | IFF_DRV_OACTIVE)) !=
 	    IFF_DRV_RUNNING || priv->port_up == 0) {
+#endif
 		if (m != NULL)
 			err = drbr_enqueue(dev, ring->br, m);
 		return (err);
