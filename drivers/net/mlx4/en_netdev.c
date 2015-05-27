@@ -2177,22 +2177,25 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	if (mdev->dev->caps.rl_caps.enable) {
 		memset(&all_num_rates, 0, sizeof(all_num_rates));
 		/* Query total number of rates */
-		err = mlx4_query_num_of_rates(mdev->dev, port, &all_num_rates);
+		err = mlx4_query_rl_fw_resources(mdev->dev, port, &all_num_rates);
 		if (!err) {
 			/* Set number of rates per prioroty */
 			if (mdev->num_rl_prios)
 				priv->num_rates_per_prio = all_num_rates.available_RPP/mdev->num_rl_prios;
 			/* Adding one to priv->num_rates_per_prio because index zero is used for the regular SQs,
 			 * Therefore FW can recieve 1-120 new different rates */
-			priv->rate_limits = (struct mlx4_en_rate_limit_indexes *) kzalloc((priv->num_rates_per_prio + 1) * sizeof(struct mlx4_en_rate_limit_indexes), GFP_KERNEL);
+			priv->rate_limits = (struct mlx4_en_rate_limit_indexes *) kzalloc((priv->num_rates_per_prio + 1)
+						* sizeof(struct mlx4_en_rate_limit_indexes), GFP_KERNEL);
 			for (i = 0; i < MLX4_NUM_PRIORITIES; i++) {
 				if (mdev->lst_of_prios & (1 << i)) {
 					all_num_rates.RPP_per_prio[i] = priv->num_rates_per_prio;
 				}
 			}
-			err = mlx4_allocate_num_of_rates(mdev->dev, port, &all_num_rates);
+			all_num_rates.base_qp_num = mdev->dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FW];
+			err = mlx4_alloc_rl_fw_resources(mdev->dev, port, &all_num_rates);
 			if (err) {
 				en_err(priv, "Couldn't set available number of rates per prio for port %d\n", port);
+				en_err(priv, "Couldn't set the amount of reserved qps needed by the FW \n");
 				mdev->dev->caps.rl_caps.enable = 0;
 			}
 		} else {

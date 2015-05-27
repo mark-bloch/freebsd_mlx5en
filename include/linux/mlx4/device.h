@@ -1316,11 +1316,13 @@ struct mlx4_hw_num_of_rates {
 	u8	RPP_prio_14;
 	u8	reserved17[3];
 	u8	RPP_prio_15;
+	__be32	base_qp_num;
 };
 
 struct mlx4_num_of_rates {
 	u16	available_RPP;
 	u8	RPP_per_prio[MLX4_NUM_PRIOS_TOTAL];
+	u32	base_qp_num;
 };
 
 struct mlx4_hw_qp_rl_index {
@@ -1421,9 +1423,9 @@ int mlx4_query_diag_counters(struct mlx4_dev *mlx4_dev, int array_length,
 			     u32 counter_out[]);
 
 #ifdef CONFIG_RATELIMIT
-int mlx4_query_num_of_rates(struct mlx4_dev *dev, u8 port,
+int mlx4_query_rl_fw_resources(struct mlx4_dev *dev, u8 port,
 			    struct mlx4_num_of_rates *all_num_rates);
-int mlx4_allocate_num_of_rates(struct mlx4_dev *dev, u8 port,
+int mlx4_alloc_rl_fw_resources(struct mlx4_dev *dev, u8 port,
 			       struct mlx4_num_of_rates *all_num_rates);
 int mlx4_set_rates_and_burst_size(struct mlx4_dev *dev, u8 port, u8 index,
 				  struct mlx4_qp_rl_index *qp_rl_index);

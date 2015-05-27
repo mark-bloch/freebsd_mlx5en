@@ -2707,7 +2707,7 @@ void mlx4_counter_free(struct mlx4_dev *dev, u8 port, u32 idx)
 EXPORT_SYMBOL_GPL(mlx4_counter_free);
 
 #ifdef CONFIG_RATELIMIT
-int mlx4_query_num_of_rates(struct mlx4_dev *dev, u8 port,
+int mlx4_query_rl_fw_resources(struct mlx4_dev *dev, u8 port,
 			    struct mlx4_num_of_rates *all_num_rates)
 {
 	struct mlx4_hw_num_of_rates *hw_all_num_rates;
@@ -2732,7 +2732,7 @@ int mlx4_query_num_of_rates(struct mlx4_dev *dev, u8 port,
 	return err;
 }
 
-int mlx4_allocate_num_of_rates(struct mlx4_dev *dev, u8 port,
+int mlx4_alloc_rl_fw_resources(struct mlx4_dev *dev, u8 port,
 			       struct mlx4_num_of_rates *all_num_rates)
 {
 	/* initialize struct mlx4_hw_num_of_rates because prios 8-15 are not is use for now */
@@ -2757,6 +2757,9 @@ int mlx4_allocate_num_of_rates(struct mlx4_dev *dev, u8 port,
 	hw_all_num_rates->RPP_prio_5 = all_num_rates->RPP_per_prio[5];
 	hw_all_num_rates->RPP_prio_6 = all_num_rates->RPP_per_prio[6];
 	hw_all_num_rates->RPP_prio_7 = all_num_rates->RPP_per_prio[7];
+
+	/* Update the fw the needed amount of reserved qp's for RLPPs */
+	hw_all_num_rates->base_qp_num |= cpu_to_be32(all_num_rates->base_qp_num & 0xffffff);
 
 	err = mlx4_cmd(dev, mailbox_in_dma, inmod,
 		       MLX4_ALLOCATE_RLPP_FOR_PORT,
