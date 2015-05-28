@@ -1331,6 +1331,7 @@ retry:
 				atomic_add_int(&priv->blocked, 1);
 			/* Set HW-queue-is-full flag */
 			atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
+			priv->port_stats.queue_stopped++;
 		}
 #else
 		/* every full Tx ring stops queue */
@@ -1338,9 +1339,9 @@ retry:
 			atomic_add_int(&priv->blocked, 1);
 		/* Set HW-queue-is-full flag */
 		atomic_set_int(&dev->if_drv_flags, IFF_DRV_OACTIVE);
+		priv->port_stats.queue_stopped++;
 #endif
 		ring->blocked = 1;
-		priv->port_stats.queue_stopped++;
 		ring->queue_stopped++;
 
 		/* Use interrupts to find out when queue opened */
