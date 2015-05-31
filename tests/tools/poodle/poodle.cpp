@@ -16,12 +16,13 @@
 #include <arpa/inet.h>
 #include <arpa/inet.h>        /*  inet (3) funtions         */
 #include <unistd.h>           /*  misc. UNIX functions      */
-#include <pthread.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/sysctl.h>
+
+#include <list>
 
 #define MAX_FDS 300000
 #define min(a,b) (((a) < (b)) ? (a) : (b))
@@ -29,9 +30,9 @@
 #define KILO 1000
 #define BITS_IN_BYTE 8
 
-class  reporter_c;
+class  client_reporter_c;
 
-reporter_c* p_reporter_for_sig_handling;
+client_reporter_c* p_reporter_for_sig_handling;
 
 bool report = false;
 
@@ -398,7 +399,7 @@ int one_connection_c::shut_down()
 	m_is_active = false;
 	return 0;
 }
-class reporter_c {
+class client_reporter_c {
 	public:
 		void init(connection_group_thread_c* load, int num_threads);
 		int run();
@@ -412,27 +413,27 @@ class reporter_c {
 		pthread_t the_thread;
 };
 
-void reporter_c::init(connection_group_thread_c* load, int num_threads)
+void client_reporter_c::init(connection_group_thread_c* load, int num_threads)
 {
 	m_current_load = load;
 	m_num_threads = num_threads;
 }
 
-void* reporter_c::thread_func(void* arg)
+void* client_reporter_c::thread_func(void* arg)
 {
-	reporter_c* t = (reporter_c*)arg;
+	client_reporter_c* t = (client_reporter_c*)arg;
 	t->main_loop();
 	return NULL;
 }
 
-int reporter_c::run()
+int client_reporter_c::run()
 {
 	pthread_create(&the_thread, NULL, thread_func, this);
 	pthread_detach(the_thread);
 	return 0;
 }
 
-void reporter_c::summary()
+void client_reporter_c::summary()
 {
 	unsigned long system_conns_created = 0;
 	unsigned long system_conns_closed = 0;
@@ -444,7 +445,7 @@ void reporter_c::summary()
 	printf("Total conns closed = %lu\n", system_conns_closed);
 }
 
-void reporter_c::main_loop()
+void client_reporter_c::main_loop()
 {
 	unsigned long last_second_all_bytes = 0;
 	while ( true ) {
@@ -457,7 +458,172 @@ void reporter_c::main_loop()
 	}
 }
 
-int one_server(int server_port)
+class server_worker_c {
+	public:
+		void init();
+		int run();
+		static void* thread_func(void* arg);
+		void main_loop();
+		void safe_add_pending_socket(int s);
+		unsigned long get_last_second_recieved() { return m_saved_last_second_received; }
+		unsigned int get_num_conns() { return m_num_conns; }
+
+
+	private:
+
+		void safe_update_all_socket_list();
+		pthread_mutex_t m_lock;
+		pthread_t the_thread;
+		std::list<int> all_socket;
+		std::list<int> pending_sockets;
+		unsigned int m_last_second_received;
+		unsigned int m_saved_last_second_received;
+		unsigned int m_num_conns;
+
+
+};
+void server_worker_c::safe_update_all_socket_list()
+{
+	int s;
+
+	pthread_mutex_lock(&m_lock);
+		while ( !pending_sockets.empty() ) {
+			s = pending_sockets.front();
+			all_socket.push_front(s);
+			pending_sockets.pop_front();
+			m_num_conns++;
+		}
+	pthread_mutex_unlock(&m_lock);
+}
+
+void server_worker_c::safe_add_pending_socket(int s)
+{
+	pthread_mutex_lock(&m_lock);
+		pending_sockets.push_back(s);
+	pthread_mutex_unlock(&m_lock);
+}
+
+void server_worker_c::init()
+{	
+	m_lock = PTHREAD_MUTEX_INITIALIZER;
+	m_num_conns = 0;
+	
+}
+
+void* server_worker_c::thread_func(void* arg)
+{
+	server_worker_c* t = (server_worker_c*)arg;
+	t->main_loop();
+	return NULL;
+}
+
+int server_worker_c::run()
+{
+	pthread_create(&the_thread, NULL, thread_func, this);
+	pthread_detach(the_thread);
+	return 0;
+}
+
+
+#define SECOND_PASSED (Time()-second_start)>1000000
+void server_worker_c::main_loop()
+{
+	char buf[1024*1024];
+	int rc;
+	double second_start;
+	
+	second_start = Time();
+	while ( true ) {
+		// read all active sockets
+		for (std::list<int>::iterator s=all_socket.begin(); s != all_socket.end(); ++s)
+		{
+again:
+			rc = read(*s, buf, 1024*1204);
+			if ( rc == 0 ) {
+				printf("Closing %d\n", *s);
+			}
+			if ( rc > 0 ) {
+				m_last_second_received += rc;
+				goto again;
+			}
+		}
+		safe_update_all_socket_list();
+		if ( SECOND_PASSED ) {
+			m_saved_last_second_received = m_last_second_received;
+			m_last_second_received = 0;
+			second_start = Time();
+		}
+	}
+}
+
+class server_reporter_c { /* XXX Todo: this class is almost the same as client_reporter - they need to be under the same class */
+	public:
+		void init(server_worker_c* load, int num_threads);
+		int run();
+		static void* thread_func(void* arg);
+		void main_loop();
+		void summary();
+
+	private:
+		server_worker_c* m_current_load;
+		int m_num_threads;
+		pthread_t the_thread;
+};
+
+void server_reporter_c::init(server_worker_c* load, int num_threads)
+{
+	m_current_load = load;
+	m_num_threads = num_threads;
+}
+
+void* server_reporter_c::thread_func(void* arg)
+{
+	server_reporter_c* t = (server_reporter_c*)arg;
+	t->main_loop();
+	return NULL;
+}
+
+int server_reporter_c::run()
+{
+	pthread_create(&the_thread, NULL, thread_func, this);
+	pthread_detach(the_thread);
+	return 0;
+}
+
+void server_reporter_c::summary()
+{
+}
+
+#define MEGA_BITS_IN_BYTES KILO*KILO/BITS_IN_BYTE
+#define GIGA_BITS_IN_BYTES MEGA_BITS_IN_BYTES*KILO
+
+void server_reporter_c::main_loop()
+{
+	unsigned long last_second_all_bytes = 0;
+	unsigned int conns = 0;
+	while ( true ) {
+		sleep(1);
+		conns = 0;
+		last_second_all_bytes = 0;
+		for (int i=0; i<m_num_threads; i++) {
+			last_second_all_bytes += m_current_load[i].get_last_second_recieved();
+			conns += m_current_load[i].get_num_conns();
+		}
+		printf("%u conns Recieved", conns);
+		if ( last_second_all_bytes > GIGA_BITS_IN_BYTES )
+			printf(" %.3f Gbits/sec. ", (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO*KILO));
+		else if ( last_second_all_bytes > MEGA_BITS_IN_BYTES )
+			printf(" %.2f Mbits/sec. ", (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO));
+		else
+			printf(" %lu bits. ", last_second_all_bytes*BITS_IN_BYTE);
+		printf(" %.1f Kbytes per conn\n", conns > 0 ? (double)last_second_all_bytes/(conns*KILO) : 0);
+
+
+		last_second_all_bytes = 0;
+	}
+}
+
+int one_server(int server_port, int server_threads)
 {
 	int			i;
 	int			rc;
@@ -470,18 +636,29 @@ int one_server(int server_port)
 	struct 			rlimit my_limit;
 	int		    	all_fds[MAX_FDS];
 	bool rest;
-	int total;
 	unsigned long reads, read_from_start;
 	double start, passed, actual_bandwidth;
+	int next_worker_thread = 0;
+	int num_worker_threads = server_threads;
 
 	getrlimit (RLIMIT_NOFILE, &my_limit);
 	printf ( "Current limit of open files is %ld.\n", my_limit.rlim_cur);
+	printf ( "Init server with %d threads.\n", server_threads);
 
 
-	for (i = 0; i < MAX_FDS; i++ ) { 
-		all_fds[i] = -1;
+	// create worker threads
+	server_worker_c *server_worker_threads = new server_worker_c[num_worker_threads];
+	for (int i=0; i<num_worker_threads; i++) {
+		server_worker_threads[i].init();
+		server_worker_threads[i].run();
 	}
 
+	if ( report ) {
+		server_reporter_c reporter;
+		reporter.init(server_worker_threads, num_worker_threads);
+		reporter.run();
+
+	}
 
 	memset(&sa, 0, sizeof(sa));
 	sa.sin_family = AF_INET;
@@ -516,47 +693,11 @@ int one_server(int server_port)
 	if (rc) {
 		perror("listen");
 	}
-	total = 0;
-	start = Time();
-	read_from_start = 0;
 	while ( 1 ) {
 		cs = accept(s, (struct sockaddr *)&csa, &size_csa);
 		if ( cs > 1 ) {
+			server_worker_threads[next_worker_thread++ % num_worker_threads].safe_add_pending_socket(cs);
 			total_system_conns++;
-			rc = fcntl(cs, F_SETFL, O_NONBLOCK); 
-			all_fds[total] = cs;
-			while ( all_fds[total] != -1 ) {
-				total = (total + 1)%MAX_FDS;
-			}
-			continue;
-		}
-		for (i = 0; i < total; i++ ) { 
-			rc = read(all_fds[i], buf, 1024*1204);
-			if ( rc == 0 ) {
-				shutdown(all_fds[i], SHUT_RDWR);
-				close(all_fds[i]);
-				total_system_closed++;
-				all_fds[i] = -1;
-			}
-			if ( rc > 0 ) {
-				reads++;
-				read_from_start += rc;
-				while (rc > 0 ) {
-					rc = read(all_fds[i], buf, 1024*1204);
-					if ( rc > 0 )
-						read_from_start += rc;
-				}
-			}
-		}
-		if ( report ) {
-			passed = Time() - start;
-			if ( passed > 1000000 ) {
-				start = Time();
-				actual_bandwidth = (read_from_start*(1000000/passed)*BITS_IN_BYTE);
-				if (read_from_start>0)
-					printf("Recieved %.2f bitsPerSecond (%.1f Mbits/s) \n", actual_bandwidth, actual_bandwidth/(KILO*KILO));
-				read_from_start = 0;
-			}
 		}
 	}
 	return 0;
@@ -574,11 +715,12 @@ void usage(char *prog)
 			"	      -n conn created per second\n"
 			"	      -t active time per connection in seconds. The connection will be closed and a new connection will be created once time is up.\n"
 			"	      -T Total run time in secs, otherwise run forever or till killed \n"
-			"	      -r how many threads. (This box has %d cores available)\n"
+			"	      -r how many client threads. (This box has %d cores available)\n"
+			"	      -R how many server threads. (This box has %d cores available)\n"
 			"	      -M Modify pace, currently hard-coded to 10 rates\n"
 			"	      -b bandwidth per conn (kbps) or \n"
 			"	      -B total bandwidth (kbps)\n\n"
-			, prog, num_CPU()
+			, prog, num_CPU(), num_CPU()
 	      );
 	exit(0);
 }
@@ -640,7 +782,7 @@ int main(int argc, char* argv[])
 
 	srand(time(NULL));
 
-	const char *optstring = "c:p:r:C:n:t:b:B:T:hvsPM";
+	const char *optstring = "c:p:R:r:C:n:t:b:B:T:hvsPM";
 	char c;
 
 
@@ -650,6 +792,7 @@ int main(int argc, char* argv[])
 	int thread_load = 1;
 	int total_conns = 100;
 	int threads = 1;
+	int server_threads = 1;
 	unsigned long conn_active_time = 999999999;
 	int total_run_time = 0;
 	unsigned long bandwidth_per_conn = 10*KILO;
@@ -667,6 +810,9 @@ int main(int argc, char* argv[])
 				break;
 			case 'r':
 				threads = atoi(optarg);
+				break;
+			case 'R':
+				server_threads = atoi(optarg);
 				break;
 			case 'n':
 				total_conn_per_sec = atoi(optarg);
@@ -712,7 +858,7 @@ int main(int argc, char* argv[])
 	}
 
 	if ( is_server ) {
-		one_server(server_port);
+		one_server(server_port, server_threads);
 	}
 
 	if ( g_modify_pace )
@@ -726,7 +872,7 @@ int main(int argc, char* argv[])
 	}
 
 	connection_group_thread_c *loader = new connection_group_thread_c[threads];
-	reporter_c reporter;
+	client_reporter_c reporter;
 	p_reporter_for_sig_handling = &reporter;
 	char client_ip[96];
 	int base_addr;
