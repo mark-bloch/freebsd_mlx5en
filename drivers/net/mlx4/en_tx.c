@@ -723,7 +723,7 @@ void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 #ifdef CONFIG_WQE_FORMAT_1
 #define COPY_LSO_HEADER_EN(dst, src, hdr_sz)				\
 	copy_lso_header(dst, src, hdr_sz, owner_bit)
-static inline void copy_lso_header(__be32 *dst, void *src, int hdr_sz,
+static inline void copy_lso_header(__be32 *dst, caddr_t src, int hdr_sz,
 				   __be32 owner_bit) {
 	/* In WQE_FORMAT = 1 we need to split segments larger
 	 * than 64 bytes, in this case: 64 - sizeof(ctrl) -
@@ -750,6 +750,13 @@ static inline void copy_lso_header(__be32 *dst, void *src, int hdr_sz,
 		memcpy(dst, src, hdr_sz);
 	}
 }
+
+/* The +8 is for mss_header and inline header */
+#define GET_LSO_SEG_SIZE_EN(lso_header_size)			\
+	(((lso_header_size) > 44) ?				\
+	 ALIGN((lso_header_size) + 8, DS_SIZE_ALIGNMENT) :	\
+	 ALIGN((lso_header_size) + 4, DS_SIZE_ALIGNMENT))
+
 #else
 #define COPY_LSO_HEADER_EN(dst, src, hdr_sz)	memcpy(dst, src, hdr_sz)
 static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
@@ -781,6 +788,9 @@ static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
 			}
 		}
 }
+
+#define GET_LSO_SEG_SIZE_EN(lso_header_size)			\
+	ALIGN(lso_header_size + 4, DS_SIZE_ALIGNMENT)
 #endif
 
 static u32 mlx4_en_free_tx_desc(struct mlx4_en_priv *priv,
@@ -1142,7 +1152,7 @@ static int get_real_size(struct mbuf *mb, struct net_device *dev, int *p_n_segs,
                                 nr_segs--;
                         *p_n_segs = nr_segs;
                         return CTRL_SIZE + nr_segs * DS_SIZE +
-				GET_LSO_SEG_SIZE(*lso_header_size);
+				GET_LSO_SEG_SIZE_EN(*lso_header_size);
                 }
         } else
                 *lso_header_size = 0;
@@ -1277,6 +1287,9 @@ static int mlx4_en_xmit(struct net_device *dev, int tx_ind, struct mbuf **mbp)
 	mb = *mbp;
 	int defrag = 1;
 	__be32 owner_bit;
+#ifdef CONFIG_WQE_FORMAT_1
+	__be32  wqe_data_len[32];
+#endif
 
 	if (!priv->port_up)
 		goto tx_drop;
@@ -1374,10 +1387,8 @@ retry:
 	tx_info->nr_segs = nr_segs;
 
 	if (lso_header_size) {
-		COPY_LSO_HEADER_EN(tx_desc->lso.header, mb->m_data,
-				   lso_header_size);
 		data = ((void *)&tx_desc->lso +
-			GET_LSO_SEG_SIZE(lso_header_size));
+			GET_LSO_SEG_SIZE_EN(lso_header_size));
 		/* lso header is part of m_data.
 		 * need to omit when mapping DMA */
 		mb->m_data += lso_header_size;
@@ -1393,18 +1404,50 @@ retry:
 		tx_info->inl = 1;
 	} else {
 		for (i = 0, m = mb; i < nr_segs; i++, m = m->m_next) {
-                        if (m->m_len == 0) {
-                                i--;
-                                continue;
-                        }
-                        dma = pci_map_single(mdev->dev->pdev, m->m_data,
-                                             m->m_len, PCI_DMA_TODEVICE);
-                        data->addr = cpu_to_be64(dma);
-                        data->lkey = cpu_to_be32(mdev->mr.key);
-                        wmb();
+			if (m->m_len == 0) {
+				i--;
+				continue;
+			}
+			dma = pci_map_single(mdev->dev->pdev, m->m_data,
+					     m->m_len, PCI_DMA_TODEVICE);
+			data->addr = cpu_to_be64(dma);
+			data->lkey = cpu_to_be32(mdev->mr.key);
+#ifdef CONFIG_WQE_FORMAT_1
+			/* Keep the len + owner bit in array to be used later.
+			 * We need to make sure the owner bit is the last thing
+			 * written to make sure the HW won't read the wrong
+			 * data. we move down the chain (mbuf) without setting.
+			 * Need to make sure we set the bit every 64B when going
+			 * up
+			 */
+			wqe_data_len[i] = SET_BYTE_COUNT(m->m_len);
+#else
+			/* Need to make sure we write the data first and
+			 * then overide the wqe stamp
+			 */
+			wmb();
 			data->byte_count = SET_BYTE_COUNT(m->m_len);
-                        data++;
-                }
+#endif
+			data++;
+		}
+
+#ifdef CONFIG_WQE_FORMAT_1
+		/* Prepare to go up the chain.
+		 * and set len and owner_bit
+		 */
+		data--;
+		i--;
+		while (i > -1) {
+			/*Need to make sure we write owner_bit after
+			 *data has been synced
+			 */
+			wmb();
+
+			data->byte_count = wqe_data_len[i];
+			data--;
+			i--;
+		}
+#endif
                 if (lso_header_size) {
                         mb->m_data -= lso_header_size;
                         mb->m_len += lso_header_size;
@@ -1456,6 +1499,9 @@ retry:
 		/* Fill in the LSO prefix */
 		tx_desc->lso.mss_hdr_size = cpu_to_be32(
 			mb->m_pkthdr.tso_segsz << 16 | lso_header_size);
+
+		COPY_LSO_HEADER_EN(tx_desc->lso.header, mb->m_data,
+				   lso_header_size);
 
                 priv->port_stats.tso_packets++;
                 segsz = mb->m_pkthdr.tso_segsz;

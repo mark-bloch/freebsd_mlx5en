@@ -203,7 +203,7 @@ enum {
 	MLX4_DEV_CAP_FLAG2_EQE_STRIDE		= 1LL <<  23,
 	MLX4_DEV_CAP_FLAG2_UPDATE_QP_SRC_CHECK_LB = 1LL << 24,
 	MLX4_DEV_CAP_FLAG2_RX_CSUM_MODE		= 1LL <<  25,
-	MLX4_DEV_CAP_FLAG2_WQE_FORMAT		= 1ULL << 35,
+	MLX4_DEV_CAP_FLAG2_WQE_FORMAT		= 1ULL << 38,
 };
 
 /* bit enums for an 8-bit flags field indicating special use
