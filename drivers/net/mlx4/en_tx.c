@@ -108,7 +108,7 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 		ring->br = buf_ring_alloc(MLX4_EN_DEF_TX_QUEUE_SIZE, M_DEVBUF,
 					  M_WAITOK, &ring->tx_lock.m);
 	else
-		ring->br = buf_ring_alloc(size / 2, M_DEVBUF, M_WAITOK,
+		ring->br = buf_ring_alloc(size / 4, M_DEVBUF, M_WAITOK,
 					  &ring->tx_lock.m);
 #else
 	ring->br = buf_ring_alloc(MLX4_EN_DEF_TX_QUEUE_SIZE, M_DEVBUF,

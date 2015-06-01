@@ -168,7 +168,7 @@ enum {
 #define MLX4_EN_NUM_UP			1
 
 #ifdef CONFIG_RATELIMIT
-#define MLX4_EN_DEF_RL_TX_RING_SIZE     128
+#define MLX4_EN_DEF_RL_TX_RING_SIZE     512
 #define MLX4_EN_DEF_RL_USER_PRIO        0
 #define MLX4_EN_DEF_MAX_RL_TX_RINGS     45000
 #else
