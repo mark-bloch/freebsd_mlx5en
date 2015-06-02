@@ -1321,7 +1321,8 @@ retry:
                         defrag = 0;
                         goto retry;
                 }
-		en_warn(priv, "Oversized header or SG list\n");
+		/*Oversized header or SG list*/
+		ring->oversized_packets++;
 		goto tx_drop;
 	}
 

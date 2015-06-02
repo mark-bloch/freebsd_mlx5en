@@ -1601,6 +1601,7 @@ static void mlx4_en_clear_stats(struct net_device *dev)
 		priv->tx_ring[i]->bytes = 0;
 		priv->tx_ring[i]->packets = 0;
 		priv->tx_ring[i]->tx_csum = 0;
+		priv->tx_ring[i]->oversized_packets = 0;
 	}
 	for (i = 0; i < priv->rx_ring_num; i++) {
 		priv->rx_ring[i]->bytes = 0;
@@ -3078,6 +3079,8 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	    &priv->port_stats.wake_queue, "Queue resumed after full");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_timeout", CTLFLAG_RD,
 	    &priv->port_stats.tx_timeout, "Transmit timeouts");
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "TX_oversized_packets", CTLFLAG_RD,
+		&priv->port_stats.oversized_packets, "TX oversized packets, m_defrag failed");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_alloc_failed", CTLFLAG_RD,
 	    &priv->port_stats.rx_alloc_failed, "RX failed to allocate mbuf");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_chksum_good", CTLFLAG_RD,

@@ -333,6 +333,7 @@ struct mlx4_en_tx_ring {
 	unsigned long packets;
 	unsigned long tx_csum;
 	unsigned long queue_stopped;
+	unsigned long oversized_packets;
 	unsigned long wake_queue;
 	struct mlx4_bf bf;
 	bool bf_enabled;
