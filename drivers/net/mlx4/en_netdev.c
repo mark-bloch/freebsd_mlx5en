@@ -3079,7 +3079,7 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	    &priv->port_stats.wake_queue, "Queue resumed after full");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_timeout", CTLFLAG_RD,
 	    &priv->port_stats.tx_timeout, "Transmit timeouts");
-	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "TX_oversized_packets", CTLFLAG_RD,
+	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_oversized_packets", CTLFLAG_RD,
 		&priv->port_stats.oversized_packets, "TX oversized packets, m_defrag failed");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_alloc_failed", CTLFLAG_RD,
 	    &priv->port_stats.rx_alloc_failed, "RX failed to allocate mbuf");
