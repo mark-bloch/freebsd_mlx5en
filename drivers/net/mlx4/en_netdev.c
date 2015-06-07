@@ -1794,6 +1794,16 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	if (priv->allocated)
 		mlx4_free_hwq_res(mdev->dev, &priv->res, MLX4_EN_PAGE_SIZE);
 
+#ifdef CONFIG_RATELIMIT
+	/* Need to make sure there are no rl related tasks(1)
+	 * and more won't be added before we run mlx4_en_stop_port(2).
+	 * 1 - We get because we drain and free the tq below.
+	 * 2 - We get becase we called ether_ifdetach which replaces
+	 *     the ioctl callback, so new tasks won't be added.
+	 */
+	taskqueue_drain(priv->rl_tq, &priv->rl_task);
+	taskqueue_free(priv->rl_tq);
+#endif
 	mutex_lock(&mdev->state_lock);
 	mlx4_en_stop_port(dev);
 	mutex_unlock(&mdev->state_lock);
@@ -1811,8 +1821,6 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
 	mutex_unlock(&mdev->state_lock);
 
 #ifdef CONFIG_RATELIMIT
-	taskqueue_drain(priv->rl_tq, &priv->rl_task);
-	taskqueue_free(priv->rl_tq);
 	mlx4_en_free_rl_resources(priv);
 #endif
 
