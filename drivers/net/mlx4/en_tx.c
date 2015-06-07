@@ -493,14 +493,14 @@ static void mlx4_en_create_rl_res(struct mlx4_en_priv *priv,
 	err = mlx4_en_create_cq(priv, &priv->tx_cq[ring_id],
                 MLX4_EN_DEF_RL_TX_RING_SIZE, ring_id, TX, node);
         if (err) {
-                en_err(priv, "Failed to create rate limit tx CQ, ring index %u\n", ring_id);
+                en_err(priv, "Failed to create rate limit tx CQ, ring index %u, rate %u\n", ring_id, rate_index);
                 goto err_create_cq;
         }
 
         err = mlx4_en_create_tx_ring(priv, &priv->tx_ring[ring_id],
                 MLX4_EN_DEF_RL_TX_RING_SIZE, TXBB_SIZE, node, ring_id);
         if (err) {
-                en_err(priv, "Failed to create rate limited tx ring %u\n", ring_id);
+                en_err(priv, "Failed to create rate limited tx ring %u, rate %u\n", ring_id, rate_index);
                 goto err_create_ring;
         }
 

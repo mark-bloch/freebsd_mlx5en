@@ -2470,7 +2470,7 @@ static int mlx4_en_rl_locked_set(struct mlx4_en_priv *priv, u8 index,
 	if (err) {
 		priv->rate_limits[index].rate = old_rate;
 		priv->rate_limits[index].burst_size = old_burst;
-		en_err(priv, "Couldn't set hardware with new rate/burst size, for port %d\n", priv->port);
+		en_err(priv, "Couldn't set port %d with new rate/burst size\n", priv->port);
 	}
 	return err;
 }

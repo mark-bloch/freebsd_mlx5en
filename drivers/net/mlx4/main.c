@@ -603,17 +603,17 @@ static void mlx4_set_port_mask(struct mlx4_dev *dev)
 static u64 mlx4_calc_rl_supported_rate(u16 rate_val, u8 unit)
 {
 	u32 calc_rate = 0;
-	u32 rate = (u32)rate_val;
+	u64 rate = (u64)rate_val;
 
 	switch (unit) {
 	case MLX4_QP_RATE_LIMIT_KBPS:
-		calc_rate = rate * (u32)(1000);
+		calc_rate = rate * (u64)(1000);
 		break;
 	case MLX4_QP_RATE_LIMIT_MBPS:
-		calc_rate = rate * (u32)(1000*1000);
+		calc_rate = rate * (u64)(1000*1000);
 		break;
 	case MLX4_QP_RATE_LIMIT_GBPS:
-		calc_rate = rate * (u32)(1000*1000*1000);
+		calc_rate = rate * (u64)(1000*1000*1000);
 		break;
 	default:
 		calc_rate = 0;
@@ -4096,7 +4096,7 @@ u8 mlx4_parse_prios_for_rl(char *str, u8 *lst_of_prios, int max_num_prios)
 		}
 		index = (int)strtol(p + i, 0, 10);
 		if (index >= max_num_prios || index < 0) {
-			pr_warn("mlx4_en: Priority number is not valid, using priority 0 as default\n");
+			pr_warn("Priority number is not valid, using priority 0 as default\n");
 			*lst_of_prios = 1;
 			num_prios = 1;
 			return num_prios;
