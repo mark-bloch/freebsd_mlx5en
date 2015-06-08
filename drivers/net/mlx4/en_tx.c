@@ -519,8 +519,8 @@ activate:
         mutex_lock(&mdev->state_lock);
         if (!priv->port_up) {
                 /* No need activating resources, start_port will take care of that */
-                mutex_unlock(&mdev->state_lock);
 		tx_ring->rl_data.user_valid = true;
+                mutex_unlock(&mdev->state_lock);
                 return;
         }
 
@@ -555,10 +555,10 @@ activate:
 	for (j = 0; j < tx_ring->buf_size; j += STAMP_STRIDE)
 		*((u32 *) (tx_ring->buf + j)) = INIT_OWNER_BIT;
 
-	mutex_unlock(&mdev->state_lock);
-
 	/* Set ring as valid */
         tx_ring->rl_data.user_valid = true;
+	mutex_unlock(&mdev->state_lock);
+
 	priv->rate_limit_tx_ring_num++;
 
 	/* Add rate limit statistics to sysctl if debug option was enabled */
@@ -624,6 +624,8 @@ static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
 
 	ring = priv->tx_ring[ring_id];
 
+	mutex_lock(&mdev->state_lock);
+
 	/* Index was validated, thus ring is not NULL */
 	spin_lock(&ring->tx_lock);
 	if (ring->rl_data.user_valid == false) {
@@ -643,7 +645,6 @@ static void mlx4_en_destroy_rl_res(struct mlx4_en_priv *priv,
 	atomic_subtract_int(&priv->rate_limits[ring->rl_data.rate_index].ref, 1);
 
 	/* Deactivate resources */
-	mutex_lock(&mdev->state_lock);
 	if (priv->port_up) {
 		mlx4_en_deactivate_tx_ring(priv, ring);
 		mlx4_en_deactivate_cq(priv, priv->tx_cq[ring_id]);
