@@ -102,6 +102,8 @@ read_args()
                            ;;
                         p) _MODULES_BUILD_FLAGS[mlx4]="${_MODULES_BUILD_FLAGS[mlx4]} CONFIG_RATELIMIT=yes"
                            _MODULES_BUILD_FLAGS[mlxen]="${_MODULES_BUILD_FLAGS[mlxen]} CONFIG_RATELIMIT=yes"
+                           _MODULES_BUILD_FLAGS[mlx4ib]="${_MODULES_BUILD_FLAGS[mlx4ib]} CONFIG_RATELIMIT=yes"
+                           _MODULES_BUILD_FLAGS[ibcore]="${_MODULES_BUILD_FLAGS[ibcore]} CONFIG_RATELIMIT=yes"
                           ;;
                         \?)exit
                 esac

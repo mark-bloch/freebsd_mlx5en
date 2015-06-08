@@ -6,18 +6,21 @@ _DEFAULT=("include" \
           "build/install.sh")
 
 _EN_ONLY=("include" \
-          "drivers/net/ethernet/mellanox/mlx4")
+          "drivers/net/mlx4" \
+          "build/install.sh")
 
 _IB_ONLY=("include" \
-          "drivers/net/ethernet/mellanox/mlx4" \
+          "drivers/net/mlx4" \
           "drivers/infiniband/hw/mlx4" \
-          "drivers/infiniband/core")
+          "drivers/infiniband/core" \
+          "build/install.sh")
 
 _IB_AND_IPOIB=("include" \
-               "drivers/net/ethernet/mellanox/mlx4" \
+               "drivers/net/mlx4" \
                "drivers/infiniband/hw/mlx4" \
                "drivers/infiniband/core" \
-               "drivers/infiniband/ulp/ipoib")
+               "drivers/infiniband/ulp/ipoib" \
+               "build/install.sh")
 
 _TO_INCLUDE=("${_DEFAULT[@]}")
 
