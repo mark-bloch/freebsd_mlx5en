@@ -957,10 +957,18 @@ static int mlx4_en_process_tx_cq(struct net_device *dev,
 	if (unlikely(ring->blocked) &&
 	    (ring->prod - ring->cons) <= ring->full_size) {
 		ring->blocked = 0;
+#ifdef CONFIG_RATELIMIT
+		if (cq->ring < priv->native_tx_ring_num) {
+			if (atomic_fetchadd_int(&priv->blocked, -1) == 1)
+				atomic_clear_int(&dev->if_drv_flags ,IFF_DRV_OACTIVE);
+			priv->port_stats.wake_queue++;
+		}
+#else
 		if (atomic_fetchadd_int(&priv->blocked, -1) == 1)
 			atomic_clear_int(&dev->if_drv_flags ,IFF_DRV_OACTIVE);
-		ring->wake_queue++;
 		priv->port_stats.wake_queue++;
+#endif
+		ring->wake_queue++;
 	}
 	return done;
 }
