@@ -1788,8 +1788,11 @@ void mlx4_en_destroy_netdev(struct net_device *dev)
                 EVENTHANDLER_DEREGISTER(vlan_unconfig, priv->vlan_detach);
 
 	/* Unregister device - this will close the port if it was up */
-	if (priv->registered)
+	if (priv->registered) {
+		mutex_lock(&mdev->state_lock);
 		ether_ifdetach(dev);
+		mutex_unlock(&mdev->state_lock);
+	}
 
 	if (priv->allocated)
 		mlx4_free_hwq_res(mdev->dev, &priv->res, MLX4_EN_PAGE_SIZE);
@@ -1997,22 +2000,22 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		error = -mlx4_en_change_mtu(dev, ifr->ifr_mtu);
 		break;
 	case SIOCSIFFLAGS:
+		mutex_lock(&mdev->state_lock);
 		if (dev->if_flags & IFF_UP) {
 			if ((dev->if_drv_flags & IFF_DRV_RUNNING) == 0) {
-				mutex_lock(&mdev->state_lock);
 				mlx4_en_start_port(dev);
+			} else {
 				mutex_unlock(&mdev->state_lock);
-			}
-			else
 				mlx4_en_set_rx_mode(dev);
+				break;
+			}
 		} else {
 			if (dev->if_drv_flags & IFF_DRV_RUNNING) {
-				mutex_lock(&mdev->state_lock);
 				mlx4_en_stop_port(dev);
                                 if_link_state_change(dev, LINK_STATE_DOWN);
-				mutex_unlock(&mdev->state_lock);
 			}
 		}
+		mutex_unlock(&mdev->state_lock);
 		break;
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
