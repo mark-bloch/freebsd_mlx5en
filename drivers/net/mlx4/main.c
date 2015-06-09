@@ -844,6 +844,9 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 	else
 		dev->caps.max_counters = dev->caps.max_basic_counters;
 
+#ifdef CONFIG_RATELIMIT
+	dev->caps.fw_reserved_qp_base = dev_cap->initial_reserved_qps;
+#endif
 	dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FW] = dev_cap->reserved_qps;
 	dev->caps.reserved_qps_cnt[MLX4_QP_REGION_ETH_ADDR] =
 		dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FC_ADDR] =

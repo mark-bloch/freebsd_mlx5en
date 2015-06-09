@@ -633,6 +633,8 @@ int mlx4_QUERY_DEV_CAP(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 	MLX4_GET(field, outbox, QUERY_DEV_CAP_VL_PORT_OFFSET);
 	dev_cap->num_ports = field & 0xf;
 #ifdef CONFIG_RATELIMIT
+	/* Use initial_reserved_qps to preserve the original reserved_qps value */
+	dev_cap->initial_reserved_qps = dev_cap->reserved_qps;
 	dev_cap->reserved_qps = dev_cap->reserved_qps +
 				    (dev_cap->num_ports * MLX4_NUM_OF_QPS_FOR_SQS);
 #endif

@@ -557,6 +557,7 @@ struct mlx4_caps {
 	u8			def_counter_index[MLX4_MAX_PORTS + 1];
 #ifdef CONFIG_RATELIMIT
 	struct mlx4_rate_limit_caps rl_caps;
+	int fw_reserved_qp_base;
 #endif
 };
 

@@ -2194,13 +2194,19 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 					all_num_rates.RPP_per_prio[i] = priv->num_rates_per_prio;
 				}
 			}
-			all_num_rates.base_qp_num = mdev->dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FW];
+			/* Write base QP to the fw, fw will compute the amount of needed
+			 * QPs starting from this base QP */
+			all_num_rates.base_qp_num = mdev->dev->caps.fw_reserved_qp_base;
 			err = mlx4_alloc_rl_fw_resources(mdev->dev, port, &all_num_rates);
 			if (err) {
 				en_err(priv, "Couldn't set available number of rates per prio for port %d\n", port);
 				en_err(priv, "Couldn't set the amount of reserved qps needed by the FW \n");
 				mdev->dev->caps.rl_caps.enable = 0;
 			}
+			/* Update the base QP upon fw update success, now the new base QP =
+			 * the previous base QP + number of priorities, because fw reserves
+			 * 1 qp per each RLPP */
+			mdev->dev->caps.fw_reserved_qp_base += all_num_rates.available_RPP;
 		} else {
 			en_err(priv, "Couldn't read available number of rates for port %d\n", port);
 			mdev->dev->caps.rl_caps.enable = 0;
