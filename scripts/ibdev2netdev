@@ -1,0 +1,86 @@
+#! /bin/bash
+
+usage()
+{
+        echo "$(basename $0) <options>"
+        echo "-h, --help                print help message"
+}
+
+case $1 in
+        "-h" | "--help")
+                usage
+                exit 0
+                ;;
+esac
+
+if (( $# > 1 )); then
+	usage
+	exit -1
+fi
+
+function print_line()
+{
+	echo "$1 port $2 <===> $3"
+}
+
+function find_guid()
+{
+        for ibdev in $ibdevs; do
+                num_ports $ibdev  
+                for ((interface=1; interface<=$len; interface++)); do
+                        pguid=$(sysctl sys.class.infiniband.$ibdev.ports.$interface.gids.0 | cut -d ' ' -f2| cut -b 21- | sed -e 's/://g')
+                        if [ x$pguid == x$1 ]; then
+		        	print_line $ibdev $interface $2
+			fi
+		done
+	done
+}
+
+function find_mac()
+{
+        for ibdev in $ibdevs; do
+                num_ports $ibdev
+                for ((interface=1; interface<=$len; interface++)); do
+                        pguid=$( sysctl sys.class.infiniband.$ibdev.ports.$interface.gids.0| cut -d ' ' -f2)
+                        first=$( echo $pguid | cut -b 21-22 )
+                        first=$( echo "obase=2; ibase=16; ${first^^}" | bc )
+                        first=$(( first ^ 10 ))
+                        first=$( echo "ibase=2;obase=10000;$first"|bc)
+                        first=$(printf "%02x" 0x${first,,})
+                        second=$( echo $pguid | cut -b 21- | sed -e 's/://g' | cut -b 3-6 )
+                        third=$( echo $pguid | cut -b 21- | sed -e 's/://g' | cut -b 11- )
+                        pmac=$first$second$third
+                        if [ x$pmac == x$1 ]; then
+                		print_line $ibdev $interface $2
+		        fi
+		done
+	done
+}
+
+function num_ports()
+{
+                dev_type=$( echo $ibdev |cut -b 4)
+                dev_id=$( echo $ibdev |cut -b 6)
+                len=$( sysctl -a |grep 'sys.device.mlx'$dev_type'_core'$dev_id'.mlx'$dev_type'_port[0-9]:'| wc -l)
+}
+
+
+ibdevs=$( sysctl sys.class.infiniband_cm |grep ucm|awk '{print $2}' )
+ifcs=$(ifconfig |grep 'mlxen[0-9]:\|ib[0-9]:'|awk '{print $1}'|sed 's/.$//')
+if [ "x$ifcs" == "x" ]; then
+        echo "No relevant devices - quit immediately"
+        exit
+fi
+
+for ifc in $ifcs; do
+        if [[ $ifc == ib* ]]; then
+	        guid=$( ifconfig $ifc|grep lladdr| cut -d ' ' -f2 )
+                guid=$( printf "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x" 0x${guid//./ 0x} )
+                guid=$( echo $guid| cut -b 25- )
+        	find_guid $guid $ifc
+	elif [[ $ifc == mlxen*  ]]; then
+                mac=$( ifconfig $ifc|grep ether| cut -d ' ' -f2| sed -e 's/://g' )
+                find_mac $mac $ifc ${ibdevs[@]} 
+        fi
+done
+
