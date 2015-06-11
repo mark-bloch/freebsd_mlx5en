@@ -1424,8 +1424,7 @@ int mlx4_query_diag_counters(struct mlx4_dev *mlx4_dev, int array_length,
 			     u32 counter_out[]);
 
 #ifdef CONFIG_RATELIMIT
-int mlx4_query_rl_fw_resources(struct mlx4_dev *dev, u8 port,
-			    struct mlx4_num_of_rates *all_num_rates);
+int mlx4_query_rl_fw_resources(struct mlx4_dev *dev, u8 port, u16 *available_RLPP);
 int mlx4_alloc_rl_fw_resources(struct mlx4_dev *dev, u8 port,
 			       struct mlx4_num_of_rates *all_num_rates);
 int mlx4_set_rates_and_burst_size(struct mlx4_dev *dev, u8 port, u8 index,

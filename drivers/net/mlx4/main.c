@@ -627,6 +627,9 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 {
 	int err;
 	int i;
+#ifdef CONFIG_RATELIMIT
+	u16 available_RLPP = 0;
+#endif
 
 	err = mlx4_QUERY_DEV_CAP(dev, dev_cap);
 	if (err) {
@@ -845,8 +848,24 @@ static int mlx4_dev_cap(struct mlx4_dev *dev, struct mlx4_dev_cap *dev_cap)
 		dev->caps.max_counters = dev->caps.max_basic_counters;
 
 #ifdef CONFIG_RATELIMIT
-	dev->caps.fw_reserved_qp_base = dev_cap->initial_reserved_qps;
+	if (dev->caps.rl_caps.enable) {
+		/* Use fw_reserved_qp_base to preserve the original reserved_qps value */
+		dev->caps.fw_reserved_qp_base = dev_cap->reserved_qps;
+		for (i = 1; i <= dev_cap->num_ports; i++){
+			err = mlx4_query_rl_fw_resources(dev, i, &available_RLPP);
+			if (err) {
+				mlx4_err(dev, "Couldn't read available number of rates for port %d\n", i);
+				dev->caps.rl_caps.enable = 0;
+				/* Reset reserved_qps to original value */
+				dev_cap->reserved_qps = dev->caps.fw_reserved_qp_base;
+				break;
+			}
+			else
+				dev_cap->reserved_qps += available_RLPP;
+		}
+	}
 #endif
+
 	dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FW] = dev_cap->reserved_qps;
 	dev->caps.reserved_qps_cnt[MLX4_QP_REGION_ETH_ADDR] =
 		dev->caps.reserved_qps_cnt[MLX4_QP_REGION_FC_ADDR] =
@@ -2711,7 +2730,7 @@ EXPORT_SYMBOL_GPL(mlx4_counter_free);
 
 #ifdef CONFIG_RATELIMIT
 int mlx4_query_rl_fw_resources(struct mlx4_dev *dev, u8 port,
-			    struct mlx4_num_of_rates *all_num_rates)
+			    u16 *available_RLPP)
 {
 	struct mlx4_hw_num_of_rates *hw_all_num_rates;
 	int err;
@@ -2729,7 +2748,7 @@ int mlx4_query_rl_fw_resources(struct mlx4_dev *dev, u8 port,
 			   MLX4_CMD_QP_RLPP, MLX4_CMD_TIME_CLASS_C,
 			   MLX4_CMD_NATIVE);
 	if (!err)
-		all_num_rates->available_RPP = be16_to_cpu(hw_all_num_rates->available_RPP);
+		*available_RLPP = be16_to_cpu(hw_all_num_rates->available_RPP);
 
 	mlx4_free_cmd_mailbox(dev, mailbox_out);
 	return err;

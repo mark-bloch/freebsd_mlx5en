@@ -2180,7 +2180,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	if (mdev->dev->caps.rl_caps.enable) {
 		memset(&all_num_rates, 0, sizeof(all_num_rates));
 		/* Query total number of rates */
-		err = mlx4_query_rl_fw_resources(mdev->dev, port, &all_num_rates);
+		err = mlx4_query_rl_fw_resources(mdev->dev, port, &all_num_rates.available_RPP);
 		if (!err) {
 			/* Set number of rates per prioroty */
 			if (mdev->num_rl_prios)

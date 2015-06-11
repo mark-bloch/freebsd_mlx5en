@@ -125,7 +125,6 @@ struct mlx4_dev_cap {
 	u32 max_extended_counters;
 #ifdef CONFIG_RATELIMIT
 	struct mlx4_rate_limit_caps rl_caps;
-	int initial_reserved_qps;
 #endif
 };
 

@@ -823,12 +823,6 @@ enum mlx4_rl_index_opmod {
 	MLX4_ALLOCATE_RL_PROPERTIES,
 	MLX4_QUERY_RL_PROPERTIES,
 };
-
-/* Number of QPs to reserve for the RLPPs per port:
- * 224 * num_of_ports + 64 (initial fw reserved qps),
- * In case of 2 ports we get 512 --> 256 per port,
- * which is the max number of SQs */
-#define MLX4_NUM_OF_QPS_FOR_SQS		224
 #endif
 
 enum {
