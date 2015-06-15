@@ -45,7 +45,7 @@ char* g_buf;
 bool g_modify_pace = false;
 unsigned long g_bandwidth_in_bytes = 100/8; //100Kbits is PP lower mark.
 bool is_PP_throttle = false;
-#define G_BUF_SIZE 20*1024*1024
+#define G_BUF_SIZE 32*1024
 time_t sys_start;
 int old_somaxconn = 0;
 size_t old_somaxconn_size = sizeof(old_somaxconn);
@@ -242,7 +242,7 @@ void connection_group_thread_c::main_loop()
 			rounds++;
 			for ( int i = 0; i < m_load; i++ ){
 				if ( conns[i].m_is_active )
-					sent_this_second += conns[i].send((20*KILO*KILO));
+					sent_this_second += conns[i].send((G_BUF_SIZE));
 			}
 			for ( int i = 0; i < m_load; i++ ){
 				if (TIME_TO_CLOSE(i)) {
@@ -346,11 +346,7 @@ int one_connection_c::send(int s_size)
 
 	left_to_send = m_byte_to_send_per_second - m_bytes_sent_this_second;
 
-	send_size = s_size<left_to_send ? s_size : left_to_send;
-	send_size = send_size/5;
-
-
-	nwritten = write(socket, m_buf, send_size);
+	nwritten = write(socket, m_buf, s_size);
 	m_bytes_sent_this_second += nwritten;
 	return nwritten;
 }
@@ -547,7 +543,7 @@ int server_worker_c::run()
 #define SECOND_PASSED (Time()-second_start)>1000000
 void server_worker_c::main_loop()
 {
-	char *buf = new char[20*1024*1024];
+	char *buf = new char[32*1024];
 	int rc;
 	double second_start;
 	
@@ -557,7 +553,7 @@ void server_worker_c::main_loop()
 		for (std::list<int>::iterator s=all_socket.begin(); s != all_socket.end(); ++s)
 		{
 again:
-			rc = read(*s, buf, 20*1024*1204);
+			rc = read(*s, buf, 32*1024);
 			if ( rc <= 0 && errno != EAGAIN) {
 				rc = ::close(*s);
 				all_socket.erase(s);
@@ -653,7 +649,6 @@ int one_server(int server_port, int server_threads)
 	int			rc;
 	int			s; 
 	int			cs; 		/* new connection's socket descriptor */
-	char			buf[1024*1024];  /* buffer for incoming data */
 	struct sockaddr_in	sa;
 	struct sockaddr_in	csa; 		/* client's address struct */
 	socklen_t         	size_csa; 	/* size of client's address struct */
