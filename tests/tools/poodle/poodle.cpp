@@ -45,7 +45,7 @@ char* g_buf;
 bool g_modify_pace = false;
 unsigned long g_bandwidth_in_bytes = 100/8; //100Kbits is PP lower mark.
 bool is_PP_throttle = false;
-#define G_BUF_SIZE 1024*1024
+#define G_BUF_SIZE 20*1024*1024
 time_t sys_start;
 int old_somaxconn = 0;
 size_t old_somaxconn_size = sizeof(old_somaxconn);
@@ -80,6 +80,7 @@ double Time()
 }
 
 bool should_run = true;
+bool close_all_sockets = false;
 
 class connection_group_thread_c;
 
@@ -157,6 +158,7 @@ class connection_group_thread_c {
 		int get_last_second_sent() { return m_last_second_sent; }
 		unsigned long get_conns_created() { return m_conns_created; }
 		unsigned long get_conns_closed() { return m_conns_closed; }
+		void close_all();
 
 	private:
 
@@ -172,6 +174,14 @@ class connection_group_thread_c {
 		unsigned long m_conns_closed;
 
 };
+
+void connection_group_thread_c::close_all()
+{
+	for ( int i = 0; i < m_load; i++ ) {
+		conns[i].shut_down();
+	}
+	delete[] conns;
+}
 
 void connection_group_thread_c::main_loop()
 {
@@ -232,7 +242,7 @@ void connection_group_thread_c::main_loop()
 			rounds++;
 			for ( int i = 0; i < m_load; i++ ){
 				if ( conns[i].m_is_active )
-					sent_this_second += conns[i].send((1024*1024));
+					sent_this_second += conns[i].send((20*KILO*KILO));
 			}
 			for ( int i = 0; i < m_load; i++ ){
 				if (TIME_TO_CLOSE(i)) {
@@ -374,6 +384,7 @@ int one_connection_c::connect()
 		socket = -1;
 		return -1;
 	}
+
 #ifdef USE_PP
 	// packet pacing
 	if ( is_PP_throttle ) {
@@ -393,8 +404,7 @@ int one_connection_c::shut_down()
 {
 	if (!m_is_active)
 		return 1;
-	::shutdown(socket, SHUT_RDWR);
-	close(socket);
+	::close(socket);
 	socket = -1;
 	m_is_active = false;
 	return 0;
@@ -406,6 +416,7 @@ class client_reporter_c {
 		static void* thread_func(void* arg);
 		void main_loop();
 		void summary();
+		void help_close_all();
 
 	private:
 		connection_group_thread_c* m_current_load;
@@ -433,6 +444,13 @@ int client_reporter_c::run()
 	return 0;
 }
 
+void client_reporter_c::help_close_all()
+{
+	for (int i=0; i<m_num_threads; i++) {
+		m_current_load[i].close_all();
+	}
+}
+
 void client_reporter_c::summary()
 {
 	unsigned long system_conns_created = 0;
@@ -440,6 +458,7 @@ void client_reporter_c::summary()
 	for (int i=0; i<m_num_threads; i++) {
 		system_conns_created += m_current_load[i].get_conns_created();
 		system_conns_closed += m_current_load[i].get_conns_closed();
+
 	}
 	printf("Total conns created = %lu\n", system_conns_created);
 	printf("Total conns closed = %lu\n", system_conns_closed);
@@ -453,7 +472,7 @@ void client_reporter_c::main_loop()
 		for (int i=0; i<m_num_threads; i++) {
 			last_second_all_bytes += m_current_load[i].get_last_second_sent();
 		}
-		printf("Transmited %.2f bits per second (%.1f Mbits/s )\n", (double)last_second_all_bytes*BITS_IN_BYTE, (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO));
+		printf("Wrote %.2f bits per second (%.1f Mbits/s )\n", (double)last_second_all_bytes*BITS_IN_BYTE, (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO));
 		last_second_all_bytes = 0;
 	}
 }
@@ -528,7 +547,7 @@ int server_worker_c::run()
 #define SECOND_PASSED (Time()-second_start)>1000000
 void server_worker_c::main_loop()
 {
-	char buf[1024*1024];
+	char *buf = new char[20*1024*1024];
 	int rc;
 	double second_start;
 	
@@ -538,9 +557,11 @@ void server_worker_c::main_loop()
 		for (std::list<int>::iterator s=all_socket.begin(); s != all_socket.end(); ++s)
 		{
 again:
-			rc = read(*s, buf, 1024*1204);
-			if ( rc == 0 ) {
-				printf("Closing %d\n", *s);
+			rc = read(*s, buf, 20*1024*1204);
+			if ( rc <= 0 && errno != EAGAIN) {
+				rc = ::close(*s);
+				all_socket.erase(s);
+				break;
 			}
 			if ( rc > 0 ) {
 				m_last_second_received += rc;
@@ -550,6 +571,7 @@ again:
 		safe_update_all_socket_list();
 		if ( SECOND_PASSED ) {
 			m_saved_last_second_received = m_last_second_received;
+
 			m_last_second_received = 0;
 			second_start = Time();
 		}
@@ -609,6 +631,8 @@ void server_reporter_c::main_loop()
 			last_second_all_bytes += m_current_load[i].get_last_second_recieved();
 			conns += m_current_load[i].get_num_conns();
 		}
+		if ( last_second_all_bytes == 0 )
+			continue;
 		printf("%u conns Recieved", conns);
 		if ( last_second_all_bytes > GIGA_BITS_IN_BYTES )
 			printf(" %.3f Gbits/sec. ", (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO*KILO));
@@ -685,7 +709,7 @@ int one_server(int server_port, int server_threads)
 	}
 
 
-	rc = listen(s, 2048);
+	rc = listen(s, 20480);
 
 	printf("Listening on port %d\n", server_port);
 
@@ -695,6 +719,7 @@ int one_server(int server_port, int server_threads)
 	}
 	while ( 1 ) {
 		cs = accept(s, (struct sockaddr *)&csa, &size_csa);
+
 		if ( cs > 1 ) {
 			server_worker_threads[next_worker_thread++ % num_worker_threads].safe_add_pending_socket(cs);
 			total_system_conns++;
@@ -713,11 +738,12 @@ void usage(char *prog)
 			"	      -C concurrent connections(100000 max)\n"
 			"	      -P use Packet Pacing for throttling. otherwise software is used\n"
 			"	      -n conn created per second\n"
-			"	      -t active time per connection in seconds. The connection will be closed and a new connection will be created once time is up.\n"
+			"	      -t active time per connection in seconds. The connection will be //closed and a new connection will be created once time is up.\n"
 			"	      -T Total run time in secs, otherwise run forever or till killed \n"
 			"	      -r how many client threads. (This box has %d cores available)\n"
 			"	      -R how many server threads. (This box has %d cores available)\n"
 			"	      -M Modify pace, currently hard-coded to 10 rates\n"
+			"	      -z bandwidth per conn (bits) or \n"
 			"	      -b bandwidth per conn (kbps) or \n"
 			"	      -B total bandwidth (kbps)\n\n"
 			, prog, num_CPU(), num_CPU()
@@ -738,6 +764,11 @@ void shut_down_handler(int s) {
 		else  {
 			p_reporter_for_sig_handling->summary();
 		}
+	}
+	if (!is_server ) {
+		should_run = false;
+		sleep(3);
+		p_reporter_for_sig_handling->help_close_all();
 	}
 	exit(0);
 	return ;
@@ -767,8 +798,6 @@ int main(int argc, char* argv[])
 	rlim.rlim_max = MAX_FDS;
 	rlim.rlim_cur = MAX_FDS;
 	rc =  setrlimit(resource, &rlim);
-	//printf ( "sysconf() says %ld files.\n", sysconf(_SC_OPEN_MAX));
-	//save the old somax and load the new
 	sysctlbyname("kern.ipc.somaxconn", &old_somaxconn, &old_somaxconn_size, &new_somaxconn_new_size, sizeof(new_somaxconn_new_size));
 
 
@@ -782,7 +811,7 @@ int main(int argc, char* argv[])
 
 	srand(time(NULL));
 
-	const char *optstring = "c:p:R:r:C:n:t:b:B:T:hvsPM";
+	const char *optstring = "z:c:p:R:r:C:n:t:b:B:T:hvsPM";
 	char c;
 
 
@@ -832,6 +861,10 @@ int main(int argc, char* argv[])
 				break;
 			case 't':
 				conn_active_time = atoi(optarg);
+				break;
+			case 'z':
+				bandwidth_per_conn = atoi(optarg);
+				g_bandwidth_in_bytes = bandwidth_per_conn/BITS_IN_BYTE;
 				break;
 			case 'T':
 				total_run_time = atoi(optarg);
@@ -889,8 +922,9 @@ int main(int argc, char* argv[])
 		loader[i].run();
 	}
 
+	reporter.init(loader, threads);
+
 	if ( report ) {
-		reporter.init(loader, threads);
 		reporter.run();
 	}
 
