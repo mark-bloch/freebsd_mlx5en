@@ -716,6 +716,7 @@ int one_server(int server_port, int server_threads)
 		cs = accept(s, (struct sockaddr *)&csa, &size_csa);
 
 		if ( cs > 1 ) {
+			rc = fcntl(cs, F_SETFL, O_NONBLOCK); 
 			server_worker_threads[next_worker_thread++ % num_worker_threads].safe_add_pending_socket(cs);
 			total_system_conns++;
 		}
