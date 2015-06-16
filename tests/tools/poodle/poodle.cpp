@@ -43,6 +43,7 @@ bool is_server = false;
 bool is_client = false; 
 char* g_buf;
 bool g_modify_pace = false;
+int g_yield_factor;
 unsigned long g_bandwidth_in_bytes = 100/8; //100Kbits is PP lower mark.
 bool is_PP_throttle = false;
 #define G_BUF_SIZE 32*1024
@@ -145,6 +146,7 @@ class one_connection_c {
 	char m_server_address[96];
 	int m_bytes_sent_this_second;
 	unsigned long m_byte_to_send_per_second;
+	int m_yield_factor;
 };
 
 class connection_group_thread_c {
@@ -315,6 +317,7 @@ int one_connection_c::init(int id, char* server_address, int server_port)
 	m_bytes_sent_this_second = 0;
 	m_created = 0; //this is initiate a connect in the manager main loop.
 	m_is_active = false;
+	m_yield_factor = 0;
 	strcpy(m_server_address, server_address);
 	m_server_port = server_port;
 	memset(&servaddr, 0, sizeof(servaddr));
@@ -333,6 +336,12 @@ int one_connection_c::send(int s_size)
 	int nwritten;
 	int left_to_send;
 	int send_size;
+
+	if ( m_yield_factor != 0 ) {
+		m_yield_factor--;
+		return 0;
+	}
+	m_yield_factor = g_yield_factor;
 
 #ifdef USE_PP
 	if (is_PP_throttle) {
@@ -619,6 +628,8 @@ void server_reporter_c::main_loop()
 {
 	unsigned long last_second_all_bytes = 0;
 	unsigned int conns = 0;
+	unsigned long delta_avg_all_bytes = 0;
+	int avg_count = 0;
 	while ( true ) {
 		sleep(1);
 		conns = 0;
@@ -627,11 +638,13 @@ void server_reporter_c::main_loop()
 			last_second_all_bytes += m_current_load[i].get_last_second_recieved();
 			conns += m_current_load[i].get_num_conns();
 		}
+		delta_avg_all_bytes += last_second_all_bytes;
+		avg_count++;
 		if ( last_second_all_bytes == 0 )
 			continue;
 		printf("%u conns Recieved", conns);
 		if ( last_second_all_bytes > GIGA_BITS_IN_BYTES )
-			printf(" %.3f Gbits/sec. ", (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO*KILO));
+			printf(" %.3f[%.3f] Gbits/sec. ", (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO*KILO), (double)(delta_avg_all_bytes/avg_count)*BITS_IN_BYTE/(KILO*KILO*KILO));
 		else if ( last_second_all_bytes > MEGA_BITS_IN_BYTES )
 			printf(" %.2f Mbits/sec. ", (double)last_second_all_bytes*BITS_IN_BYTE/(KILO*KILO));
 		else
@@ -640,6 +653,11 @@ void server_reporter_c::main_loop()
 
 
 		last_second_all_bytes = 0;
+		if ( avg_count == 20 ) 
+		{
+			delta_avg_all_bytes = 0;
+			avg_count = 0;
+		}
 	}
 }
 
@@ -739,6 +757,7 @@ void usage(char *prog)
 			"	      -r how many client threads. (This box has %d cores available)\n"
 			"	      -R how many server threads. (This box has %d cores available)\n"
 			"	      -M Modify pace, currently hard-coded to 10 rates\n"
+			"	      -y yield send factor \n"
 			"	      -z bandwidth per conn (bits) or \n"
 			"	      -b bandwidth per conn (kbps) or \n"
 			"	      -B total bandwidth (kbps)\n\n"
@@ -807,7 +826,7 @@ int main(int argc, char* argv[])
 
 	srand(time(NULL));
 
-	const char *optstring = "z:c:p:R:r:C:n:t:b:B:T:hvsPM";
+	const char *optstring = "y:z:c:p:R:r:C:n:t:b:B:T:hvsPM";
 	char c;
 
 
@@ -857,6 +876,9 @@ int main(int argc, char* argv[])
 				break;
 			case 't':
 				conn_active_time = atoi(optarg);
+				break;
+			case 'y':
+				g_yield_factor = atoi(optarg);
 				break;
 			case 'z':
 				bandwidth_per_conn = atoi(optarg);
