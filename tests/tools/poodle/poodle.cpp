@@ -39,6 +39,12 @@ bool report = false;
 unsigned long total_system_conns;
 unsigned long total_system_bytes;
 unsigned long total_system_closed;
+static bool g_print_snd_buff = true;
+bool g_set_snd_buf = false;
+int  g_snd_buf_size;
+static bool g_print_rcv_buff = true;
+bool g_set_rcv_buf = false;
+int  g_rcv_buf_size;
 bool is_server = false; 
 bool is_client = false; 
 char* g_buf;
@@ -341,12 +347,18 @@ int one_connection_c::send(int s_size)
 		m_yield_factor--;
 		return 0;
 	}
-	m_yield_factor = g_yield_factor;
 
 #ifdef USE_PP
 	if (is_PP_throttle) {
 		nwritten = write(socket, m_buf, s_size);
-		return nwritten;
+		if ( nwritten > 0 ) {
+			return nwritten;
+		}
+		else {
+			m_yield_factor = g_yield_factor;
+			return 0;
+		}
+
 	}
 #endif
 
@@ -380,6 +392,25 @@ int one_connection_c::connect()
 	setsockopt(socket, SOL_SOCKET, SO_LINGER, &nolinger, optlen); 
 
 	rc = fcntl(socket, F_SETFL, O_NONBLOCK); 
+
+	if ( g_set_snd_buf ) {
+		rc = setsockopt( socket, SOL_SOCKET, SO_SNDBUF, (char*) &g_snd_buf_size, sizeof(g_snd_buf_size));
+		if ( rc < 0 ) {
+			perror("setsockopt SO_SNDBUF:");
+		}
+
+	}
+	if ( g_print_snd_buff )	
+	{
+		g_print_snd_buff = false;
+		socklen_t len;
+		int the_buf = 0;
+		rc = getsockopt( socket, SOL_SOCKET, SO_SNDBUF, (char*) &the_buf, &len );
+		if ( rc < 0 )
+			perror("getsockopt SO_SNDBUF:");
+		printf("SND BUF = %d\n", the_buf);
+	}
+
 
 	rc = ::connect(socket, (struct sockaddr *) &servaddr, sizeof(servaddr));
 	if ( (rc < 0) && (errno != EINPROGRESS)  ) {
@@ -562,7 +593,7 @@ void server_worker_c::main_loop()
 		for (std::list<int>::iterator s=all_socket.begin(); s != all_socket.end(); ++s)
 		{
 again:
-			rc = read(*s, buf, 32*1024);
+			rc = recv(*s, buf, 32*1024, 0);
 			if ( rc <= 0 && errno != EAGAIN) {
 				rc = ::close(*s);
 				all_socket.erase(s);
@@ -734,6 +765,23 @@ int one_server(int server_port, int server_threads)
 		cs = accept(s, (struct sockaddr *)&csa, &size_csa);
 
 		if ( cs > 1 ) {
+			if ( g_set_rcv_buf ) {
+				rc = setsockopt( cs, SOL_SOCKET, SO_RCVBUF, (char*) &g_rcv_buf_size, sizeof(g_rcv_buf_size));
+				if ( rc < 0 ) {
+					perror("setsockopt SO_RCVBUF:");
+				}
+
+			}
+			if ( g_print_rcv_buff )	
+			{
+				g_print_rcv_buff = false;
+				socklen_t len;
+				int the_buf = 0;
+				rc = getsockopt( cs, SOL_SOCKET, SO_RCVBUF, (char*) &the_buf, &len );
+				if ( rc < 0 )
+					perror("getsockopt SO_RCVBUF:");
+				printf("RCV BUF = %d\n", the_buf);
+			}
 			rc = fcntl(cs, F_SETFL, O_NONBLOCK); 
 			server_worker_threads[next_worker_thread++ % num_worker_threads].safe_add_pending_socket(cs);
 			total_system_conns++;
@@ -758,6 +806,8 @@ void usage(char *prog)
 			"	      -R how many server threads. (This box has %d cores available)\n"
 			"	      -M Modify pace, currently hard-coded to 10 rates\n"
 			"	      -y yield send factor \n"
+			"	      -S snd buffer size (KB) \n"
+			"	      -E rcv buffer size (KB) \n"
 			"	      -z bandwidth per conn (bits) or \n"
 			"	      -b bandwidth per conn (kbps) or \n"
 			"	      -B total bandwidth (kbps)\n\n"
@@ -826,7 +876,7 @@ int main(int argc, char* argv[])
 
 	srand(time(NULL));
 
-	const char *optstring = "y:z:c:p:R:r:C:n:t:b:B:T:hvsPM";
+	const char *optstring = "E:S:y:z:c:p:R:r:C:n:t:b:B:T:hvsPM";
 	char c;
 
 
@@ -879,6 +929,16 @@ int main(int argc, char* argv[])
 				break;
 			case 'y':
 				g_yield_factor = atoi(optarg);
+				break;
+			case 'S':
+				g_set_snd_buf = true;
+				g_snd_buf_size = atoi(optarg);
+				g_snd_buf_size *= 1024;
+				break;
+			case 'E':
+				g_set_rcv_buf = true;
+				g_rcv_buf_size = atoi(optarg);
+				g_rcv_buf_size *= 1024;
 				break;
 			case 'z':
 				bandwidth_per_conn = atoi(optarg);
