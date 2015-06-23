@@ -2719,8 +2719,10 @@ static int mlx4_en_get_module_info(struct net_device *dev,
         ret = mlx4_get_module_info(mdev->dev, priv->port,
                                    0/*offset*/, 2/*size*/, data);
 
-        if (ret < 2)
-                return ret;
+        if (ret < 2) {
+		en_err(priv, "Failed to read eeprom module first two bytes, error: 0x%x\n", -ret);
+		return -EIO;
+	}
 
         switch (data[0] /* identifier */) {
         case MLX4_MODULE_ID_QSFP:
@@ -2810,33 +2812,34 @@ static void mlx4_en_print_eeprom(u8 *data, __u32 len)
 	}
 }
 
+/* Read cable EEPROM module information by first inspecting the first
+ * two bytes to get the length and then read the rest of the information.
+ * The information is printed to dmesg. */
 static int mlx4_en_read_eeprom(SYSCTL_HANDLER_ARGS)
 {
 
 	u8* 		data;
 	int 		error;
-	int		result;
+	int		result = 0;
 	struct 		mlx4_en_priv *priv;
 	struct 		net_device *dev;
 	struct 		mlx4_eeprom_modinfo modinfo;
 	struct 		mlx4_eeprom ee;
 
-	result = 0;
 	error = sysctl_handle_int(oidp, &result, 0, req);
 	if (error || !req->newptr)
 		return (error);
 
-	if (result == 1){
+	if (result == 1) {
 		priv = arg1;
 		dev = priv->dev;
 		data = kmalloc(PAGE_SIZE, GFP_KERNEL);
 
 		error = mlx4_en_get_module_info(dev, &modinfo);
-		if (error){
+		if (error) {
 			en_err(priv,
                                "mlx4_en_get_module_info returned with error - FAILED (0x%x)\n",
-                               error);
-                        error = 0;
+                               -error);
 			goto out;
                 }
 
@@ -2844,21 +2847,20 @@ static int mlx4_en_read_eeprom(SYSCTL_HANDLER_ARGS)
 		ee.offset = 0;
 
 		error = mlx4_en_get_module_eeprom(dev, &ee, data);
-		if (error){
+		if (error) {
 			en_err(priv,
                                "mlx4_en_get_module_eeprom returned with error - FAILED (0x%x)\n",
-                               error);
-			error = 0;
-			goto out;
+                               -error);
+			/* Continue printing partial information in case of an error */
 		}
 
-		/* EEPROM information will be printed in the dmesg */
+		/* EEPROM information will be printed in dmesg */
 		mlx4_en_print_eeprom(data, ee.len);
 out:
 		kfree(data);
 	}
-	return error;
-
+	/* Return zero to prevent sysctl failure. */
+	return (0);
 }
 
 static int mlx4_en_set_tx_ppp(SYSCTL_HANDLER_ARGS)
