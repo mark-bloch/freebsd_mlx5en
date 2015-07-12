@@ -250,7 +250,7 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 	 * Check that the number of fragments in the chain doesn't
 	 * exceed the maximum:
 	 */
-	if (mlx5e_num_frags(mb) > MLX5E_MAX_TX_MBUF_FRAGS) {
+	if (unlikely(mlx5e_num_frags(mb) > MLX5E_MAX_TX_MBUF_FRAGS)) {
 		mx = m_defrag(mb, M_NOWAIT);
 		if (mx == NULL) {
 			sq->stats.dropped++;
