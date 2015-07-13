@@ -95,6 +95,13 @@ int main(int argc, char* argv[])
 				perror("read sysctl");
 				break;
 			}
+			if ( strncmp(ifmd.ifmd_name, "mlx5en", 6) == 0 ) {
+				ifs[t].iface_name = strdup(ifmd.ifmd_name);
+				sprintf(ifs[t].iface_rx_sysctl_line, "hw.%s.vstats.rx_bytes", ifs[t].iface_name);
+				sprintf(ifs[t].iface_tx_sysctl_line, "hw.%s.vstats.tx_bytes", ifs[t].iface_name);
+				t++;
+
+			}
 			if ( strncmp(ifmd.ifmd_name, "mlxen", 5) == 0 ) {
 				ifs[t].iface_name = strdup(ifmd.ifmd_name);
 				sprintf(ifs[t].iface_rx_sysctl_line, "hw.%s.stat.rx_bytes", ifs[t].iface_name);
