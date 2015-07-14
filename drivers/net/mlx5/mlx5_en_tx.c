@@ -141,16 +141,6 @@ mlx5e_get_inline_hdr_size(struct mlx5e_sq *sq, struct mbuf *mb)
 	return (MIN(MLX5E_MAX_TX_INLINE, mb->m_len));
 }
 
-static inline void
-mlx5e_insert_vlan(void *start, struct mbuf *mb, u16 ihs)
-{
-	struct ether_vlan_header *vhdr = start;
-	const int size = ETHER_HDR_LEN + ETHER_VLAN_ENCAP_LEN;
-
-	m_copydata(mb, 0, size, (void *)vhdr);
-	m_adj(mb, size);
-}
-
 static int
 mlx5e_get_header_size(struct mbuf *mb)
 {
@@ -303,7 +293,27 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 		    ETHER_MIN_LEN - ETHER_CRC_LEN);
 	}
 	if (mb->m_flags & M_VLANTAG) {
-		mlx5e_insert_vlan(wqe->eth.inline_hdr_start, mb, ihs);
+		struct ether_vlan_header *eh =
+		    (struct ether_vlan_header *)wqe->eth.inline_hdr_start;
+		/* range checks */
+		if (ihs > (MLX5E_MAX_TX_INLINE - ETHER_VLAN_ENCAP_LEN))
+			ihs = (MLX5E_MAX_TX_INLINE - ETHER_VLAN_ENCAP_LEN);
+		else if (ihs < ETHER_HDR_LEN) {
+			sq->stats.dropped++;
+			m_freem(mb);
+			return (EINVAL);
+		}
+		m_copydata(mb, 0, ETHER_HDR_LEN, (caddr_t)eh);
+		m_adj(mb, ETHER_HDR_LEN);
+		/* insert 4 bytes VLAN tag into data stream */
+		eh->evl_proto = eh->evl_encap_proto;
+		eh->evl_encap_proto = htons(ETHERTYPE_VLAN);
+		eh->evl_tag = htons(mb->m_pkthdr.ether_vtag);
+		/* copy rest of header data, if any */
+		m_copydata(mb, 0, ihs - ETHER_HDR_LEN, (caddr_t)(eh + 1));
+		m_adj(mb, ihs - ETHER_HDR_LEN);
+		/* extend header by 4 bytes */
+		ihs += ETHER_VLAN_ENCAP_LEN;
 	} else {
 		m_copydata(mb, 0, ihs, wqe->eth.inline_hdr_start);
 		m_adj(mb, ihs);
