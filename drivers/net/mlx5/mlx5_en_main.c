@@ -1849,9 +1849,9 @@ mlx5e_close_locked(struct ifnet *ifp)
 }
 
 static uint64_t
-mlx5e_get_counter(struct ifnet *ifpice, ift_counter cnt)
+mlx5e_get_counter(struct ifnet *ifp, ift_counter cnt)
 {
-	struct mlx5e_priv *priv = ifpice->if_softc;
+	struct mlx5e_priv *priv = ifp->if_softc;
 	u64 retval;
 
 	/* PRIV_LOCK(priv); XXX not allowed */
@@ -1884,7 +1884,7 @@ mlx5e_get_counter(struct ifnet *ifpice, ift_counter cnt)
 		retval = priv->stats.vport.tx_queue_dropped;
 		break;
 	default:
-		retval = if_get_counter_default(ifpice, cnt);
+		retval = if_get_counter_default(ifp, cnt);
 		break;
 	}
 	/* PRIV_UNLOCK(priv); XXX not allowed */
