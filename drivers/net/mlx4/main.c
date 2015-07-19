@@ -1423,9 +1423,10 @@ static ssize_t show_port_ib_mtu(struct device *dev,
 						   port_mtu_attr);
 	struct mlx4_dev *mdev = info->dev;
 
-	/*When port type is eth, port mtu value isn't used.*/
+	/* When port type is eth, port mtu value isn't used. */
 	if (mdev->caps.port_type[info->port] == MLX4_PORT_TYPE_ETH)
 		return -EINVAL;
+
 	sprintf(buf, "%d\n",
 			ibta_mtu_to_int(mdev->caps.port_ib_mtu[info->port]));
 	return strlen(buf);
@@ -2730,7 +2731,7 @@ EXPORT_SYMBOL_GPL(mlx4_counter_free);
 
 #ifdef CONFIG_RATELIMIT
 int mlx4_query_rl_fw_resources(struct mlx4_dev *dev, u8 port,
-			    u16 *available_RLPP)
+			       u16 *available_RLPP)
 {
 	struct mlx4_hw_num_of_rates *hw_all_num_rates;
 	int err;
@@ -3203,9 +3204,9 @@ static void mlx4_enable_msi_x(struct mlx4_dev *dev)
 				goto retry;
 			}
 			kfree(entries);
-			/* if error, or can't alloc even 1 irq */
+			/* if error, or can't alloc even 1 IRQ */
 			if (err < 0) {
-				mlx4_err(dev ,"No IRQs left, device won't "
+				mlx4_err(dev, "No IRQs left, device can't "
 					 "be started.\n");
 				goto no_irq;
 			}
@@ -3648,9 +3649,9 @@ slave_start:
 
 	mlx4_enable_msi_x(dev);
 
-	/* no msix and no shared irq */
+	/* no MSIX and no shared irq */
 	if (!dev->caps.num_comp_vectors && !dev->caps.comp_pool) {
-		err = (-ENOSPC);
+		err = -ENOSPC;
 		goto err_free_eq;
 	}
 

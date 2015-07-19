@@ -1537,6 +1537,7 @@ int mlx4_INIT_HCA(struct mlx4_dev *dev, struct mlx4_init_hca_param *param)
 
 	if (err)
 		mlx4_err(dev, "INIT_HCA returns %d\n", err);
+
 	mlx4_free_cmd_mailbox(dev, mailbox);
 	return err;
 }

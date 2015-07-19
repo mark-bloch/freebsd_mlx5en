@@ -40,8 +40,6 @@
 
 #include "mlx4.h"
 
-
-
 int mlx4_get_mgm_entry_size(struct mlx4_dev *dev)
 {
 	return 1 << dev->oper_log_mgm_entry_size;
@@ -693,8 +691,10 @@ static int find_entry(struct mlx4_dev *dev, u8 port,
 	if (err)
 		return err;
 
-	if (0)
-		mlx4_dbg(dev, "Hash for "GID_PRINT_FMT" is %04x\n", GID_PRINT_ARGS(gid), hash);
+	if (0) {
+		mlx4_dbg(dev, "Hash for "GID_PRINT_FMT" is %04x\n",
+		    GID_PRINT_ARGS(gid), hash);
+	}
 
 	*index = hash;
 	*prev  = -1;
@@ -915,7 +915,8 @@ static void mlx4_err_rule(struct mlx4_dev *dev, char *str,
 
 		case MLX4_NET_TRANS_RULE_ID_IB:
 			len += snprintf(buf + len, BUF_SIZE - len,
-					"dst-gid = "GID_PRINT_FMT"\n", GID_PRINT_ARGS(cur->ib.dst_gid));
+					"dst-gid = "GID_PRINT_FMT"\n",
+					GID_PRINT_ARGS(cur->ib.dst_gid));
 			len += snprintf(buf + len, BUF_SIZE - len,
 					"dst-gid-mask = "GID_PRINT_FMT"\n",
 					GID_PRINT_ARGS(cur->ib.dst_gid_msk));
@@ -1138,7 +1139,8 @@ int mlx4_qp_detach_common(struct mlx4_dev *dev, struct mlx4_qp *qp, u8 gid[16],
 		goto out;
 
 	if (index == -1) {
-		mlx4_err(dev, "MGID "GID_PRINT_FMT" not found\n", GID_PRINT_ARGS(gid));
+		mlx4_err(dev, "MGID "GID_PRINT_FMT" not found\n",
+		    GID_PRINT_ARGS(gid));
 		err = -EINVAL;
 		goto out;
 	}
