@@ -979,6 +979,9 @@ static void mlx4_en_do_set_rx_mode(struct work_struct *work)
 	if (!mlx4_en_QUERY_PORT(mdev, priv->port)) {
 		if (priv->port_state.link_state) {
 			priv->last_link_state = MLX4_DEV_EVENT_PORT_UP;
+			/* update netif baudrate */
+			priv->dev->if_baudrate =
+			    IF_Mbps(priv->port_state.link_speed);
 			/* Important note: the following call for if_link_state_change
 			 * is needed for interface up scenario (start port, link state
 			 * change) */
@@ -1202,13 +1205,20 @@ static void mlx4_en_linkstate(struct work_struct *work)
 		if (linkstate == MLX4_DEV_EVENT_PORT_DOWN) {
 			en_info(priv, "Link Down\n");
 			if_link_state_change(priv->dev, LINK_STATE_DOWN);
-		/* make sure the port is up before notifying the OS. 
-		 * This is tricky since we get here on INIT_PORT and 
+			/* update netif baudrate */
+			priv->dev->if_baudrate = 0;
+
+		/* make sure the port is up before notifying the OS.
+		 * This is tricky since we get here on INIT_PORT and
 		 * in such case we can't tell the OS the port is up.
 		 * To solve this there is a call to if_link_state_change
 		 * in set_rx_mode.
 		 * */
 		} else if (priv->port_up && (linkstate == MLX4_DEV_EVENT_PORT_UP)){
+			if (mlx4_en_QUERY_PORT(priv->mdev, priv->port))
+				en_info(priv, "Query port failed\n");
+			priv->dev->if_baudrate =
+			    IF_Mbps(priv->port_state.link_speed);
 			en_info(priv, "Link Up\n");
 			if_link_state_change(priv->dev, LINK_STATE_UP);
 		}
@@ -2098,7 +2108,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	dev->if_softc = priv;
 	if_initname(dev, "mlxen", atomic_fetchadd_int(&mlx4_en_unit, 1));
 	dev->if_mtu = ETHERMTU;
-	dev->if_baudrate = 1000000000;
 	dev->if_init = mlx4_en_open;
 	dev->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
 	dev->if_ioctl = mlx4_en_ioctl;
