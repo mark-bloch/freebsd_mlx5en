@@ -54,7 +54,6 @@
 #include <netinet/udp.h>
 
 #include "mlx4_en.h"
-#include "utils.h"
 
 enum {
 	MAX_INLINE = 104, /* 128 - 16 - 4 - 4 */
@@ -1227,10 +1226,10 @@ static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct mbuf *mb,
 	tx_desc->ctrl.fence_size = (real_size / 16) & 0x3f;
 }
 
-static unsigned long hashrandom;
+static uint32_t hashrandom;
 static void hashrandom_init(void *arg)
 {
-	hashrandom = random();
+	hashrandom = m_ether_tcpip_hash_init();
 }
 SYSINIT(hashrandom_init, SI_SUB_KLD, SI_ORDER_SECOND, &hashrandom_init, NULL);
 
@@ -1238,18 +1237,17 @@ u16 mlx4_en_select_queue(struct net_device *dev, struct mbuf *mb)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
 	u32 rings_p_up = priv->num_tx_rings_p_up;
-	u32 vlan_tag = 0;
 	u32 up = 0;
 	u32 queue_index;
 
+#if (MLX4_EN_NUM_UP > 1)
 	/* Obtain VLAN information if present */
 	if (mb->m_flags & M_VLANTAG) {
-		vlan_tag = mb->m_pkthdr.ether_vtag;
-	        up = (vlan_tag >> 13);
+		u32 vlan_tag = mb->m_pkthdr.ether_vtag;
+	        up = (vlan_tag >> 13) % MLX4_EN_NUM_UP;
 	}
-
-	/* hash mbuf */
-	queue_index = mlx4_en_hashmbuf(MLX4_F_HASHL3 | MLX4_F_HASHL4, mb, hashrandom);
+#endif
+	queue_index = m_ether_tcpip_hash(MBUF_HASHFLAG_L3 | MBUF_HASHFLAG_L4, mb, hashrandom);
 
 	return ((queue_index % rings_p_up) + (up * rings_p_up));
 }
@@ -1670,8 +1668,9 @@ mlx4_en_transmit(struct ifnet *dev, struct mbuf *m)
 	}
 	else
 #endif
-	if ((m->m_flags & (M_FLOWID | M_VLANTAG)) == M_FLOWID) {
-		i = m->m_pkthdr.flowid % (priv->tx_ring_num - 1);
+	/* Compute which queue to use */
+	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE) {
+		i = m->m_pkthdr.flowid % priv->tx_ring_num;
 	}
 	else {
 		i = mlx4_en_select_queue(dev, m);
