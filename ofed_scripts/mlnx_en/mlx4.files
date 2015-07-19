@@ -1,6 +1,0 @@
-%defattr(644,root,root,755)
-/lib/modules/%2-%1
-/etc/depmod.d/mlx4_core.conf
-/etc/depmod.d/mlx4_en.conf
-/etc/depmod.d/mlx4_ib.conf
-/etc/modprobe.d/mlx4_en.conf
