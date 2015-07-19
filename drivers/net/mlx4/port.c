@@ -1090,6 +1090,7 @@ enum cable_info_err {
 
 #define MAD_STATUS_2_CABLE_ERR(mad_status) ((mad_status >> 8) & 0xFF)
 
+#ifdef DEBUG
 static inline const char *cable_info_mad_err_str(u16 mad_status)
 {
 	u8 err = MAD_STATUS_2_CABLE_ERR(mad_status);
@@ -1116,6 +1117,7 @@ static inline const char *cable_info_mad_err_str(u16 mad_status)
 	}
 	return "Unknown Error";
 }
+#endif /* DEBUG */
 
 /**
  * mlx4_get_module_info - Read cable module eeprom data
@@ -1193,10 +1195,12 @@ int mlx4_get_module_info(struct mlx4_dev *dev, u8 port, u16 offset,
 	if (be16_to_cpu(outmad->status)) {
 		/* Mad returned with bad status */
 		ret = be16_to_cpu(outmad->status);
+#ifdef DEBUG
 		mlx4_warn(dev, "MLX4_CMD_MAD_IFC Get Module info attr(%x) "
 		    "port(%d) i2c_addr(%x) offset(%d) size(%d): Response "
 		    "Mad Status(%x) - %s\n", 0xFF60, port, i2c_addr, offset,
 		    size, ret, cable_info_mad_err_str(ret));
+#endif
 		if (i2c_addr == I2C_ADDR_HIGH &&
 		    MAD_STATUS_2_CABLE_ERR(ret) == CABLE_INF_I2C_ADDR)
 			/* Some SFP cables do not support i2c slave
