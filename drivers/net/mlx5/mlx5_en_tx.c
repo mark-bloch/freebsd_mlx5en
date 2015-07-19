@@ -260,10 +260,13 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 	if (ifp != NULL && ifp->if_bpf != NULL)
 		ETHER_BPF_MTAP(ifp, mb);
 
-	if (mb->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TSO |
-	    CSUM_TCP | CSUM_UDP | CSUM_TCP_IPV6 | CSUM_UDP_IPV6)) {
-		wqe->eth.cs_flags = MLX5_ETH_WQE_L3_CSUM | MLX5_ETH_WQE_L4_CSUM;
-	} else {
+	if (mb->m_pkthdr.csum_flags & (CSUM_IP | CSUM_TSO)) {
+		wqe->eth.cs_flags |= MLX5_ETH_WQE_L3_CSUM;
+	}
+	if (mb->m_pkthdr.csum_flags & (CSUM_TCP | CSUM_UDP | CSUM_UDP_IPV6 | CSUM_TCP_IPV6 | CSUM_TSO)) {
+		wqe->eth.cs_flags |= MLX5_ETH_WQE_L4_CSUM;
+	}
+	if ( wqe->eth.cs_flags == 0 ) {
 		sq->stats.csum_offload_none++;
 	}
 
