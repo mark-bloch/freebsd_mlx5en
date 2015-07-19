@@ -350,8 +350,6 @@ static void __exit mlx4_en_cleanup(void)
 module_init(mlx4_en_init);
 module_exit(mlx4_en_cleanup);
 
-#undef MODULE_VERSION
-#include <sys/module.h>
 static int
 mlxen_evhand(module_t mod, int event, void *arg)
 {
