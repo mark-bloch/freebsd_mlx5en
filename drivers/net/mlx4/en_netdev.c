@@ -1309,7 +1309,7 @@ int mlx4_en_start_port(struct net_device *dev)
 		cq = priv->tx_cq[i];
 		err = mlx4_en_activate_cq(priv, cq, i);
 		if (err) {
-			en_err(priv, "Failed allocating Tx CQ\n");
+			en_err(priv, "Failed activating Tx CQ\n");
 			goto tx_err;
 		}
 		err = mlx4_en_set_cq_moder(priv, cq);
@@ -1327,16 +1327,16 @@ int mlx4_en_start_port(struct net_device *dev)
 		err = mlx4_en_activate_tx_ring(priv, tx_ring, cq->mcq.cqn,
 					       i / priv->num_tx_rings_p_up);
 		if (err) {
-			en_err(priv, "Failed allocating Tx ring\n");
+			en_err(priv, "Failed activating Tx ring %d\n", i);
 			mlx4_en_deactivate_cq(priv, cq);
 #ifdef CONFIG_RATELIMIT
 			if (i >= priv->native_tx_ring_num) {
-                                /* Rate limit ring - no need for err flow*/
+				/* Rate limit ring - no need for err flow*/
 				mlx4_en_invalidate_rl_ring(priv, i);
-                                mlx4_en_rl_reused_index_insert(priv, i);
-                                ++tx_index;
-                                continue;
-                        }
+				mlx4_en_rl_reused_index_insert(priv, i);
+				++tx_index;
+				continue;
+			}
 #endif
 			goto tx_err;
 		}
@@ -1681,20 +1681,20 @@ void mlx4_en_free_resources(struct mlx4_en_priv *priv)
 #ifdef CONFIG_RATELIMIT
 static void mlx4_en_free_rl_resources(struct mlx4_en_priv *priv)
 {
-        int i;
+	int i;
 	struct mlx4_en_tx_ring *ring;
 
-        for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
-                if (priv->tx_ring && priv->tx_ring[i]) {
-                        ring = priv->tx_ring[i];
+	for (i = priv->native_tx_ring_num; i < priv->tx_ring_num; i++) {
+		if (priv->tx_ring && priv->tx_ring[i]) {
+			ring = priv->tx_ring[i];
 			if (ring->rl_data.user_valid == true) {
 				sysctl_ctx_free(&ring->rl_data.rl_stats_ctx);
 			}
-                        mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
-                }
-                if (priv->tx_cq && priv->tx_cq[i])
-                        mlx4_en_destroy_cq(priv, &priv->tx_cq[i]);
-        }
+			mlx4_en_destroy_tx_ring(priv, &priv->tx_ring[i]);
+		}
+		if (priv->tx_cq && priv->tx_cq[i])
+			mlx4_en_destroy_cq(priv, &priv->tx_cq[i]);
+	}
 }
 #endif
 
@@ -2012,7 +2012,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		} else {
 			if (dev->if_drv_flags & IFF_DRV_RUNNING) {
 				mlx4_en_stop_port(dev);
-                                if_link_state_change(dev, LINK_STATE_DOWN);
+				if_link_state_change(dev, LINK_STATE_DOWN);
 			}
 		}
 		mutex_unlock(&mdev->state_lock);
@@ -2049,17 +2049,17 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		break;
 #ifdef CONFIG_RATELIMIT
 	case SIOCARATECTL:
-                rl_req = (struct ifreq_hwtxring *)data;
+		rl_req = (struct ifreq_hwtxring *)data;
 		error = mlx4_en_create_rate_limit_ring(priv, rl_req);
 		break;
 	case SIOCSRATECTL:
-                rl_req = (struct ifreq_hwtxring *)data;
+		rl_req = (struct ifreq_hwtxring *)data;
 		error = mlx4_en_modify_rate_limit_ring(priv, rl_req);
-                break;
-        case SIOCDRATECTL:
-                rl_req = (struct ifreq_hwtxring *)data;
+		break;
+	case SIOCDRATECTL:
+		rl_req = (struct ifreq_hwtxring *)data;
 		error = mlx4_en_destroy_rate_limit_ring(priv, rl_req);
-                break;
+		break;
 #endif
 	default:
 		error = ether_ioctl(dev, command, data);
@@ -2252,10 +2252,10 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 		if_name(priv->dev));
 
 	for (i = priv->native_tx_ring_num; i < MAX_TX_RINGS; i++) {
-                struct mlx4_en_reuse_index_list_element *reused_item;
-                reused_item = priv->reuse_index_list_array + i;
-                reused_item->val = i;
-        }
+		struct mlx4_en_reuse_index_list_element *reused_item;
+		reused_item = priv->reuse_index_list_array + i;
+		reused_item->val = i;
+	}
 
 #endif
 
@@ -2283,12 +2283,14 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 
 	if (mdev->LSO_support)
 		dev->if_capabilities |= IFCAP_TSO4 | IFCAP_TSO6 | IFCAP_VLAN_HWTSO;
+
 #if __FreeBSD_version >= 1100000
 	/* set TSO limits so that we don't have to drop TX packets */
 	dev->if_hw_tsomax = 65536 - (ETHER_HDR_LEN + ETHER_VLAN_ENCAP_LEN);
 	dev->if_hw_tsomaxsegcount = 16;
 	dev->if_hw_tsomaxsegsize = 65536;       /* XXX can do up to 4GByte */
 #endif
+
 	dev->if_capenable = dev->if_capabilities;
 
 	dev->if_hwassist = 0;
@@ -2364,6 +2366,7 @@ out:
 	mlx4_en_destroy_netdev(dev);
 	return err;
 }
+
 static int mlx4_en_set_ring_size(struct net_device *dev,
     int rx_size, int tx_size)
 {
@@ -2708,88 +2711,88 @@ static int show_rate_limit_rings_list(SYSCTL_HANDLER_ARGS)
 #endif
 
 static int mlx4_en_get_module_info(struct net_device *dev,
-                                   struct mlx4_eeprom_modinfo *modinfo)
+				   struct mlx4_eeprom_modinfo *modinfo)
 {
-        struct mlx4_en_priv *priv = netdev_priv(dev);
-        struct mlx4_en_dev *mdev = priv->mdev;
-        int ret;
-        u8 data[4];
+	struct mlx4_en_priv *priv = netdev_priv(dev);
+	struct mlx4_en_dev *mdev = priv->mdev;
+	int ret;
+	u8 data[4];
 
-        /* Read first 2 bytes to get Module & REV ID */
-        ret = mlx4_get_module_info(mdev->dev, priv->port,
-                                   0/*offset*/, 2/*size*/, data);
+	/* Read first 2 bytes to get Module & REV ID */
+	ret = mlx4_get_module_info(mdev->dev, priv->port,
+				   0/*offset*/, 2/*size*/, data);
 
-        if (ret < 2) {
+	if (ret < 2) {
 		en_err(priv, "Failed to read eeprom module first two bytes, error: 0x%x\n", -ret);
 		return -EIO;
 	}
 
-        switch (data[0] /* identifier */) {
-        case MLX4_MODULE_ID_QSFP:
-                modinfo->type = ETH_MODULE_SFF_8436;
-                modinfo->eeprom_len = ETH_MODULE_SFF_8436_LEN;
-                break;
-        case MLX4_MODULE_ID_QSFP_PLUS:
-                if (data[1] >= 0x3) { /* revision id */
-                        modinfo->type = ETH_MODULE_SFF_8636;
-                        modinfo->eeprom_len = ETH_MODULE_SFF_8636_LEN;
-                } else {
-                        modinfo->type = ETH_MODULE_SFF_8436;
-                        modinfo->eeprom_len = ETH_MODULE_SFF_8436_LEN;
-                }
-                break;
-        case MLX4_MODULE_ID_QSFP28:
-                modinfo->type = ETH_MODULE_SFF_8636;
-                modinfo->eeprom_len = ETH_MODULE_SFF_8636_LEN;
-                break;
-        case MLX4_MODULE_ID_SFP:
-                modinfo->type = ETH_MODULE_SFF_8472;
-                modinfo->eeprom_len = ETH_MODULE_SFF_8472_LEN;
-                break;
-        default:
+	switch (data[0] /* identifier */) {
+	case MLX4_MODULE_ID_QSFP:
+		modinfo->type = ETH_MODULE_SFF_8436;
+		modinfo->eeprom_len = ETH_MODULE_SFF_8436_LEN;
+		break;
+	case MLX4_MODULE_ID_QSFP_PLUS:
+		if (data[1] >= 0x3) { /* revision id */
+			modinfo->type = ETH_MODULE_SFF_8636;
+			modinfo->eeprom_len = ETH_MODULE_SFF_8636_LEN;
+		} else {
+			modinfo->type = ETH_MODULE_SFF_8436;
+			modinfo->eeprom_len = ETH_MODULE_SFF_8436_LEN;
+		}
+		break;
+	case MLX4_MODULE_ID_QSFP28:
+		modinfo->type = ETH_MODULE_SFF_8636;
+		modinfo->eeprom_len = ETH_MODULE_SFF_8636_LEN;
+		break;
+	case MLX4_MODULE_ID_SFP:
+		modinfo->type = ETH_MODULE_SFF_8472;
+		modinfo->eeprom_len = ETH_MODULE_SFF_8472_LEN;
+		break;
+	default:
 		en_err(priv, "mlx4_en_get_module_info :  Not recognized cable type\n");
-                return -EINVAL;
-        }
+		return -EINVAL;
+	}
 
-        return 0;
+	return 0;
 }
 
 static int mlx4_en_get_module_eeprom(struct net_device *dev,
-                                     struct mlx4_eeprom *ee,
-                                     u8 *data)
+				     struct mlx4_eeprom *ee,
+				     u8 *data)
 {
-        struct mlx4_en_priv *priv = netdev_priv(dev);
-        struct mlx4_en_dev *mdev = priv->mdev;
-        int offset = ee->offset;
-        int i = 0, ret;
+	struct mlx4_en_priv *priv = netdev_priv(dev);
+	struct mlx4_en_dev *mdev = priv->mdev;
+	int offset = ee->offset;
+	int i = 0, ret;
 
-        if (ee->len == 0)
-                return -EINVAL;
+	if (ee->len == 0)
+		return -EINVAL;
 
-        memset(data, 0, ee->len);
+	memset(data, 0, ee->len);
 
-        while (i < ee->len) {
-                en_dbg(DRV, priv,
-                       "mlx4_get_module_info i(%d) offset(%d) len(%d)\n",
-                       i, offset, ee->len - i);
+	while (i < ee->len) {
+		en_dbg(DRV, priv,
+		       "mlx4_get_module_info i(%d) offset(%d) len(%d)\n",
+		       i, offset, ee->len - i);
 
-                ret = mlx4_get_module_info(mdev->dev, priv->port,
-                                           offset, ee->len - i, data + i);
+		ret = mlx4_get_module_info(mdev->dev, priv->port,
+					   offset, ee->len - i, data + i);
 
-                if (!ret) /* Done reading */
-                        return 0;
+		if (!ret) /* Done reading */
+			return 0;
 
-                if (ret < 0) {
-                        en_err(priv,
-                               "mlx4_get_module_info i(%d) offset(%d) bytes_to_read(%d) - FAILED (0x%x)\n",
-                               i, offset, ee->len - i, ret);
-                        return -1;
-                }
+		if (ret < 0) {
+			en_err(priv,
+			       "mlx4_get_module_info i(%d) offset(%d) bytes_to_read(%d) - FAILED (0x%x)\n",
+			       i, offset, ee->len - i, ret);
+			return -1;
+		}
 
-                i += ret;
-                offset += ret;
-        }
-        return 0;
+		i += ret;
+		offset += ret;
+	}
+	return 0;
 }
 
 static void mlx4_en_print_eeprom(u8 *data, __u32 len)
@@ -2818,13 +2821,13 @@ static void mlx4_en_print_eeprom(u8 *data, __u32 len)
 static int mlx4_en_read_eeprom(SYSCTL_HANDLER_ARGS)
 {
 
-	u8* 		data;
-	int 		error;
+	u8*		data;
+	int		error;
 	int		result = 0;
-	struct 		mlx4_en_priv *priv;
-	struct 		net_device *dev;
-	struct 		mlx4_eeprom_modinfo modinfo;
-	struct 		mlx4_eeprom ee;
+	struct		mlx4_en_priv *priv;
+	struct		net_device *dev;
+	struct		mlx4_eeprom_modinfo modinfo;
+	struct		mlx4_eeprom ee;
 
 	error = sysctl_handle_int(oidp, &result, 0, req);
 	if (error || !req->newptr)
@@ -2838,10 +2841,10 @@ static int mlx4_en_read_eeprom(SYSCTL_HANDLER_ARGS)
 		error = mlx4_en_get_module_info(dev, &modinfo);
 		if (error) {
 			en_err(priv,
-                               "mlx4_en_get_module_info returned with error - FAILED (0x%x)\n",
-                               -error);
+			       "mlx4_en_get_module_info returned with error - FAILED (0x%x)\n",
+			       -error);
 			goto out;
-                }
+		}
 
 		ee.len = modinfo.eeprom_len;
 		ee.offset = 0;
@@ -2849,8 +2852,8 @@ static int mlx4_en_read_eeprom(SYSCTL_HANDLER_ARGS)
 		error = mlx4_en_get_module_eeprom(dev, &ee, data);
 		if (error) {
 			en_err(priv,
-                               "mlx4_en_get_module_eeprom returned with error - FAILED (0x%x)\n",
-                               -error);
+			       "mlx4_en_get_module_eeprom returned with error - FAILED (0x%x)\n",
+			       -error);
 			/* Continue printing partial information in case of an error */
 		}
 
@@ -2968,12 +2971,12 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
             CTLFLAG_RD, &priv->rx_ring_num, 0,
             "Number of receive rings");
 #ifdef CONFIG_RATELIMIT
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "native_tx_rings",
-            CTLFLAG_RD, &priv->native_tx_ring_num, 0,
-            "Number of native transmit rings");
-        SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rate_limit_tx_rings",
-            CTLFLAG_RD, &priv->rate_limit_tx_ring_num, 0,
-            "Number of rate limit transmit rings");
+	SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "native_tx_rings",
+	    CTLFLAG_RD, &priv->native_tx_ring_num, 0,
+	    "Number of native transmit rings");
+	SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "rate_limit_tx_rings",
+	    CTLFLAG_RD, &priv->rate_limit_tx_ring_num, 0,
+	    "Number of rate limit transmit rings");
 #else
 	SYSCTL_ADD_UINT(ctx, node_list, OID_AUTO, "tx_rings",
 	    CTLFLAG_RD, &priv->tx_ring_num, 0,
@@ -3049,12 +3052,10 @@ static void mlx4_en_sysctl_conf(struct mlx4_en_priv *priv)
             "Enable adaptive rx coalescing");
 
 	/* EEPROM support */
-        SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "eeprom_info",
-            CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
-             mlx4_en_read_eeprom, "I", "EEPROM information");
-
+	SYSCTL_ADD_PROC(ctx, node_list, OID_AUTO, "eeprom_info",
+	    CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv, 0,
+	    mlx4_en_read_eeprom, "I", "EEPROM information");
 }
-
 
 static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 {
@@ -3102,7 +3103,7 @@ static void mlx4_en_sysctl_stat(struct mlx4_en_priv *priv)
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_timeout", CTLFLAG_RD,
 	    &priv->port_stats.tx_timeout, "Transmit timeouts");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "tx_oversized_packets", CTLFLAG_RD,
-		&priv->port_stats.oversized_packets, "TX oversized packets, m_defrag failed");
+	    &priv->port_stats.oversized_packets, "TX oversized packets, m_defrag failed");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_alloc_failed", CTLFLAG_RD,
 	    &priv->port_stats.rx_alloc_failed, "RX failed to allocate mbuf");
 	SYSCTL_ADD_ULONG(ctx, node_list, OID_AUTO, "rx_chksum_good", CTLFLAG_RD,

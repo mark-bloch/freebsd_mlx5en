@@ -168,11 +168,11 @@ enum {
 #define MLX4_EN_NUM_UP			1
 
 #ifdef CONFIG_RATELIMIT
-#define MLX4_EN_DEF_RL_TX_RING_SIZE     512
-#define MLX4_EN_DEF_RL_USER_PRIO        0
-#define MLX4_EN_DEF_MAX_RL_TX_RINGS     45000
+#define MLX4_EN_DEF_RL_TX_RING_SIZE	512
+#define MLX4_EN_DEF_RL_USER_PRIO	0
+#define MLX4_EN_DEF_MAX_RL_TX_RINGS	45000
 #else
-#define MLX4_EN_DEF_MAX_RL_TX_RINGS     0
+#define MLX4_EN_DEF_MAX_RL_TX_RINGS	0
 #endif
 
 #define MAX_TX_RINGS			((MLX4_EN_MAX_TX_RING_P_UP * \
@@ -395,11 +395,7 @@ struct mlx4_en_rx_ring {
 
 static inline int mlx4_en_can_lro(__be16 status)
 {
-	static __be16 status_all;
-	static __be16 status_ipv4_ipok_tcp;
-	static __be16 status_ipv6_ipok_tcp;
-
-	status_all                         = cpu_to_be16(
+	const __be16 status_all = cpu_to_be16(
 			MLX4_CQE_STATUS_IPV4    |
 			MLX4_CQE_STATUS_IPV4F   |
 			MLX4_CQE_STATUS_IPV6    |
@@ -407,11 +403,11 @@ static inline int mlx4_en_can_lro(__be16 status)
 			MLX4_CQE_STATUS_TCP     |
 			MLX4_CQE_STATUS_UDP     |
 			MLX4_CQE_STATUS_IPOK);
-	status_ipv4_ipok_tcp               = cpu_to_be16(
+	const __be16 status_ipv4_ipok_tcp = cpu_to_be16(
 			MLX4_CQE_STATUS_IPV4    |
 			MLX4_CQE_STATUS_IPOK    |
 			MLX4_CQE_STATUS_TCP);
-	status_ipv6_ipok_tcp               = cpu_to_be16(
+	const __be16 status_ipv6_ipok_tcp = cpu_to_be16(
 			MLX4_CQE_STATUS_IPV6    |
 			MLX4_CQE_STATUS_IPOK    |
 			MLX4_CQE_STATUS_TCP);
@@ -420,7 +416,6 @@ static inline int mlx4_en_can_lro(__be16 status)
 	return (status == status_ipv4_ipok_tcp ||
 			status == status_ipv6_ipok_tcp);
 }
-
 
 struct mlx4_en_cq {
 	struct mlx4_cq          mcq;
@@ -722,8 +717,8 @@ struct mlx4_en_priv {
 	STAILQ_HEAD(, mlx4_en_reuse_index_list_element) reuse_index_list_head;
 	STAILQ_HEAD(, mlx4_en_rl_task_list_element) rl_op_list_head;
 	struct mlx4_en_reuse_index_list_element reuse_index_list_array [MAX_TX_RINGS];
-	struct 		task rl_task;
-	struct 		taskqueue *rl_tq;
+	struct		task rl_task;
+	struct		taskqueue *rl_tq;
 	int		num_rates_per_prio;
 	struct mlx4_en_rate_limit_indexes	*rate_limits;
 	struct mutex rate_limit_table_lock;

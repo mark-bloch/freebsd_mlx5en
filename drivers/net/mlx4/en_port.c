@@ -560,8 +560,8 @@ int mlx4_en_DUMP_ETH_STATS(struct mlx4_en_dev *mdev, u8 port, u8 reset)
 		dev->if_ierrors         = priv->pkstats.rx_errors;
 		dev->if_iqdrops         = priv->pkstats.rx_dropped;
 		dev->if_imcasts         = priv->pkstats.rx_multicast_packets;
-                dev->if_omcasts         = priv->pkstats.tx_multicast_packets;
-                dev->if_collisions      = 0;
+		dev->if_omcasts         = priv->pkstats.tx_multicast_packets;
+		dev->if_collisions      = 0;
 	}
 
 	spin_unlock(&priv->stats_lock);
