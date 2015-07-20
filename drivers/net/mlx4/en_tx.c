@@ -262,6 +262,7 @@ int mlx4_en_activate_tx_ring(struct mlx4_en_priv *priv,
 #ifdef CONFIG_RATELIMIT
 	if (ring->rl_data.rate_index) {
                 ring->context.rate_limit_index = ring->rl_data.rate_index;
+		ring->context.sq_size_stride |= MLX4_DISABLE_WQE_PREFETCH;
         }
 #endif
 

@@ -196,6 +196,10 @@ enum { /* fvl_rx */
 	MLX4_FVL_RX_FORCE_ETH_VLAN	= 1 << 0 /* enforce Eth rx vlan */
 };
 
+enum {
+	MLX4_DISABLE_WQE_PREFETCH = (1 << 7)
+};
+
 struct mlx4_qp_context {
 	__be32			flags;
 	__be32			pd;
