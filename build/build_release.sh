@@ -1,7 +1,9 @@
 #!/bin/bash
 
 RELEASE_DIR="/mswg/release/freebsd/src"
-BUILD_PACK_SCRIPT="build_pack.sh"
+BUILD_PACK_MLX4_SCRIPT="build_pack.sh"
+BUILD_PACK_MLX5_SCRIPT="build_mlx5_pack.sh"
+BUILD_PACK_SCRIPT=""
 DEFAULT_RELEASE="latest"
 RELEASE=""
 #default branch to create release pack of.
@@ -18,13 +20,14 @@ usage()
         printf "\t-b <tag>            : what tag to tar.gz.\n"
         printf "\t-b <commit_sha>     : What commit to use as head , that tree will be tar.gz.\n"
         printf "\t-r <release>        : What symbol link to create/change, default latest\n"
+       printf "\t-v <mlx4/mlx5>      : What release to publish, mlx4/mlx5\n"
         printf "\t-h                  : Show usage.\n"
 }
 
 
 read_args()
 {
-        while getopts :b:r:h flag; do
+        while getopts :v:b:r:h flag; do
                 case ${flag} in
                         b)      BRANCH=$OPTARG
                                 ;;
@@ -36,9 +39,26 @@ read_args()
                         r)      RELEASE=$OPTARG
                                 ;;
 
+                       v)      case ${OPTARG} in
+                                       "mlx4") BUILD_PACK_SCRIPT=${BUILD_PACK_MLX4_SCRIPT}
+                                               ;;
+
+                                       "mlx5") BUILD_PACK_SCRIPT=${BUILD_PACK_MLX5_SCRIPT}
+                                               ;;
+                                       \?) exit
+                               esac
+                               ;;
+
                         \?)     exit
                 esac
         done
+       if [ -z "${BUILD_PACK_SCRIPT}" ]; then
+		echo "Must give mlx4/mlx5 arg"
+		exit
+       fi
+       if [ "${BUILD_PACK_SCRIPT}" == "${BUILD_PACK_MLX5_SCRIPT}" ] && [ -z "${RELEASE}" ]; then
+               DEFAULT_RELEASE+="-mlx5"
+       fi
 }
 
 
@@ -49,7 +69,7 @@ main()
         if [ -z "${RELEASE}" ]; then
                 RELEASE=${DEFAULT_RELEASE}
         fi
-        NAME=freebsd-${BRANCH}
+        NAME=${BRANCH}
         bash ${BUILD_PACK_SCRIPT} -b ${BRANCH}
         FILE=$(ls *${NAME}* | head -n 1)
 
