@@ -1033,7 +1033,8 @@ mlx5e_destroy_cq(struct mlx5e_cq *cq)
 }
 
 static int
-mlx5e_enable_cq(struct mlx5e_cq *cq, struct mlx5e_cq_param *param)
+mlx5e_enable_cq(struct mlx5e_cq *cq, struct mlx5e_cq_param *param,
+		u8 moderation_mode)
 {
 	struct mlx5e_channel *c = cq->channel;
 	struct mlx5e_priv *priv = c->priv;
@@ -1061,6 +1062,11 @@ mlx5e_enable_cq(struct mlx5e_cq *cq, struct mlx5e_cq_param *param)
 
 	mlx5_vector2eqn(mdev, param->eq_ix, &eqn, &irqn_not_used);
 
+	MLX5_SET(cqc, cqc, cq_period_mode,
+		 MLX5_CAP_GEN(mdev, cq_period_start_from_cqe) &&
+		 moderation_mode == MLX5_CQ_PERIOD_MODE_START_FROM_CQE ?
+		 MLX5_CQ_PERIOD_MODE_START_FROM_CQE:
+		 MLX5_CQ_PERIOD_MODE_START_FROM_EQE);
 	MLX5_SET(cqc, cqc, c_eqn, eqn);
 	MLX5_SET(cqc, cqc, uar_page, mcq->uar->index);
 	MLX5_SET(cqc, cqc, log_page_size, cq->wq_ctrl.buf.page_shift -
@@ -1093,7 +1099,8 @@ static int
 mlx5e_open_cq(struct mlx5e_channel *c,
     struct mlx5e_cq_param *param,
     struct mlx5e_cq *cq,
-    mlx5e_cq_func_t *func)
+    mlx5e_cq_func_t *func,
+    u8 moderation_mode)
 {
 	int err;
 
@@ -1101,7 +1108,7 @@ mlx5e_open_cq(struct mlx5e_channel *c,
 	if (err)
 		return (err);
 
-	err = mlx5e_enable_cq(cq, param);
+	err = mlx5e_enable_cq(cq, param, moderation_mode);
 	if (err)
 		goto err_destroy_cq;
 
@@ -1130,7 +1137,7 @@ mlx5e_open_tx_cqs(struct mlx5e_channel *c,
 	for (tc = 0; tc < c->num_tc; tc++) {
 		/* open completion queue */
 		err = mlx5e_open_cq(c, &cparam->tx_cq, &c->sq[tc].cq,
-		    &mlx5e_tx_cq_function);
+		    &mlx5e_tx_cq_function, MLX5_CQ_PERIOD_MODE_START_FROM_EQE);
 		if (err)
 			goto err_close_tx_cqs;
 	}
@@ -1246,7 +1253,7 @@ mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 
 	/* open receive completion queue */
 	err = mlx5e_open_cq(c, &cparam->rx_cq, &c->rq.cq,
-	    &mlx5e_rx_cq_function);
+	    &mlx5e_rx_cq_function, MLX5_CQ_PERIOD_MODE_START_FROM_CQE);
 	if (err)
 		goto err_close_tx_cqs;
 
@@ -2026,6 +2033,8 @@ mlx5e_build_ifp_priv(struct mlx5_core_dev *mdev,
 	priv->params.log_rq_size =
 	    MLX5E_PARAMS_DEFAULT_LOG_RQ_SIZE;
 	priv->params.rx_cq_moderation_usec =
+	    MLX5_CAP_GEN(mdev, cq_period_start_from_cqe) ?
+	    MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_USEC_FROM_CQE :
 	    MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_USEC;
 	priv->params.rx_cq_moderation_pkts =
 	    MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_PKTS;
