@@ -1,0 +1,11 @@
+READONLY clone of drivers to be used with Connectx-3 and Connectx-4.
+
+The top commit in this repository includes changes needed for the code to be used outside of Mellanox.
+The repository should be synced automiaticlly with the internal copy at Mellanox.
+
+In order to compile the driver, you will need:
+
+- 11-current.
+- compiling and loading the linuxapi module. (mlx5/mlx5en only)
+
+For any problem please contact freebsd-drivers@mellanox.com.
