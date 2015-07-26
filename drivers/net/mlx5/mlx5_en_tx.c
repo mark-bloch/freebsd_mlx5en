@@ -396,10 +396,10 @@ mlx5e_xmit(struct ifnet *ifp, struct mbuf *mb)
 		m_freem(mb);
 		return (ENXIO);
 	}
-	mtx_lock(&sq->mtx);
-	mlx5e_poll_tx_cq(sq, MLX5E_BUDGET_MAX);
+	mtx_lock(&sq->lock);
 	ret = mlx5e_sq_xmit(sq, mb);
-	mtx_unlock(&sq->mtx);
+	mtx_unlock(&sq->lock);
+
 	return (ret);
 }
 
@@ -408,8 +408,8 @@ mlx5e_tx_cq_comp(struct mlx5_core_cq *mcq)
 {
 	struct mlx5e_sq *sq = container_of(mcq, struct mlx5e_sq, cq.mcq);
 
-	mtx_lock(&sq->mtx);
+	mtx_lock(&sq->comp_lock);
 	mlx5e_poll_tx_cq(sq, MLX5E_BUDGET_MAX);
 	mlx5e_cq_arm(&sq->cq);
-	mtx_unlock(&sq->mtx);
+	mtx_unlock(&sq->comp_lock);
 }

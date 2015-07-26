@@ -368,8 +368,9 @@ enum {
 
 struct mlx5e_sq {
 	/* data path */
-	struct mtx mtx;
+	struct mtx lock;
 	bus_dma_tag_t dma_tag;
+	struct mtx comp_lock;
 
 	/* dirtied @completion */
 	u16	cc;

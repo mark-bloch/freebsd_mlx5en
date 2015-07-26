@@ -1284,8 +1284,11 @@ mlx5e_chan_mtx_init(struct mlx5e_channel *c)
 
 	mtx_init(&c->rq.mtx, "mlx5rx", MTX_NETWORK_LOCK, MTX_DEF);
 
-	for (tc = 0; tc < c->num_tc; tc++)
-		mtx_init(&c->sq[tc].mtx, "mlx5tx", MTX_NETWORK_LOCK, MTX_DEF);
+	for (tc = 0; tc < c->num_tc; tc++) {
+		mtx_init(&c->sq[tc].lock, "mlx5tx", MTX_NETWORK_LOCK, MTX_DEF);
+		mtx_init(&c->sq[tc].comp_lock, "mlx5comp", MTX_NETWORK_LOCK,
+		    MTX_DEF);
+	}
 }
 
 static void
@@ -1295,8 +1298,10 @@ mlx5e_chan_mtx_destroy(struct mlx5e_channel *c)
 
 	mtx_destroy(&c->rq.mtx);
 
-	for (tc = 0; tc < c->num_tc; tc++)
-		mtx_destroy(&c->sq[tc].mtx);
+	for (tc = 0; tc < c->num_tc; tc++) {
+		mtx_destroy(&c->sq[tc].lock);
+		mtx_destroy(&c->sq[tc].comp_lock);
+	}
 }
 
 static int
