@@ -107,7 +107,7 @@ mlx5e_select_queue(struct ifnet *ifp, struct mbuf *mb)
 	u32 tc;
 
 	/* check if channels are successfully opened */
-	if (priv->channel == NULL)
+	if (unlikely(priv->channel == NULL))
 		return (NULL);
 
 	/* obtain VLAN information if present */
@@ -130,7 +130,7 @@ mlx5e_select_queue(struct ifnet *ifp, struct mbuf *mb)
 	}
 
 	/* check if channel is allocated */
-	if (priv->channel[ch] == NULL)
+	if (unlikely(priv->channel[ch] == NULL))
 		return (NULL);
 
 	return (&priv->channel[ch]->sq[tc]);
@@ -450,7 +450,7 @@ mlx5e_xmit(struct ifnet *ifp, struct mbuf *mb)
 	int ret;
 
 	sq = mlx5e_select_queue(ifp, mb);
-	if (sq == NULL) {
+	if (unlikely(sq == NULL)) {
 		/* invalid send queue */
 		m_freem(mb);
 		return (ENXIO);
