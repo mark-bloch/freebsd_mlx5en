@@ -28,11 +28,11 @@
  */
 
 #ifndef _FBSD_PRINTK_H_
-#define _FBSD_PRINTK_H_
+#define	_FBSD_PRINTK_H_
 
 /* GID printing macros */
-#define GID_PRINT_FMT			"%.4x:%.4x:%.4x:%.4x:%.4x:%.4x:%.4x:%.4x"
-#define GID_PRINT_ARGS(gid_raw)		htons(((u16 *)gid_raw)[0]), htons(((u16 *)gid_raw)[1]),\
+#define	GID_PRINT_FMT			"%.4x:%.4x:%.4x:%.4x:%.4x:%.4x:%.4x:%.4x"
+#define	GID_PRINT_ARGS(gid_raw)		htons(((u16 *)gid_raw)[0]), htons(((u16 *)gid_raw)[1]),\
 					htons(((u16 *)gid_raw)[2]), htons(((u16 *)gid_raw)[3]),\
 					htons(((u16 *)gid_raw)[4]), htons(((u16 *)gid_raw)[5]),\
 					htons(((u16 *)gid_raw)[6]), htons(((u16 *)gid_raw)[7])

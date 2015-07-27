@@ -177,7 +177,7 @@ class_show(struct kobject *kobj, struct attribute *attr, char *buf)
 	error = -EIO;
 	if (dattr->show)
 		error = dattr->show(container_of(kobj, struct class, kobj),
-			dattr, buf);
+		    dattr, buf);
 	return (error);
 }
 
@@ -192,7 +192,7 @@ class_store(struct kobject *kobj, struct attribute *attr, const char *buf,
 	error = -EIO;
 	if (dattr->store)
 		error = dattr->store(container_of(kobj, struct class, kobj),
-			dattr, buf, count);
+		    dattr, buf, count);
 	return (error);
 }
 
@@ -416,32 +416,7 @@ static inline int dev_to_node(struct device *dev)
                 return -1;
 }
 
-static inline char *kvasprintf(gfp_t gfp, const char *fmt, va_list ap)
-{
-	unsigned int len;
-	char *p = NULL;
-	va_list aq;
-
-	va_copy(aq, ap);
-	len = vsnprintf(NULL, 0, fmt, aq);
-	va_end(aq);
-
-	vsnprintf(p, len+1, fmt, ap);
-
-	return p;
-}
-
-static inline char *kasprintf(gfp_t gfp, const char *fmt, ...)
-{
-	va_list ap;
-	char *p;
-
-	va_start(ap, fmt);
-	p = kvasprintf(gfp, fmt, ap);
-	va_end(ap);
-
-	return p;
-}
-
+char *kvasprintf(gfp_t, const char *, va_list);
+char *kasprintf(gfp_t, const char *, ...);
 
 #endif	/* _LINUX_DEVICE_H_ */
