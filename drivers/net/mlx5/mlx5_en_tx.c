@@ -33,7 +33,7 @@
 #include "en.h"
 
 void
-mlx5e_send_nop(struct mlx5e_sq *sq, bool notify_hw)
+mlx5e_send_nop(struct mlx5e_sq *sq, u32 ds_cnt, bool notify_hw)
 {
 	u16 pi = sq->pc & sq->wq.sz_m1;
 	struct mlx5e_tx_wqe *wqe = mlx5_wq_cyc_get_wqe(&sq->wq, pi);
@@ -41,11 +41,12 @@ mlx5e_send_nop(struct mlx5e_sq *sq, bool notify_hw)
 	memset(&wqe->ctrl, 0, sizeof(wqe->ctrl));
 
 	wqe->ctrl.opmod_idx_opcode = cpu_to_be32((sq->pc << 8) | MLX5_OPCODE_NOP);
-	wqe->ctrl.qpn_ds = cpu_to_be32((sq->sqn << 8) | 0x01);
+	wqe->ctrl.qpn_ds = cpu_to_be32((sq->sqn << 8) | ds_cnt);
 	wqe->ctrl.fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
 
 	sq->mbuf[pi].mbuf = NULL;
-	sq->pc++;
+	sq->mbuf[pi].num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
+	sq->pc += sq->mbuf[pi].num_wqebbs;
 	if (notify_hw)
 		mlx5e_tx_notify_hw(sq, wqe, 0);
 }
@@ -182,8 +183,16 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 	}
 
 	/* align SQ edge with NOPs to avoid WQE wrap around */
-	while (((~sq->pc) & sq->wq.sz_m1) < (MLX5_SEND_WQE_MAX_WQEBBS - 1))
-		mlx5e_send_nop(sq, false);
+	pi = ((~sq->pc) & sq->wq.sz_m1);
+	if (pi < (MLX5_SEND_WQE_MAX_WQEBBS - 1)) {
+		/* send one multi NOP message instead of many */
+		mlx5e_send_nop(sq, (pi + 1) * MLX5_SEND_WQEBB_NUM_DS, false);
+		pi = ((~sq->pc) & sq->wq.sz_m1);
+		if (pi < (MLX5_SEND_WQE_MAX_WQEBBS - 1)) {
+			m_freem(mb);
+			return (ENOMEM);
+		}
+	}
 
 	/* setup local variables */
 	pi = sq->pc & sq->wq.sz_m1;
@@ -347,7 +356,7 @@ mlx5e_poll_tx_cq(struct mlx5e_sq *sq, int budget)
 		if (unlikely(mb == NULL)) {
 			/* nop */
 			sq->stats.nop++;
-			sqcc++;
+			sqcc += sq->mbuf[ci].num_wqebbs;
 			continue;
 		}
 		bus_dmamap_sync(sq->dma_tag, sq->mbuf[ci].dma_map,

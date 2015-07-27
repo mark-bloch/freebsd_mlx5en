@@ -644,6 +644,6 @@ void	mlx5e_create_ethtool(struct mlx5e_priv *);
 void	mlx5e_create_stats(struct sysctl_ctx_list *,
     struct sysctl_oid_list *, const char *,
     const char **, unsigned, u64 *);
-void	mlx5e_send_nop(struct mlx5e_sq *, bool);
+void	mlx5e_send_nop(struct mlx5e_sq *, u32, bool);
 
 #endif					/* _MLX5_EN_H_ */

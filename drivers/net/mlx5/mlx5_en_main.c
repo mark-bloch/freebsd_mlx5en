@@ -746,7 +746,7 @@ mlx5e_open_rq(struct mlx5e_channel *c,
 	 * "mlx5e_post_rx_wqes()":
 	 */
 	for (i = 0; i != c->num_tc; i++)
-		mlx5e_send_nop(&c->sq[i], true);
+		mlx5e_send_nop(&c->sq[i], 1, true);
 	return (0);
 
 err_disable_rq:
@@ -1027,7 +1027,7 @@ mlx5e_close_sq(struct mlx5e_sq *sq)
 
 	/* ensure hw is notified of all pending wqes */
 	if (mlx5e_sq_has_room_for(sq, 1))
-		mlx5e_send_nop(sq, true);
+		mlx5e_send_nop(sq, 1, true);
 
 	mlx5e_modify_sq(sq, MLX5_SQC_STATE_RDY, MLX5_SQC_STATE_ERR);
 }
