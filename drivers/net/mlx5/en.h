@@ -52,6 +52,8 @@
 #include <netinet/tcp_lro.h>
 #include <netinet/udp.h>
 
+#include <machine/bus.h>
+
 #ifdef HAVE_TURBO_LRO
 #include "tcp_tlro.h"
 #endif
@@ -91,6 +93,7 @@
 
 #define	MLX5E_MAX_TX_NUM_TC	8	/* units */
 #define	MLX5E_MAX_TX_HEADER	128	/* bytes */
+#define	MLX5E_MAX_TX_MBUF_SIZE	65536	/* bytes */
 #define	MLX5E_MAX_TX_MBUF_FRAGS	\
     ((MLX5_SEND_WQE_MAX_WQEBBS * MLX5_SEND_WQEBB_NUM_DS) - \
     (MLX5E_MAX_TX_HEADER / MLX5_SEND_WQE_DS))	/* units */
@@ -140,6 +143,7 @@ typedef void (mlx5e_cq_func_t)(struct mlx5e_cq *);
   m(+1, u64 rx_csum_none, "rx_csum_none", "Received no checksum packets") \
   m(+1, u64 tx_csum_offload, "tx_csum_offload", "Transmit checksum offload packets") \
   m(+1, u64 tx_queue_dropped, "tx_queue_dropped", "Transmit queue dropped") \
+  m(+1, u64 tx_defragged, "tx_defragged", "Transmit queue defragged") \
   m(+1, u64 rx_wqe_err, "rx_wqe_err", "Receive WQE errors")
 
 #define	MLX5E_VPORT_STATS_NUM (0 MLX5E_VPORT_STATS(MLX5E_STATS_COUNT))
@@ -252,6 +256,7 @@ struct mlx5e_rq_stats {
   m(+1, u64 tso_packets, "tso_packets", "Transmitted packets")		\
   m(+1, u64 tso_bytes, "tso_bytes", "Transmitted bytes")		\
   m(+1, u64 csum_offload_none, "csum_offload_none", "Transmitted packets")	\
+  m(+1, u64 defragged, "defragged", "Transmitted packets")		\
   m(+1, u64 dropped, "dropped", "Transmitted packets")			\
   m(+1, u64 nop, "nop", "Transmitted packets")
 
@@ -340,18 +345,11 @@ struct mlx5e_rq {
 	struct mlx5e_channel *channel;
 } __aligned(MLX5E_CACHELINE_SIZE);
 
-struct mlx5e_tx_mbuf_cb {
+struct mlx5e_sq_mbuf {
+	bus_dmamap_t dma_map;
+	struct mbuf *mbuf;
 	u32	num_bytes;
-	u8	num_wqebbs;
-	u8	num_dma;
-};
-
-#define	MLX5E_TX_MBUF_CB(_mb) \
-    ((struct mlx5e_tx_mbuf_cb *)(_mb)->m_pkthdr.PH_loc.sixtyfour)
-
-struct mlx5e_sq_dma {
-	dma_addr_t addr;
-	u32	size;
+	u32	num_wqebbs;
 };
 
 enum {
@@ -361,26 +359,23 @@ enum {
 struct mlx5e_sq {
 	/* data path */
 	struct mtx mtx;
+	bus_dma_tag_t dma_tag;
 
 	/* dirtied @completion */
 	u16	cc;
-	u32	dma_fifo_cc;
 
 	/* dirtied @xmit */
-	u32	dma_fifo_pc __aligned(MLX5E_CACHELINE_SIZE);
-	u16	pc;
+	u16	pc __aligned(MLX5E_CACHELINE_SIZE);
 	u16	bf_offset;
 	struct mlx5e_sq_stats stats;
 
 	struct mlx5e_cq cq;
 
 	/* pointers to per packet info: write@xmit, read@completion */
-	struct mbuf **mbuf;
-	struct mlx5e_sq_dma *dma_fifo;
+	struct mlx5e_sq_mbuf *mbuf;
 
 	/* read only */
 	struct mlx5_wq_cyc wq;
-	u32	dma_fifo_mask;
 	void __iomem *uar_map;
 	void __iomem *uar_bf_map;
 	u32	sqn;

@@ -44,52 +44,14 @@ mlx5e_send_nop(struct mlx5e_sq *sq, bool notify_hw)
 	wqe->ctrl.qpn_ds = cpu_to_be32((sq->sqn << 8) | 0x01);
 	wqe->ctrl.fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
 
-	sq->mbuf[pi] = NULL;
+	sq->mbuf[pi].mbuf = NULL;
 	sq->pc++;
 	if (notify_hw)
 		mlx5e_tx_notify_hw(sq, wqe, 0);
 }
 
-static void
-mlx5e_dma_pop_last_pushed(struct mlx5e_sq *sq, dma_addr_t *addr,
-    u32 * size)
-{
-	sq->dma_fifo_pc--;
-	*addr = sq->dma_fifo[sq->dma_fifo_pc & sq->dma_fifo_mask].addr;
-	*size = sq->dma_fifo[sq->dma_fifo_pc & sq->dma_fifo_mask].size;
-}
-
-static void
-mlx5e_dma_unmap_wqe_err(struct mlx5e_sq *sq, struct mbuf *mb)
-{
-	dma_addr_t addr;
-	u32 size;
-	int i;
-
-	for (i = 0; i < MLX5E_TX_MBUF_CB(mb)->num_dma; i++) {
-		mlx5e_dma_pop_last_pushed(sq, &addr, &size);
-		dma_unmap_single(sq->pdev, addr, size, DMA_TO_DEVICE);
-	}
-}
-
-static inline void
-mlx5e_dma_push(struct mlx5e_sq *sq, dma_addr_t addr,
-    u32 size)
-{
-	sq->dma_fifo[sq->dma_fifo_pc & sq->dma_fifo_mask].addr = addr;
-	sq->dma_fifo[sq->dma_fifo_pc & sq->dma_fifo_mask].size = size;
-	sq->dma_fifo_pc++;
-}
-
-static inline void
-mlx5e_dma_get(struct mlx5e_sq *sq, u32 i, dma_addr_t *addr,
-    u32 * size)
-{
-	*addr = sq->dma_fifo[i & sq->dma_fifo_mask].addr;
-	*size = sq->dma_fifo[i & sq->dma_fifo_mask].size;
-}
-
 static uint32_t mlx5e_hash_value;
+
 static void
 mlx5e_hash_init(void *arg)
 {
@@ -196,24 +158,17 @@ mlx5e_get_header_size(struct mbuf *mb)
 	return (eth_hdr_len);
 }
 
-static u32
-mlx5e_num_frags(struct mbuf *mb)
-{
-	u32 frags = 0;
-	do {
-		if (mb->m_len != 0)
-			frags++;
-	} while ((mb = mb->m_next) != NULL);
-	return (frags);
-}
-
 static int
 mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 {
+	bus_dma_segment_t segs[MLX5E_MAX_TX_MBUF_FRAGS];
 	struct mlx5_wqe_data_seg *dseg;
-	struct ifnet *ifp;
 	struct mlx5e_tx_wqe *wqe;
+	struct ifnet *ifp;
 	struct mbuf *mx;
+	int nsegs;
+	int err;
+	int x;
 	u16 ds_cnt;
 	u16 ihs;
 	u16 pi;
@@ -236,26 +191,6 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 	ifp = sq->channel->ifp;
 
 	memset(wqe, 0, sizeof(*wqe));
-
-	/*
-	 * Check that the number of fragments in the chain doesn't
-	 * exceed the maximum:
-	 */
-	if (unlikely(mlx5e_num_frags(mb) > MLX5E_MAX_TX_MBUF_FRAGS)) {
-		mx = m_defrag(mb, M_NOWAIT);
-		if (mx == NULL) {
-			sq->stats.dropped++;
-			m_freem(mb);
-			return (ENOMEM);
-		} else {
-			if (mlx5e_num_frags(mx) > MLX5E_MAX_TX_MBUF_FRAGS) {
-				sq->stats.dropped++;
-				m_freem(mx);
-				return (ENOMEM);
-			}
-			mb = mx;
-		}
-	}
 
 	/* send a copy of the frame to the BPF listener, if any */
 	if (ifp != NULL && ifp->if_bpf != NULL)
@@ -284,17 +219,15 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 			num_pkts = 1;
 		else
 			num_pkts = DIV_ROUND_UP(payload_len, mss);
-		MLX5E_TX_MBUF_CB(mb)->num_bytes =
-		    payload_len + (num_pkts * ihs);
+		sq->mbuf[pi].num_bytes = payload_len + (num_pkts * ihs);
 
 		sq->stats.tso_packets++;
 		sq->stats.tso_bytes += payload_len;
 	} else {
 		opcode = MLX5_OPCODE_SEND;
 		ihs = mlx5e_get_inline_hdr_size(sq, mb);
-		MLX5E_TX_MBUF_CB(mb)->num_bytes =
-		    max_t (unsigned int, mb->m_pkthdr.len,
-		    ETHER_MIN_LEN - ETHER_CRC_LEN);
+		sq->mbuf[pi].num_bytes = max_t (unsigned int,
+		    mb->m_pkthdr.len, ETHER_MIN_LEN - ETHER_CRC_LEN);
 	}
 	if (mb->m_flags & M_VLANTAG) {
 		struct ether_vlan_header *eh =
@@ -332,55 +265,59 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 	}
 	dseg = ((struct mlx5_wqe_data_seg *)&wqe->ctrl) + ds_cnt;
 
-	for (mx = mb; mx != NULL; mx = mx->m_next) {
-		dma_addr_t dma_addr;
-
-		if (mx->m_len == 0)
+	err = bus_dmamap_load_mbuf_sg(sq->dma_tag, sq->mbuf[pi].dma_map,
+	    mb, segs, &nsegs, BUS_DMA_NOWAIT);
+	if (err == EFBIG) {
+		/* Update statistics */
+		sq->stats.defragged++;
+		/* Too many mbuf fragments */
+		mx = m_defrag(mb, M_NOWAIT);
+		if (mx == NULL) {
+			sq->stats.dropped++;
+			m_freem(mb);
+			return (err);
+		}
+		mb = mx;
+		/* Try again */
+		err = bus_dmamap_load_mbuf_sg(sq->dma_tag, sq->mbuf[pi].dma_map,
+		    mb, segs, &nsegs, BUS_DMA_NOWAIT);
+	}
+	/* catch errors */
+	if (err != 0) {
+		sq->stats.dropped++;
+		m_freem(mb);
+		return (err);
+	}
+	for (x = 0; x != nsegs; x++) {
+		if (segs[x].ds_len == 0)
 			continue;
-
-		dma_addr = dma_map_single(sq->pdev, mx->m_data, mx->m_len,
-		    DMA_TO_DEVICE);
-		if (unlikely(dma_mapping_error(sq->pdev, dma_addr)))
-			goto dma_unmap_wqe_err;
-
-		dseg->addr = cpu_to_be64(dma_addr);
+		dseg->addr = cpu_to_be64((uint64_t)segs[x].ds_addr);
 		dseg->lkey = sq->mkey_be;
-		dseg->byte_count = cpu_to_be32(mx->m_len);
-
-		mlx5e_dma_push(sq, dma_addr, mx->m_len);
+		dseg->byte_count = cpu_to_be32((uint32_t)segs[x].ds_len);
 		dseg++;
 	}
-
-	MLX5E_TX_MBUF_CB(mb)->num_dma =
-	    (dseg - ((struct mlx5_wqe_data_seg *)&wqe->ctrl)) - ds_cnt;
-	ds_cnt += MLX5E_TX_MBUF_CB(mb)->num_dma;
+	ds_cnt = (dseg - ((struct mlx5_wqe_data_seg *)&wqe->ctrl));
 
 	wqe->ctrl.opmod_idx_opcode = cpu_to_be32((sq->pc << 8) | opcode);
 	wqe->ctrl.qpn_ds = cpu_to_be32((sq->sqn << 8) | ds_cnt);
 	wqe->ctrl.fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
 
-	sq->mbuf[pi] = mb;
+	sq->mbuf[pi].mbuf = mb;
+	sq->mbuf[pi].num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
+	sq->pc += sq->mbuf[pi].num_wqebbs;
 
-	MLX5E_TX_MBUF_CB(mb)->num_wqebbs = DIV_ROUND_UP(ds_cnt,
-	    MLX5_SEND_WQEBB_NUM_DS);
-	sq->pc += MLX5E_TX_MBUF_CB(mb)->num_wqebbs;
+	/* make sure all mbuf data is written to RAM */
+	bus_dmamap_sync(sq->dma_tag, sq->mbuf[pi].dma_map, BUS_DMASYNC_PREWRITE);
 
 	mlx5e_tx_notify_hw(sq, wqe, 0);
 
 	sq->stats.packets++;
 	return (0);
-
-dma_unmap_wqe_err:
-	sq->stats.dropped++;
-	mlx5e_dma_unmap_wqe_err(sq, mb);
-	m_freem(mb);
-	return (ENXIO);
 }
 
 static void
 mlx5e_poll_tx_cq(struct mlx5e_sq *sq, int budget)
 {
-	u32 dma_fifo_cc;
 	u32 nbytes;
 	u16 npkts;
 	u16 sqcc;
@@ -394,22 +331,18 @@ mlx5e_poll_tx_cq(struct mlx5e_sq *sq, int budget)
 	 */
 	sqcc = sq->cc;
 
-	/* avoid dirtying sq cache line every cqe */
-	dma_fifo_cc = sq->dma_fifo_cc;
-
 	while (budget--) {
 		struct mlx5_cqe64 *cqe;
 		struct mbuf *mb;
 		u16 ci;
-		int j;
 
 		cqe = mlx5e_get_cqe(&sq->cq);
 		if (!cqe)
 			break;
 
 		ci = sqcc & sq->wq.sz_m1;
-		mb = sq->mbuf[ci];
-		sq->mbuf[ci] = NULL;	/* clear mbuf pointer */
+		mb = sq->mbuf[ci].mbuf;
+		sq->mbuf[ci].mbuf = NULL;	/* safety clear */
 
 		if (unlikely(mb == NULL)) {
 			/* nop */
@@ -417,18 +350,13 @@ mlx5e_poll_tx_cq(struct mlx5e_sq *sq, int budget)
 			sqcc++;
 			continue;
 		}
-		for (j = 0; j < MLX5E_TX_MBUF_CB(mb)->num_dma; j++) {
-			dma_addr_t addr;
-			u32 size;
-
-			mlx5e_dma_get(sq, dma_fifo_cc, &addr, &size);
-			dma_fifo_cc++;
-			dma_unmap_single(sq->pdev, addr, size, DMA_TO_DEVICE);
-		}
+		bus_dmamap_sync(sq->dma_tag, sq->mbuf[ci].dma_map,
+		    BUS_DMASYNC_POSTWRITE);
+		bus_dmamap_unload(sq->dma_tag, sq->mbuf[ci].dma_map);
 
 		npkts++;
-		nbytes += MLX5E_TX_MBUF_CB(mb)->num_bytes;
-		sqcc += MLX5E_TX_MBUF_CB(mb)->num_wqebbs;
+		nbytes += sq->mbuf[ci].num_bytes;
+		sqcc += sq->mbuf[ci].num_wqebbs;
 
 		/* free transmitted mbuf */
 		m_freem(mb);
@@ -439,7 +367,6 @@ mlx5e_poll_tx_cq(struct mlx5e_sq *sq, int budget)
 	/* ensure cq space is freed before enabling more cqes */
 	wmb();
 
-	sq->dma_fifo_cc = dma_fifo_cc;
 	sq->cc = sqcc;
 }
 

@@ -331,6 +331,7 @@ mlx5e_update_stats_work(struct work_struct *work)
 	s->tso_packets = 0;
 	s->tso_bytes = 0;
 	s->tx_queue_dropped = 0;
+	s->tx_defragged = 0;
 	tx_offload_none = 0;
 	s->lro_packets = 0;
 	s->lro_bytes = 0;
@@ -350,6 +351,7 @@ mlx5e_update_stats_work(struct work_struct *work)
 			s->tso_packets += sq_stats->tso_packets;
 			s->tso_bytes += sq_stats->tso_bytes;
 			s->tx_queue_dropped += sq_stats->dropped;
+			s->tx_defragged += sq_stats->defragged;
 			tx_offload_none += sq_stats->csum_offload_none;
 		}
 	}
@@ -743,7 +745,11 @@ mlx5e_close_rq_wait(struct mlx5e_rq *rq)
 static void
 mlx5e_free_sq_db(struct mlx5e_sq *sq)
 {
-	free(sq->dma_fifo, M_MLX5EN);
+	int wq_sz = mlx5_wq_cyc_get_size(&sq->wq);
+	int x;
+
+	for (x = 0; x != wq_sz; x++)
+		bus_dmamap_destroy(sq->dma_tag, sq->mbuf[x].dma_map);
 	free(sq->mbuf, M_MLX5EN);
 }
 
@@ -751,16 +757,23 @@ static int
 mlx5e_alloc_sq_db(struct mlx5e_sq *sq)
 {
 	int wq_sz = mlx5_wq_cyc_get_size(&sq->wq);
-	int df_sz = wq_sz * MLX5_SEND_WQEBB_NUM_DS;
+	int err;
+	int x;
 
 	sq->mbuf = malloc(wq_sz * sizeof(sq->mbuf[0]), M_MLX5EN, M_WAITOK | M_ZERO);
-	sq->dma_fifo = malloc(df_sz * sizeof(*sq->dma_fifo), M_MLX5EN, M_WAITOK | M_ZERO);
-	if (sq->mbuf == NULL || sq->dma_fifo == NULL) {
-		mlx5e_free_sq_db(sq);
+	if (sq->mbuf == NULL)
 		return (-ENOMEM);
-	}
-	sq->dma_fifo_mask = df_sz - 1;
 
+	/* Create DMA descriptor MAPs */
+	for (x = 0; x != wq_sz; x++) {
+		err = -bus_dmamap_create(sq->dma_tag, 0, &sq->mbuf[x].dma_map);
+		if (err != 0) {
+			while (x--)
+				bus_dmamap_destroy(sq->dma_tag, sq->mbuf[x].dma_map);
+			free(sq->mbuf, M_MLX5EN);
+			return (err);
+		}
+	}
 	return (0);
 }
 
@@ -782,9 +795,25 @@ mlx5e_create_sq(struct mlx5e_channel *c,
 	void *sqc_wq = MLX5_ADDR_OF(sqc, sqc, wq);
 	int err;
 
+	/* Create DMA descriptor TAG */
+	if ((err = -bus_dma_tag_create(
+		bus_get_dma_tag(mdev->pdev->dev.bsddev),
+		1,				/* any alignment */
+		0,				/* no boundary */
+	        BUS_SPACE_MAXADDR,		/* lowaddr */
+		BUS_SPACE_MAXADDR,		/* highaddr */
+		NULL, NULL,			/* filter, filterarg */
+		MLX5E_MAX_TX_MBUF_SIZE * MLX5E_MAX_TX_MBUF_FRAGS, /* maxsize */
+		MLX5E_MAX_TX_MBUF_FRAGS,	/* nsegments */
+		MLX5E_MAX_TX_MBUF_SIZE,		/* maxsegsize */
+		0,				/* flags */
+		NULL, NULL,			/* lockfunc, lockfuncarg */
+		&sq->dma_tag)))
+		goto done;
+
 	err = mlx5_alloc_map_uar(mdev, &sq->uar);
 	if (err)
-		return (err);
+		goto err_free_dma_tag;
 
 	err = mlx5_wq_cyc_create(mdev, &param->wq, sqc_wq, &sq->wq,
 	    &sq->wq_ctrl);
@@ -818,6 +847,9 @@ err_sq_wq_destroy:
 err_unmap_free_uar:
 	mlx5_unmap_free_uar(mdev, &sq->uar);
 
+err_free_dma_tag:
+	bus_dma_tag_destroy(sq->dma_tag);
+done:
 	return (err);
 }
 
@@ -2168,7 +2200,7 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 	/* set TSO limits so that we don't have to drop TX packets */
 	ifp->if_hw_tsomax = 65536 - (ETHER_HDR_LEN + ETHER_VLAN_ENCAP_LEN);
 	ifp->if_hw_tsomaxsegcount = MLX5E_MAX_TX_MBUF_FRAGS - 1 /* hdr */;
-	ifp->if_hw_tsomaxsegsize = 65536;	/* XXX can do up to 4GByte */
+	ifp->if_hw_tsomaxsegsize = MLX5E_MAX_TX_MBUF_SIZE;
 
 	ifp->if_capenable = ifp->if_capabilities;
 	ifp->if_hwassist = 0;
