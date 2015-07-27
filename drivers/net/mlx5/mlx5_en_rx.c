@@ -36,8 +36,10 @@ static inline int
 mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
     struct mlx5e_rx_wqe *wqe, u16 ix)
 {
+	bus_dma_segment_t segs[1];
 	struct mbuf *mb;
-	dma_addr_t dma_addr;
+	int nsegs;
+	int err;
 
 	mb = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, rq->wqe_sz);
 	if (unlikely(!mb))
@@ -46,25 +48,28 @@ mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
 	/* set initial mbuf length */
 	mb->m_pkthdr.len = mb->m_len = rq->wqe_sz;
 
-	dma_addr = dma_map_single(rq->pdev,
-	    mb->m_data, mb->m_len, DMA_FROM_DEVICE);
-
-	if (unlikely(dma_mapping_error(rq->pdev, dma_addr)))
-		goto err_free_mbuf;
-
 	/* get IP header aligned */
 	m_adj(mb, MLX5E_NET_IP_ALIGN);
 
-	MLX5E_RX_MBUF_DMA_ADDR(mb) = dma_addr;
-	wqe->data.addr = cpu_to_be64(dma_addr + MLX5E_NET_IP_ALIGN);
+	err = -bus_dmamap_load_mbuf_sg(rq->dma_tag, rq->mbuf[ix].dma_map,
+	    mb, segs, &nsegs, BUS_DMA_NOWAIT);
+	if (err != 0)
+		goto err_free_mbuf;
+	if (nsegs != 1) {
+		err = -ENOMEM;
+		goto err_free_mbuf;
+	}
+	wqe->data.addr = cpu_to_be64(segs[0].ds_addr);
 
-	rq->mbuf[ix] = mb;
+	rq->mbuf[ix].mbuf = mb;
 
+	bus_dmamap_sync(rq->dma_tag, rq->mbuf[ix].dma_map,
+	    BUS_DMASYNC_PREREAD);
 	return (0);
 
 err_free_mbuf:
 	m_freem(mb);
-	return (-ENOMEM);
+	return (err);
 }
 
 static void
@@ -139,13 +144,12 @@ mlx5e_poll_rx_cq(struct mlx5e_rq *rq, int budget)
 		wqe_counter_be = cqe->wqe_counter;
 		wqe_counter = be16_to_cpu(wqe_counter_be);
 		wqe = mlx5_wq_ll_get_wqe(&rq->wq, wqe_counter);
-		mb = rq->mbuf[wqe_counter];
-		rq->mbuf[wqe_counter] = NULL;
+		mb = rq->mbuf[wqe_counter].mbuf;
+		rq->mbuf[wqe_counter].mbuf = NULL;	/* safety clear */
 
-		dma_unmap_single(rq->pdev,
-		    MLX5E_RX_MBUF_DMA_ADDR(mb),
-		    mb->m_len + MLX5E_NET_IP_ALIGN,
-		    DMA_FROM_DEVICE);
+		bus_dmamap_sync(rq->dma_tag, rq->mbuf[wqe_counter].dma_map,
+		    BUS_DMASYNC_POSTREAD);
+		bus_dmamap_unload(rq->dma_tag, rq->mbuf[wqe_counter].dma_map);
 
 		if (unlikely((cqe->op_own >> 4) != MLX5_CQE_RESP_SEND)) {
 			rq->stats.wqe_err++;

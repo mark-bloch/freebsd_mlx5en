@@ -505,10 +505,26 @@ mlx5e_create_rq(struct mlx5e_channel *c,
 	int err;
 	int i;
 
+	/* Create DMA descriptor TAG */
+	if ((err = -bus_dma_tag_create(
+		bus_get_dma_tag(mdev->pdev->dev.bsddev),
+		1,			/* any alignment */
+		0,			/* no boundary */
+	        BUS_SPACE_MAXADDR,	/* lowaddr */
+		BUS_SPACE_MAXADDR,	/* highaddr */
+		NULL, NULL,		/* filter, filterarg */
+		MJUM16BYTES,		/* maxsize */
+		1,			/* nsegments */
+		MJUM16BYTES,		/* maxsegsize */
+		0,			/* flags */
+		NULL, NULL,		/* lockfunc, lockfuncarg */
+		&rq->dma_tag)))
+		goto done;
+
 	err = mlx5_wq_ll_create(mdev, &param->wq, rqc_wq, &rq->wq,
 	    &rq->wq_ctrl);
 	if (err)
-		return (err);
+		goto err_free_dma_tag;
 
 	rq->wq.db = &rq->wq.db[MLX5_RCV_DBR];
 
@@ -533,10 +549,16 @@ mlx5e_create_rq(struct mlx5e_channel *c,
 		goto err_rq_wq_destroy;
 	}
 
-	for (i = 0; i < wq_sz; i++) {
+	for (i = 0; i != wq_sz; i++) {
 		struct mlx5e_rx_wqe *wqe = mlx5_wq_ll_get_wqe(&rq->wq, i);
 		uint32_t byte_count = rq->wqe_sz - MLX5E_NET_IP_ALIGN;
 
+		err = -bus_dmamap_create(rq->dma_tag, 0, &rq->mbuf[i].dma_map);
+		if (err != 0) {
+			while (i--)
+				bus_dmamap_destroy(rq->dma_tag, rq->mbuf[i].dma_map);
+			goto err_rq_mbuf_free;
+		}
 		wqe->data.lkey = c->mkey_be;
 		wqe->data.byte_count = cpu_to_be32(byte_count | MLX5_HW_START_PADDING);
 	}
@@ -560,18 +582,24 @@ mlx5e_create_rq(struct mlx5e_channel *c,
 	else
 		rq->lro.ifp = c->ifp;
 #endif
-
 	return (0);
 
+err_rq_mbuf_free:
+	free(rq->mbuf, M_MLX5EN);
 err_rq_wq_destroy:
 	mlx5_wq_destroy(&rq->wq_ctrl);
-
+err_free_dma_tag:
+	bus_dma_tag_destroy(rq->dma_tag);
+done:
 	return (err);
 }
 
 static void
 mlx5e_destroy_rq(struct mlx5e_rq *rq)
 {
+	int wq_sz;
+	int i;
+
 	/* destroy all sysctl nodes */
 	sysctl_ctx_free(&rq->stats.ctx);
 
@@ -581,7 +609,9 @@ mlx5e_destroy_rq(struct mlx5e_rq *rq)
 #else
 	tcp_lro_free(&rq->lro);
 #endif
-
+	wq_sz = mlx5_wq_ll_get_size(&rq->wq);
+	for (i = 0; i != wq_sz; i++)
+		bus_dmamap_destroy(rq->dma_tag, rq->mbuf[i].dma_map);
 	free(rq->mbuf, M_MLX5EN);
 	mlx5_wq_destroy(&rq->wq_ctrl);
 }

@@ -248,9 +248,6 @@ struct mlx5e_rq_stats {
 	MLX5E_RQ_STATS(MLX5E_STATS_VAR)
 };
 
-#define	MLX5E_RX_MBUF_DMA_ADDR(_mb) \
-	(_mb)->m_pkthdr.PH_loc.sixtyfour[0]
-
 #define	MLX5E_SQ_STATS(m)						\
   m(+1, u64 packets, "packets", "Transmitted packets")			\
   m(+1, u64 tso_packets, "tso_packets", "Transmitted packets")		\
@@ -320,13 +317,18 @@ struct mlx5e_cq {
 	struct mlx5_wq_ctrl wq_ctrl;
 } __aligned(MLX5E_CACHELINE_SIZE);
 
+struct mlx5e_rq_mbuf {
+	bus_dmamap_t dma_map;
+	struct mbuf *mbuf;
+};
+
 struct mlx5e_rq {
 	/* data path */
 	struct mlx5_wq_ll wq;
 	struct mtx mtx;
+	bus_dma_tag_t dma_tag;
 	u32	wqe_sz;
-	struct mbuf **mbuf;
-
+	struct mlx5e_rq_mbuf *mbuf;
 	struct device *pdev;
 	struct ifnet *ifp;
 	struct mlx5e_rq_stats stats;
