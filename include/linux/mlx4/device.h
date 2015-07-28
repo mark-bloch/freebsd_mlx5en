@@ -190,8 +190,8 @@ enum {
 	MLX4_DEV_CAP_FLAG2_ETH_BACKPL_AN_REP	= 1LL <<  10,
 	MLX4_DEV_CAP_FLAG2_FLOWSTATS_EN		= 1LL <<  11,
 	MLX4_DEV_CAP_FLAG2_RECOVERABLE_ERROR_EVENT = 1LL << 12,
-	MLX4_DEV_CAP_FLAG2_TS                   = 1LL <<  13,
-	MLX4_DEV_CAP_FLAG2_DRIVER_VERSION_TO_FW    = 1LL <<  14,
+	MLX4_DEV_CAP_FLAG2_TS			= 1LL <<  13,
+	MLX4_DEV_CAP_FLAG2_DRIVER_VERSION_TO_FW	   = 1LL <<  14,
 	MLX4_DEV_CAP_FLAG2_REASSIGN_MAC_EN	= 1LL <<  15,
 	MLX4_DEV_CAP_FLAG2_VXLAN_OFFLOADS	= 1LL <<  16,
 	MLX4_DEV_CAP_FLAG2_FS_EN_NCSI		= 1LL <<  17,
@@ -424,10 +424,10 @@ enum {
 			     MLX4_EQ_PORT_INFO_MSTR_SM_LID_CHANGE_MASK)
 
 enum mlx4_module_id {
-        MLX4_MODULE_ID_SFP              = 0x3,
-        MLX4_MODULE_ID_QSFP             = 0xC,
-        MLX4_MODULE_ID_QSFP_PLUS        = 0xD,
-        MLX4_MODULE_ID_QSFP28           = 0x11,
+	MLX4_MODULE_ID_SFP		= 0x3,
+	MLX4_MODULE_ID_QSFP		= 0xC,
+	MLX4_MODULE_ID_QSFP_PLUS	= 0xD,
+	MLX4_MODULE_ID_QSFP28		= 0x11,
 };
 
 static inline u64 mlx4_fw_ver(u64 major, u64 minor, u64 subminor)
@@ -453,8 +453,8 @@ struct mlx4_rate_limit_caps {
 	u16	min_val;
 	u32	calc_max_val;
 	u32	calc_min_val;
-	char    min_val_str[32];
-	char    max_val_str[32];
+	char	min_val_str[32];
+	char	max_val_str[32];
 };
 #endif
 
@@ -835,7 +835,7 @@ struct mlx4_dev {
 	u64			regid_promisc_array[MLX4_MAX_PORTS + 1];
 	u64			regid_allmulti_array[MLX4_MAX_PORTS + 1];
 #ifdef CONFIG_RATELIMIT
-	struct sysctl_ctx_list  rl_ctx;
+	struct sysctl_ctx_list	rl_ctx;
 #endif
 };
 
@@ -1353,28 +1353,28 @@ struct mlx4_hw_qp_rl_index {
 	u8	reserved9[3];
 	u8	burst_size_prio_7;
 	/* For IB Prios */
-	__be32  rate_prio_8;
+	__be32	rate_prio_8;
 	u8	reserved10[3];
 	u8	burst_size_prio_8;
-	__be32  rate_prio_9;
+	__be32	rate_prio_9;
 	u8	reserved11[3];
 	u8	burst_size_prio_9;
-	__be32  rate_prio_10;
+	__be32	rate_prio_10;
 	u8	reserved12[3];
 	u8	burst_size_prio_10;
-	__be32  rate_prio_11;
+	__be32	rate_prio_11;
 	u8	reserved13[3];
 	u8	burst_size_prio_11;
-	__be32  rate_prio_12;
+	__be32	rate_prio_12;
 	u8	reserved14[3];
 	u8	burst_size_prio_12;
-	__be32  rate_prio_13;
+	__be32	rate_prio_13;
 	u8	reserved15[3];
 	u8	burst_size_prio_13;
-	__be32  rate_prio_14;
+	__be32	rate_prio_14;
 	u8	reserved16[3];
 	u8	burst_size_prio_14;
-	__be32  rate_prio_15;
+	__be32	rate_prio_15;
 	u8	reserved17[3];
 	u8	burst_size_prio_15;
 };

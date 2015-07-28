@@ -42,15 +42,15 @@
 #define	DS_SIZE_ALIGNMENT	16
 
 #ifdef CONFIG_WQE_FORMAT_1
-#define WQE_FORMAT_1_MASK      cpu_to_be32(0xbfffffff)
-#define SET_BYTE_COUNT(byte_count) (cpu_to_be32(byte_count) | owner_bit)
-#define SET_LSO_MSS(mss_hdr_size) (cpu_to_be32(mss_hdr_size) | owner_bit)
+#define	WQE_FORMAT_1_MASK	cpu_to_be32(0xbfffffff)
+#define	SET_BYTE_COUNT(byte_count) (cpu_to_be32(byte_count) | owner_bit)
+#define	SET_LSO_MSS(mss_hdr_size) (cpu_to_be32(mss_hdr_size) | owner_bit)
 
 #define	DS_BYTE_COUNT_MASK	cpu_to_be32(0x3fffffff)
 #else
-#define SET_BYTE_COUNT(byte_count) cpu_to_be32(byte_count)
-#define SET_LSO_MSS(mss_hdr_size) cpu_to_be32(mss_hdr_size)
-#define DS_BYTE_COUNT_MASK       cpu_to_be32(0x7fffffff)
+#define	SET_BYTE_COUNT(byte_count) cpu_to_be32(byte_count)
+#define	SET_LSO_MSS(mss_hdr_size) cpu_to_be32(mss_hdr_size)
+#define	DS_BYTE_COUNT_MASK	cpu_to_be32(0x7fffffff)
 #endif
 
 enum ib_m_qp_attr_mask {
@@ -242,7 +242,7 @@ struct mlx4_qp_context {
 	u8			rate_limit_index;
 	u32			reserved7[7];
 #else
-	u32                     reserved5[10];
+	u32			reserved5[10];
 #endif
 };
 
@@ -469,7 +469,7 @@ enum mlx4_update_qp_attr {
 	MLX4_UPDATE_QP_RATE_LIMIT		= 1 << 3,
 	MLX4_UPDATE_QP_SUPPORTED_ATTRS		= (1 << 4) - 1
 #else
-	MLX4_UPDATE_QP_SUPPORTED_ATTRS          = (1 << 3) - 1
+	MLX4_UPDATE_QP_SUPPORTED_ATTRS		= (1 << 3) - 1
 #endif
 };
 
