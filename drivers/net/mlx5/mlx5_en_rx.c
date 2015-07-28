@@ -265,10 +265,11 @@ wq_ll_pop:
 }
 
 void
-mlx5e_rx_cq_function(struct mlx5e_cq *cq)
+mlx5e_rx_cq_comp(struct mlx5_core_cq *mcq)
 {
-	struct mlx5e_rq *rq = container_of(cq, struct mlx5e_rq, cq);
+	struct mlx5e_rq *rq = container_of(mcq, struct mlx5e_rq, cq.mcq);
 	int i = 0;
+
 	mtx_lock(&rq->mtx);
 
 	/*
@@ -285,8 +286,7 @@ mlx5e_rx_cq_function(struct mlx5e_cq *cq)
 		mlx5e_post_rx_wqes(rq);
 	}
 	mlx5e_post_rx_wqes(rq);
-
-	mlx5e_cq_arm(cq);
+	mlx5e_cq_arm(&rq->cq);
 #ifdef HAVE_TURBO_LRO
 	tcp_tlro_flush(&rq->lro, 1);
 #endif

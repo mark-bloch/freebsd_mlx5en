@@ -51,14 +51,6 @@ mlx5e_get_cqe(struct mlx5e_cq *cq)
 }
 
 void
-mlx5e_completion_event(struct mlx5_core_cq *mcq)
-{
-	struct mlx5e_cq *cq = container_of(mcq, struct mlx5e_cq, mcq);
-	/* process event */
-	cq->func(cq);
-}
-
-void
 mlx5e_cq_error_event(struct mlx5_core_cq *mcq, enum mlx5_event event)
 {
 	struct mlx5e_cq *cq = container_of(mcq, struct mlx5e_cq, mcq);

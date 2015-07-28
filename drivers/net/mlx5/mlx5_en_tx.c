@@ -390,12 +390,12 @@ mlx5e_xmit(struct ifnet *ifp, struct mbuf *mb)
 }
 
 void
-mlx5e_tx_cq_function(struct mlx5e_cq *cq)
+mlx5e_tx_cq_comp(struct mlx5_core_cq *mcq)
 {
-	struct mlx5e_sq *sq = container_of(cq, struct mlx5e_sq, cq);
+	struct mlx5e_sq *sq = container_of(mcq, struct mlx5e_sq, cq.mcq);
 
 	mtx_lock(&sq->mtx);
 	mlx5e_poll_tx_cq(sq, MLX5E_BUDGET_MAX);
-	mlx5e_cq_arm(cq);
+	mlx5e_cq_arm(&sq->cq);
 	mtx_unlock(&sq->mtx);
 }

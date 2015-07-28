@@ -770,7 +770,7 @@ mlx5e_close_rq_wait(struct mlx5e_rq *rq)
 	/* wait till RQ is empty */
 	while (!mlx5_wq_ll_is_empty(&rq->wq)) {
 		msleep(4);
-		rq->cq.func(&rq->cq);
+		rq->cq.mcq.comp(&rq->cq.mcq);
 	}
 
 	mlx5e_disable_rq(rq);
@@ -1038,7 +1038,7 @@ mlx5e_close_sq_wait(struct mlx5e_sq *sq)
 	/* wait till SQ is empty */
 	while (sq->cc != sq->pc) {
 		msleep(4);
-		sq->cq.func(&sq->cq);
+		sq->cq.mcq.comp(&sq->cq.mcq);
 	}
 
 	mlx5e_disable_sq(sq);
@@ -1049,7 +1049,7 @@ static int
 mlx5e_create_cq(struct mlx5e_channel *c,
     struct mlx5e_cq_param *param,
     struct mlx5e_cq *cq,
-    mlx5e_cq_func_t *func)
+    mlx5e_cq_comp_t *comp)
 {
 	struct mlx5e_priv *priv = c->priv;
 	struct mlx5_core_dev *mdev = priv->mdev;
@@ -1076,7 +1076,7 @@ mlx5e_create_cq(struct mlx5e_channel *c,
 	*mcq->set_ci_db = 0;
 	*mcq->arm_db = 0;
 	mcq->vector = param->eq_ix;
-	mcq->comp = mlx5e_completion_event;
+	mcq->comp = comp;
 	mcq->event = mlx5e_cq_error_event;
 	mcq->irqn = irqn;
 	mcq->uar = &priv->cq_uar;
@@ -1088,7 +1088,6 @@ mlx5e_create_cq(struct mlx5e_channel *c,
 	}
 
 	cq->channel = c;
-	cq->func = func;
 
 	return (0);
 }
@@ -1166,12 +1165,12 @@ static int
 mlx5e_open_cq(struct mlx5e_channel *c,
     struct mlx5e_cq_param *param,
     struct mlx5e_cq *cq,
-    mlx5e_cq_func_t *func,
+    mlx5e_cq_comp_t *comp,
     u8 moderation_mode)
 {
 	int err;
 
-	err = mlx5e_create_cq(c, param, cq, func);
+	err = mlx5e_create_cq(c, param, cq, comp);
 	if (err)
 		return (err);
 
@@ -1204,7 +1203,7 @@ mlx5e_open_tx_cqs(struct mlx5e_channel *c,
 	for (tc = 0; tc < c->num_tc; tc++) {
 		/* open completion queue */
 		err = mlx5e_open_cq(c, &cparam->tx_cq, &c->sq[tc].cq,
-		    &mlx5e_tx_cq_function, MLX5_CQ_PERIOD_MODE_START_FROM_EQE);
+		    &mlx5e_tx_cq_comp, MLX5_CQ_PERIOD_MODE_START_FROM_EQE);
 		if (err)
 			goto err_close_tx_cqs;
 	}
@@ -1320,7 +1319,7 @@ mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 
 	/* open receive completion queue */
 	err = mlx5e_open_cq(c, &cparam->rx_cq, &c->rq.cq,
-	    &mlx5e_rx_cq_function, MLX5_CQ_PERIOD_MODE_START_FROM_CQE);
+	    &mlx5e_rx_cq_comp, MLX5_CQ_PERIOD_MODE_START_FROM_CQE);
 	if (err)
 		goto err_close_tx_cqs;
 
@@ -1336,7 +1335,7 @@ mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	*cp = c;
 
 	/* poll receive queue initially */
-	c->rq.cq.func(&c->rq.cq);
+	c->rq.cq.mcq.comp(&c->rq.cq.mcq);
 
 	return (0);
 

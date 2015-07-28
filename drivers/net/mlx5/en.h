@@ -109,7 +109,7 @@ MALLOC_DECLARE(M_MLX5EN);
 struct mlx5_core_dev;
 struct mlx5e_cq;
 
-typedef void (mlx5e_cq_func_t)(struct mlx5e_cq *);
+typedef void (mlx5e_cq_comp_t)(struct mlx5_core_cq *);
 
 #define	MLX5E_STATS_COUNT(a,b,c,d) a
 #define	MLX5E_STATS_VAR(a,b,c,d) b;
@@ -313,7 +313,6 @@ struct mlx5e_params_ethtool {
 struct mlx5e_cq {
 	/* data path - accessed per cqe */
 	struct mlx5_cqwq wq;
-	mlx5e_cq_func_t *func;
 
 	/* data path - accessed per HW polling */
 	struct mlx5_core_cq mcq;
@@ -584,10 +583,9 @@ int	mlx5e_xmit(struct ifnet *, struct mbuf *);
 int	mlx5e_open_locked(struct ifnet *);
 int	mlx5e_close_locked(struct ifnet *);
 
-void	mlx5e_completion_event(struct mlx5_core_cq *mcq);
 void	mlx5e_cq_error_event(struct mlx5_core_cq *mcq, enum mlx5_event event);
-void	mlx5e_rx_cq_function(struct mlx5e_cq *);
-void	mlx5e_tx_cq_function(struct mlx5e_cq *);
+void	mlx5e_rx_cq_comp(struct mlx5_core_cq *);
+void	mlx5e_tx_cq_comp(struct mlx5_core_cq *);
 struct mlx5_cqe64 *mlx5e_get_cqe(struct mlx5e_cq *cq);
 
 int	mlx5e_open_flow_table(struct mlx5e_priv *priv);
