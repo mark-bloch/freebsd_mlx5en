@@ -518,7 +518,10 @@ mlx5e_disable_vlan_filter(struct mlx5e_priv *priv)
 void
 mlx5e_vlan_rx_add_vid(void *arg, struct ifnet *ifp, u16 vid)
 {
-	struct mlx5e_priv *priv = ifp->if_softc;
+	struct mlx5e_priv *priv = arg;
+
+	if (ifp != priv->ifp)
+		return;
 
 	PRIV_LOCK(priv);
 	set_bit(vid, priv->vlan.active_vlans);
@@ -530,7 +533,10 @@ mlx5e_vlan_rx_add_vid(void *arg, struct ifnet *ifp, u16 vid)
 void
 mlx5e_vlan_rx_kill_vid(void *arg, struct ifnet *ifp, u16 vid)
 {
-	struct mlx5e_priv *priv = ifp->if_softc;
+	struct mlx5e_priv *priv = arg;
+
+	if (ifp != priv->ifp)
+		return;
 
 	PRIV_LOCK(priv);
 	clear_bit(vid, priv->vlan.active_vlans);
