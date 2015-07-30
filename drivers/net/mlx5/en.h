@@ -138,8 +138,6 @@ typedef void (mlx5e_cq_func_t)(struct mlx5e_cq *);
   m(+1, u64 rx_csum_good, "rx_csum_good", "Received checksum valid packets") \
   m(+1, u64 rx_csum_none, "rx_csum_none", "Received no checksum packets") \
   m(+1, u64 tx_csum_offload, "tx_csum_offload", "Transmit checksum offload packets") \
-  m(+1, u64 tx_queue_stopped, "tx_queue_stopped", "Transmit queue stopped") \
-  m(+1, u64 tx_queue_wake, "tx_queue_wake", "Transmit queue wake")	\
   m(+1, u64 tx_queue_dropped, "tx_queue_dropped", "Transmit queue dropped") \
   m(+1, u64 rx_wqe_err, "rx_wqe_err", "Receive WQE errors")
 
@@ -249,14 +247,12 @@ struct mlx5e_rq_stats {
 	(_mb)->m_pkthdr.PH_loc.sixtyfour[0]
 
 #define	MLX5E_SQ_STATS(m)						\
-  m(+1, u64 packets, "packets", "Received packets")			\
-  m(+1, u64 tso_packets, "tso_packets", "Received packets")		\
-  m(+1, u64 tso_bytes, "tso_bytes", "Received packets")			\
-  m(+1, u64 csum_offload_none, "csum_offload_none", "Received packets")	\
-  m(+1, u64 stopped, "stopped", "Received packets")			\
-  m(+1, u64 wake, "wake", "Received packets")				\
-  m(+1, u64 dropped, "dropped", "Received packets")			\
-  m(+1, u64 nop, "nop", "Received packets")
+  m(+1, u64 packets, "packets", "Transmitted packets")			\
+  m(+1, u64 tso_packets, "tso_packets", "Transmitted packets")		\
+  m(+1, u64 tso_bytes, "tso_bytes", "Transmitted bytes")		\
+  m(+1, u64 csum_offload_none, "csum_offload_none", "Transmitted packets")	\
+  m(+1, u64 dropped, "dropped", "Transmitted packets")			\
+  m(+1, u64 nop, "nop", "Transmitted packets")
 
 #define	MLX5E_SQ_STATS_NUM (0 MLX5E_SQ_STATS(MLX5E_STATS_COUNT))
 

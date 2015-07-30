@@ -330,8 +330,6 @@ mlx5e_update_stats_work(struct work_struct *work)
 	/* Collect firts the SW counters and then HW for consistency */
 	s->tso_packets = 0;
 	s->tso_bytes = 0;
-	s->tx_queue_stopped = 0;
-	s->tx_queue_wake = 0;
 	s->tx_queue_dropped = 0;
 	tx_offload_none = 0;
 	s->lro_packets = 0;
@@ -351,8 +349,6 @@ mlx5e_update_stats_work(struct work_struct *work)
 
 			s->tso_packets += sq_stats->tso_packets;
 			s->tso_bytes += sq_stats->tso_bytes;
-			s->tx_queue_stopped += sq_stats->stopped;
-			s->tx_queue_wake += sq_stats->wake;
 			s->tx_queue_dropped += sq_stats->dropped;
 			tx_offload_none += sq_stats->csum_offload_none;
 		}
