@@ -45,6 +45,7 @@ mlx5e_send_nop(struct mlx5e_sq *sq, u32 ds_cnt, bool notify_hw)
 	wqe->ctrl.fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
 
 	sq->mbuf[pi].mbuf = NULL;
+	sq->mbuf[pi].num_bytes = 0;
 	sq->mbuf[pi].num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
 	sq->pc += sq->mbuf[pi].num_wqebbs;
 	if (notify_hw)
@@ -274,6 +275,14 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 	}
 	dseg = ((struct mlx5_wqe_data_seg *)&wqe->ctrl) + ds_cnt;
 
+	/* trim off empty mbufs */
+	while (mb->m_len == 0) {
+		mb = m_free(mb);
+		/* check if all data has been inlined */
+		if (mb == NULL)
+			goto skip_dma;
+	}
+
 	err = bus_dmamap_load_mbuf_sg(sq->dma_tag, sq->mbuf[pi].dma_map,
 	    mb, segs, &nsegs, BUS_DMA_NOWAIT);
 	if (err == EFBIG) {
@@ -305,18 +314,21 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 		dseg->byte_count = cpu_to_be32((uint32_t)segs[x].ds_len);
 		dseg++;
 	}
+skip_dma:
 	ds_cnt = (dseg - ((struct mlx5_wqe_data_seg *)&wqe->ctrl));
 
 	wqe->ctrl.opmod_idx_opcode = cpu_to_be32((sq->pc << 8) | opcode);
 	wqe->ctrl.qpn_ds = cpu_to_be32((sq->sqn << 8) | ds_cnt);
 	wqe->ctrl.fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
 
+	/* store pointer to mbuf */
 	sq->mbuf[pi].mbuf = mb;
 	sq->mbuf[pi].num_wqebbs = DIV_ROUND_UP(ds_cnt, MLX5_SEND_WQEBB_NUM_DS);
 	sq->pc += sq->mbuf[pi].num_wqebbs;
 
 	/* make sure all mbuf data is written to RAM */
-	bus_dmamap_sync(sq->dma_tag, sq->mbuf[pi].dma_map, BUS_DMASYNC_PREWRITE);
+	if (mb != NULL)
+		bus_dmamap_sync(sq->dma_tag, sq->mbuf[pi].dma_map, BUS_DMASYNC_PREWRITE);
 
 	mlx5e_tx_notify_hw(sq, wqe, 0);
 
@@ -327,12 +339,7 @@ mlx5e_sq_xmit(struct mlx5e_sq *sq, struct mbuf *mb)
 static void
 mlx5e_poll_tx_cq(struct mlx5e_sq *sq, int budget)
 {
-	u32 nbytes;
-	u16 npkts;
 	u16 sqcc;
-
-	npkts = 0;
-	nbytes = 0;
 
 	/*
 	 * sq->cc must be updated only after mlx5_cqwq_update_db_record(),
@@ -353,22 +360,20 @@ mlx5e_poll_tx_cq(struct mlx5e_sq *sq, int budget)
 		mb = sq->mbuf[ci].mbuf;
 		sq->mbuf[ci].mbuf = NULL;	/* safety clear */
 
-		if (unlikely(mb == NULL)) {
-			/* nop */
-			sq->stats.nop++;
-			sqcc += sq->mbuf[ci].num_wqebbs;
-			continue;
+		if (mb == NULL) {
+			if (sq->mbuf[ci].num_bytes == 0) {
+				/* NOP */
+				sq->stats.nop++;
+			}
+		} else {
+			bus_dmamap_sync(sq->dma_tag, sq->mbuf[ci].dma_map,
+			    BUS_DMASYNC_POSTWRITE);
+			bus_dmamap_unload(sq->dma_tag, sq->mbuf[ci].dma_map);
+
+			/* free transmitted mbuf */
+			m_freem(mb);
 		}
-		bus_dmamap_sync(sq->dma_tag, sq->mbuf[ci].dma_map,
-		    BUS_DMASYNC_POSTWRITE);
-		bus_dmamap_unload(sq->dma_tag, sq->mbuf[ci].dma_map);
-
-		npkts++;
-		nbytes += sq->mbuf[ci].num_bytes;
 		sqcc += sq->mbuf[ci].num_wqebbs;
-
-		/* free transmitted mbuf */
-		m_freem(mb);
 	}
 
 	mlx5_cqwq_update_db_record(&sq->cq.wq);
