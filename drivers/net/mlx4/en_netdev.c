@@ -2077,6 +2077,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		error = mlx4_en_destroy_rate_limit_ring(priv, rl_req);
 		break;
 #endif
+#if __FreeBSD_version >= 1100036
 	case SIOCGI2C: {
 		struct ifi2creq i2c;
 
@@ -2100,6 +2101,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 		error = copyout(&i2c, ifr->ifr_data, sizeof(i2c));
 		break;
 	}
+#endif
 	default:
 		error = ether_ioctl(dev, command, data);
 		break;

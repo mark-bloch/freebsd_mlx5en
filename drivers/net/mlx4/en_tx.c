@@ -54,6 +54,9 @@
 #include <netinet/udp.h>
 
 #include "mlx4_en.h"
+#if __FreeBSD_version < 1100000
+#include "utils.h"
+#endif
 
 enum {
 	MAX_INLINE = 104, /* 128 - 16 - 4 - 4 */
@@ -1225,11 +1228,18 @@ static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct mbuf *mb,
 	tx_desc->ctrl.ins_vlan = MLX4_WQE_CTRL_INS_VLAN * !!(*vlan_tag);
 	tx_desc->ctrl.fence_size = (real_size / 16) & 0x3f;
 }
-
+#if __FreeBSD_version >= 1100000
 static uint32_t hashrandom;
+#else
+static unsigned long hashrandom;
+#endif
 static void hashrandom_init(void *arg)
 {
+#if __FreeBSD_version >= 1100000
 	hashrandom = m_ether_tcpip_hash_init();
+#else
+	hashrandom = random();
+#endif
 }
 SYSINIT(hashrandom_init, SI_SUB_KLD, SI_ORDER_SECOND, &hashrandom_init, NULL);
 
@@ -1247,7 +1257,11 @@ u16 mlx4_en_select_queue(struct net_device *dev, struct mbuf *mb)
 	        up = (vlan_tag >> 13) % MLX4_EN_NUM_UP;
 	}
 #endif
+#if __FreeBSD_version >= 1100000
 	queue_index = m_ether_tcpip_hash(MBUF_HASHFLAG_L3 | MBUF_HASHFLAG_L4, mb, hashrandom);
+#else
+	queue_index = mlx4_en_hashmbuf(MLX4_F_HASHL3 | MLX4_F_HASHL4, mb, hashrandom);
+#endif
 
 	return ((queue_index % rings_p_up) + (up * rings_p_up));
 }

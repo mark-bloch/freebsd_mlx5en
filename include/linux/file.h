@@ -33,7 +33,9 @@
 #include <sys/file.h>
 #include <sys/filedesc.h>
 #include <sys/refcount.h>
+#if __FreeBSD_version >= 1100000
 #include <sys/capsicum.h>
+#endif
 #include <sys/proc.h>
 
 #include <linux/fs.h>
@@ -47,11 +49,18 @@ extern struct fileops linuxfileops;
 static inline struct linux_file *
 linux_fget(unsigned int fd)
 {
+#if __FreeBSD_version >= 1100000
 	cap_rights_t rights;
+#endif
 	struct file *file;
 
+#if __FreeBSD_version >= 1100000
 	if (fget_unlocked(curthread->td_proc->p_fd, fd,
 	    cap_rights_init(&rights), &file, NULL) != 0) {
+#else
+	if (fget_unlocked(curthread->td_proc->p_fd, fd, NULL, 0, &file,
+	    NULL) != 0) {
+#endif
 		return (NULL);
 	}
 	return (struct linux_file *)file->f_data;
@@ -73,11 +82,18 @@ fput(struct linux_file *filp)
 static inline void
 put_unused_fd(unsigned int fd)
 {
+#if __FreeBSD_version >= 1100000
 	cap_rights_t rights;
+#endif
 	struct file *file;
 
+#if __FreeBSD_version >= 1100000
 	if (fget_unlocked(curthread->td_proc->p_fd, fd,
 	    cap_rights_init(&rights), &file, NULL) != 0) {
+#else
+	if (fget_unlocked(curthread->td_proc->p_fd, fd, NULL, 0, &file,
+	    NULL) != 0) {
+#endif
 		return;
 	}
 	/*
@@ -85,7 +101,11 @@ put_unused_fd(unsigned int fd)
 	 * installed, so no need to free the associated Linux file
 	 * structure.
 	 */
+#if __FreeBSD_version >= 1100000
 	fdclose(curthread, file, fd);
+#else
+	fdclose(curthread->td_proc->p_fd, file, fd, curthread);
+#endif
 
 	/* drop extra reference */
 	fdrop(file, curthread);
@@ -94,11 +114,18 @@ put_unused_fd(unsigned int fd)
 static inline void
 fd_install(unsigned int fd, struct linux_file *filp)
 {
+#if __FreeBSD_version >= 1100000
 	cap_rights_t rights;
+#endif
 	struct file *file;
 
+#if __FreeBSD_version >= 1100000
 	if (fget_unlocked(curthread->td_proc->p_fd, fd,
 	    cap_rights_init(&rights), &file, NULL) != 0) {
+#else
+	if (fget_unlocked(curthread->td_proc->p_fd, fd, NULL, 0, &file,
+	    NULL) != 0) {
+#endif
 		file = NULL;
 	}
 	filp->_file = file;

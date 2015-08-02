@@ -3,20 +3,19 @@
 
 .include <bsd.own.mk>
 
-
 .PATH:  ${.CURDIR}/../../../include/linux
 
 KMOD    = mlxen
-SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h opt_inet.h opt_inet6.h
-SRCS+= utils.c en_main.c en_netdev.c en_rx.c en_cq.c en_tx.c en_port.c en_resources.c
+SRCS    = device_if.h bus_if.h pci_if.h vnode_if.h
+SRCS	+= en_cq.c en_main.c en_netdev.c en_port.c en_resources.c
+SRCS	+= en_rx.c en_tx.c
+SRCS	+= opt_inet.h opt_inet6.h
 
-CFLAGS+= -I${.CURDIR}/../../../drivers/net/mlx4
-CFLAGS+= -I${.CURDIR}/../../../include
+OSVERSION!=     /sbin/sysctl -n kern.osreldate
 
-.if defined(CONFIG_RATELIMIT)
-CFLAGS += -DCONFIG_RATELIMIT=1
-CFLAGS += -DCONFIG_WQE_FORMAT_1=1
-.endif
+.if ${OSVERSION} < 1100000
+
+SRCS	+= utils.c
 
 .if !defined(KERNBUILDDIR)
 .if ${MK_INET_SUPPORT} != "no"
@@ -29,7 +28,16 @@ opt_inet6.h:
 	@echo "#define INET6 1" > ${.TARGET}
 .endif
 .endif
+.endif
+
+CFLAGS+= -I${.CURDIR}/../../../drivers/net/mlx4
+CFLAGS+= -I${.CURDIR}/../../../include
+
+.if defined(CONFIG_RATELIMIT)
+CFLAGS += -DCONFIG_RATELIMIT=1
+CFLAGS += -DCONFIG_WQE_FORMAT_1=1
+.endif
 
 .include <bsd.kmod.mk>
 
-CFLAGS+= -Wno-cast-qual -Wno-pointer-arith ${GCC_MS_EXTENSIONS}
+CFLAGS+= -Wno-cast-qual -Wno-pointer-arith

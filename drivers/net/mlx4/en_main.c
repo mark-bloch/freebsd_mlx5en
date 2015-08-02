@@ -361,3 +361,6 @@ static moduledata_t mlxen_mod = {
 };
 DECLARE_MODULE(mlxen, mlxen_mod, SI_SUB_OFED_PREINIT, SI_ORDER_ANY);
 MODULE_DEPEND(mlxen, mlx4, 1, 1, 1);
+#if __FreeBSD_version >= 1100000
+MODULE_DEPEND(mlxen, linuxapi, 1, 1, 1);
+#endif
