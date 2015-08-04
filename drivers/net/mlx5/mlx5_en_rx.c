@@ -31,6 +31,7 @@
  */
 
 #include "en.h"
+#include <machine/in_cksum.h>
 
 static inline int
 mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
@@ -93,12 +94,81 @@ mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
 	mlx5_wq_ll_update_db_record(&rq->wq);
 }
 
+static void
+mlx5e_lro_update_hdr(struct mbuf* mb, struct mlx5_cqe64 *cqe)
+{
+	/* TODO: consider vlans, ip options, ... */
+	struct ether_header *eh;
+	uint16_t eh_type;
+
+	struct ip6_hdr *ip6 = NULL;
+	struct ip *ip4 = NULL;
+	struct tcphdr *th;
+
+
+	eh = mtod(mb, struct ether_header *);
+	eh_type = ntohs(eh->ether_type);
+
+	u8 l4_hdr_type = get_cqe_l4_hdr_type(cqe);
+	int tcp_ack = ((CQE_L4_HDR_TYPE_TCP_ACK_NO_DATA  == l4_hdr_type) ||
+			(CQE_L4_HDR_TYPE_TCP_ACK_AND_DATA == l4_hdr_type));
+
+	/* TODO: consider vlan */
+	u16 tot_len = be32_to_cpu(cqe->byte_cnt) - ETH_HLEN;
+
+	switch (eh_type) {
+	case ETHERTYPE_IP:
+		ip4 = (struct ip *)(eh + 1);
+		th = (struct tcphdr *)(ip4 + 1);
+		break;
+	case ETHERTYPE_IPV6:
+		ip6 = (struct ip6_hdr *)(eh + 1);
+		th = (struct tcphdr *)(ip6 + 1);
+		break;
+	default:
+		return;
+	}
+
+
+	/* TODO: handle timestamp */
+
+	if (get_cqe_lro_tcppsh(cqe))
+		th->th_flags           |= TH_PUSH;
+
+	if (tcp_ack) {
+		th->th_flags           |= TH_ACK;
+		th->th_ack             = cqe->lro_ack_seq_num;
+		th->th_win             = cqe->lro_tcp_win;
+	}
+
+	if (ip4) {
+		ip4->ip_ttl            = cqe->lro_min_ttl;
+		ip4->ip_len            = cpu_to_be16(tot_len);
+		ip4->ip_sum            = 0;
+		ip4->ip_sum            = in_cksum(mb, ip4->ip_hl << 2);
+	} else {
+		ip6->ip6_hlim          = cqe->lro_min_ttl;
+		ip6->ip6_plen	       = cpu_to_be16(tot_len -
+				sizeof(struct ip6_hdr));
+	}
+	/* TODO: handle tcp checksum */
+}
+
+
 static inline void
 mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
     struct mlx5e_rq *rq, struct mbuf *mb)
 {
 	struct ifnet *ifp = rq->ifp;
 	u32 cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
+	int lro_num_seg; /* HW LRO session aggregated packets counter */
+
+	lro_num_seg = be32_to_cpu(cqe->srqn) >> 24;
+	if (lro_num_seg > 1) {
+		mlx5e_lro_update_hdr(mb, cqe);
+		rq->stats.lro_packets++;
+		rq->stats.lro_bytes += cqe_bcnt;
+	}
 
 	mb->m_pkthdr.len = mb->m_len = cqe_bcnt;
 	mb->m_pkthdr.flowid = rq->ix;

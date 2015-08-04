@@ -128,6 +128,15 @@ mlx5e_ethtool_handler(SYSCTL_HANDLER_ARGS)
 	}
 	priv->params.tx_cq_moderation_pkts = priv->params_ethtool.tx_coalesce_pkts;
 
+	/* we always agree to turn off HW LRO - but not always to turn on */
+	if (priv->params_ethtool.hw_lro) {
+		if (priv->ifp->if_capenable & IFCAP_LRO)
+			priv->params.hw_lro_en = !!MLX5_CAP_ETH(priv->mdev, lro_cap);
+	}
+	else {
+		priv->params.hw_lro_en = false;
+	}
+
 	if (was_opened)
 		mlx5e_open_locked(priv->ifp);
 done:
@@ -158,6 +167,7 @@ mlx5e_create_ethtool(struct mlx5e_priv *priv)
 	priv->params_ethtool.rx_coalesce_pkts = priv->params.rx_cq_moderation_pkts;
 	priv->params_ethtool.tx_coalesce_usecs = priv->params.tx_cq_moderation_usec;
 	priv->params_ethtool.tx_coalesce_pkts = priv->params.tx_cq_moderation_pkts;
+	priv->params_ethtool.hw_lro = priv->params.hw_lro_en;
 
 	/* create root node */
 	node = SYSCTL_ADD_NODE(&priv->sysctl_ctx,

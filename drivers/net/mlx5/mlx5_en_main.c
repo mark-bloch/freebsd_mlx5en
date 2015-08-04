@@ -528,7 +528,12 @@ mlx5e_create_rq(struct mlx5e_channel *c,
 
 	rq->wq.db = &rq->wq.db[MLX5_RCV_DBR];
 
-	rq->wqe_sz = priv->ifp->if_mtu + MLX5E_MTU_OVERHEAD;
+	if (priv->params.hw_lro_en)  {
+		rq->wqe_sz = priv->params.lro_wqe_sz;
+	}
+	else {
+		rq->wqe_sz = priv->ifp->if_mtu + MLX5E_MTU_OVERHEAD;
+	}
 	if (rq->wqe_sz > MJUM16BYTES) {
 		err = -ENOMEM;
 		goto err_rq_wq_destroy;
@@ -1652,6 +1657,19 @@ mlx5e_build_tir_ctx(struct mlx5e_priv *priv, u32 * tirc, int tt)
 			  MLX5_HASH_FIELD_SEL_DST_IP   |\
 			  MLX5_HASH_FIELD_SEL_L4_SPORT |\
 			  MLX5_HASH_FIELD_SEL_L4_DPORT)
+	if (priv->params.hw_lro_en) {
+	    MLX5_SET(tirc, tirc, lro_enable_mask,
+	         MLX5_TIRC_LRO_ENABLE_MASK_IPV4_LRO |
+	         MLX5_TIRC_LRO_ENABLE_MASK_IPV6_LRO);
+	    MLX5_SET(tirc, tirc, lro_max_ip_payload_size,
+	         (priv->params.lro_wqe_sz -
+	         ROUGH_MAX_L2_L3_HDR_SZ) >> 8);
+		/* TODO: add the option to choose timer value dynamically */
+	    MLX5_SET(tirc, tirc, lro_timeout_period_usecs,
+	         MLX5_CAP_ETH(priv->mdev,
+	         lro_timer_supported_periods[2]));
+	}
+
 
 	switch (tt) {
 	case MLX5E_TT_ANY:
@@ -2057,6 +2075,25 @@ mlx5e_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 				mlx5e_disable_vlan_filter(priv);
 		}
 		VLAN_CAPABILITIES(ifp);
+		/* turn off LRO means also turn of HW LRO - if it's on */
+		if (mask & IFCAP_LRO ) {
+			PRIV_LOCK(priv);
+			int was_opened = test_bit(MLX5E_STATE_OPENED, &priv->state);
+			bool need_restart = false;
+			if (!(value & IFCAP_LRO)) {
+				if ( priv->params.hw_lro_en ) {
+					priv->params.hw_lro_en = false;
+					need_restart = true;
+					/* Not sure this is the correct way */
+					priv->params_ethtool.hw_lro  = priv->params.hw_lro_en;
+				}
+			}
+			if (was_opened && need_restart) {
+				mlx5e_close_locked(ifp);
+				mlx5e_open_locked(ifp);
+			}
+			PRIV_UNLOCK(priv);
+		}
 		break;
 	default:
 		error = ether_ioctl(ifp, command, data);
@@ -2113,6 +2150,14 @@ mlx5e_build_ifp_priv(struct mlx5_core_dev *mdev,
 	    MLX5E_PARAMS_DEFAULT_RX_HASH_LOG_TBL_SZ;
 	priv->params.num_tc = 1;
 	priv->params.default_vlan_prio = 0;
+
+	/* 
+	 * hw lro is currently defaulted to off. 
+	 * when it won't anymore we will consider the 
+	 * HW capability: "!!MLX5_CAP_ETH(mdev, lro_cap)"
+	*/ 
+	priv->params.hw_lro_en = false;
+	priv->params.lro_wqe_sz = MLX5E_PARAMS_DEFAULT_LRO_WQE_SZ;
 
 	priv->mdev = mdev;
 	priv->params.num_channels = num_comp_vectors;
