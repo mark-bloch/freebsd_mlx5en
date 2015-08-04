@@ -96,7 +96,8 @@ mlx5e_hash_init(void *arg)
 	mlx5e_hash_value = m_ether_tcpip_hash_init();
 }
 
-SYSINIT(mlx5e_hash_init, SI_SUB_KLD, SI_ORDER_SECOND, &mlx5e_hash_init, NULL);
+/* Make kernel call mlx5e_hash_init after the random stack finished initializing */
+SYSINIT(mlx5e_hash_init, SI_SUB_RANDOM, SI_ORDER_ANY, &mlx5e_hash_init, NULL);
 
 static struct mlx5e_sq *
 mlx5e_select_queue(struct ifnet *ifp, struct mbuf *mb)
