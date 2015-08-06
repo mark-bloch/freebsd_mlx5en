@@ -1544,6 +1544,7 @@ mlx5e_open_tis(struct mlx5e_priv *priv, int tc)
 	memset(in, 0, sizeof(in));
 
 	MLX5_SET(tisc, tisc, prio, tc);
+	MLX5_SET(tisc, tisc, transport_domain, priv->tdn);
 
 	return (mlx5_core_create_tis(mdev, in, sizeof(in), &priv->tisn[tc]));
 }
@@ -1647,6 +1648,8 @@ mlx5e_build_tir_ctx(struct mlx5e_priv *priv, u32 * tirc, int tt)
 {
 	void *hfso = MLX5_ADDR_OF(tirc, tirc, rx_hash_field_selector_outer);
 	__be32 *hkey;
+
+	MLX5_SET(tirc, tirc, transport_domain, priv->tdn);
 
 #define	ROUGH_MAX_L2_L3_HDR_SZ 256
 
@@ -2305,11 +2308,20 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 		    __func__, err);
 		goto err_unmap_free_uar;
 	}
+
+	err = mlx5_alloc_transport_domain(mdev, &priv->tdn);
+
+	if (err) {
+		if_printf(ifp, "%s: mlx5_alloc_transport_domain failed, %d\n",
+			  __func__, err);
+		goto err_dealloc_pd;
+	}
+
 	err = mlx5e_create_mkey(priv, priv->pdn, &priv->mr);
 	if (err) {
 		if_printf(ifp, "%s: mlx5e_create_mkey failed, %d\n",
 		    __func__, err);
-		goto err_dealloc_pd;
+		goto err_dealloc_transport_domain;
 	}
 	mlx5_query_nic_vport_mac_address(priv->mdev, dev_addr);
 
@@ -2367,8 +2379,11 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 	mtx_lock(&priv->async_events_mtx);
 	mlx5e_update_stats(priv);
 	mtx_unlock(&priv->async_events_mtx);
-	
+
 	return (priv);
+
+err_dealloc_transport_domain:
+	mlx5_dealloc_transport_domain(mdev, priv->tdn);
 
 err_dealloc_pd:
 	mlx5_core_dealloc_pd(mdev, priv->pdn);
@@ -2396,7 +2411,7 @@ mlx5e_destroy_ifp(struct mlx5_core_dev *mdev, void *vpriv)
 
 	/* stop watchdog timer */
 	callout_drain(&priv->watchdog);
-	
+
 	if (priv->vlan_attach != NULL)
 		EVENTHANDLER_DEREGISTER(vlan_config, priv->vlan_attach);
 	if (priv->vlan_detach != NULL)
@@ -2416,6 +2431,7 @@ mlx5e_destroy_ifp(struct mlx5_core_dev *mdev, void *vpriv)
 	ether_ifdetach(ifp);
 
 	mlx5_core_destroy_mkey(priv->mdev, &priv->mr);
+	mlx5_dealloc_transport_domain(priv->mdev, priv->tdn);
 	mlx5_core_dealloc_pd(priv->mdev, priv->pdn);
 	mlx5_unmap_free_uar(priv->mdev, &priv->cq_uar);
 	mlx5e_disable_async_events(priv);
