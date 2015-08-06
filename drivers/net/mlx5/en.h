@@ -51,6 +51,7 @@
 #include <netinet/tcp.h>
 #include <netinet/tcp_lro.h>
 #include <netinet/udp.h>
+#include <sys/buf_ring.h>
 
 #include <machine/bus.h>
 
@@ -96,6 +97,7 @@
 #define	MLX5E_BUDGET_MAX	8192	/* RX and TX */
 #define	MLX5E_RX_BUDGET_MAX	256
 #define	MLX5E_SQ_BF_BUDGET	16
+#define MLX5E_SQ_TX_QUEUE_SIZE	4096	/* SQ drbr queue size */
 
 #define	MLX5E_MAX_TX_NUM_TC	8	/* units */
 #define	MLX5E_MAX_TX_HEADER	128	/* bytes */
@@ -381,9 +383,12 @@ struct mlx5e_sq {
 	struct mlx5e_sq_stats stats;
 
 	struct mlx5e_cq cq;
+	struct task sq_task;
+	struct taskqueue *sq_tq;
 
 	/* pointers to per packet info: write@xmit, read@completion */
 	struct mlx5e_sq_mbuf *mbuf;
+	struct buf_ring *br;
 
 	/* read only */
 	struct mlx5_wq_cyc wq;
@@ -590,7 +595,8 @@ int	mlx5e_close_locked(struct ifnet *);
 void	mlx5e_cq_error_event(struct mlx5_core_cq *mcq, enum mlx5_event event);
 void	mlx5e_rx_cq_comp(struct mlx5_core_cq *);
 void	mlx5e_tx_cq_comp(struct mlx5_core_cq *);
-struct mlx5_cqe64 *mlx5e_get_cqe(struct mlx5e_cq *cq);
+struct	mlx5_cqe64 *mlx5e_get_cqe(struct mlx5e_cq *cq);
+void	mlx5e_tx_que(void *context, int pending);
 
 int	mlx5e_open_flow_table(struct mlx5e_priv *priv);
 void	mlx5e_close_flow_table(struct mlx5e_priv *priv);

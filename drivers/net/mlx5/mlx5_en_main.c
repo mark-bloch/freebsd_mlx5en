@@ -879,6 +879,23 @@ mlx5e_create_sq(struct mlx5e_channel *c,
 	sq->channel = c;
 	sq->tc = tc;
 
+	sq->br = buf_ring_alloc(MLX5E_SQ_TX_QUEUE_SIZE, M_DEVBUF,
+	    M_WAITOK, &sq->lock);
+
+	if (sq->br == NULL) {
+		if_printf(c->ifp, "%s: Failed allocating sq drbr buffer\n",
+		    __func__);
+                err = -ENOMEM;
+		goto err_free_sq_db;
+        }
+
+	sq->sq_tq = taskqueue_create_fast("mlx5e_que", M_NOWAIT,
+		taskqueue_thread_enqueue, &sq->sq_tq);
+	TASK_INIT(&sq->sq_task, 0, mlx5e_tx_que, sq);
+	taskqueue_start_threads(&sq->sq_tq, 1, PI_NET, "%s tx sq",
+		c->ifp->if_xname);
+
+
 	snprintf(buffer, sizeof(buffer), "txstat%dtc%d", c->ix, tc);
 	mlx5e_create_stats(&sq->stats.ctx, SYSCTL_CHILDREN(priv->sysctl),
 	    buffer, mlx5e_sq_stats_desc, MLX5E_SQ_STATS_NUM,
@@ -886,6 +903,8 @@ mlx5e_create_sq(struct mlx5e_channel *c,
 
 	return (0);
 
+err_free_sq_db:
+	mlx5e_free_sq_db(sq);
 err_sq_wq_destroy:
 	mlx5_wq_destroy(&sq->wq_ctrl);
 
@@ -910,6 +929,7 @@ mlx5e_destroy_sq(struct mlx5e_sq *sq)
 	mlx5e_free_sq_db(sq);
 	mlx5_wq_destroy(&sq->wq_ctrl);
 	mlx5_unmap_free_uar(priv->mdev, &sq->uar);
+	buf_ring_free(sq->br, M_DEVBUF);
 }
 
 static int
