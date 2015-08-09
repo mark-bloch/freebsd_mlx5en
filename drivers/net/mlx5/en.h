@@ -91,6 +91,7 @@
 #define	MLX5E_MTU_MAX			MIN(0xffff, MJUM16BYTES)
 
 #define	MLX5E_BUDGET_MAX	8192	/* RX and TX */
+#define MLX5E_RX_BUDGET		256
 #define	MLX5E_SQ_BF_BUDGET	16
 
 #define	MLX5E_MAX_TX_NUM_TC	8	/* units */

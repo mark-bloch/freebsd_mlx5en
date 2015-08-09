@@ -192,7 +192,7 @@ mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
 	}
 }
 
-static void
+static bool
 mlx5e_poll_rx_cq(struct mlx5e_rq *rq, int budget)
 {
 #ifndef HAVE_TURBO_LRO
@@ -260,16 +260,31 @@ wq_ll_pop:
 		tcp_lro_flush(&rq->lro, queued);
 	}
 #endif
+	if (i == budget)
+		return (true);
+
+	return (false);
 }
 
 void
 mlx5e_rx_cq_function(struct mlx5e_cq *cq)
 {
 	struct mlx5e_rq *rq = container_of(cq, struct mlx5e_rq, cq);
-
+	int i = 0;
 	mtx_lock(&rq->mtx);
-	mlx5e_poll_rx_cq(rq, MLX5E_BUDGET_MAX);
+
+	/* polling the entire CQ without posting new wqes
+	* reuslts with lack of recv wqes in heavy traffic
+	* scenarios */
+	while (mlx5e_poll_rx_cq(rq, MLX5E_RX_BUDGET) && 
+			(i <= MLX5E_BUDGET_MAX)) {
+		mlx5e_post_rx_wqes(rq);
+		i =+ MLX5E_RX_BUDGET;
+	}
+
+	/* left overs */
 	mlx5e_post_rx_wqes(rq);
+
 	mlx5e_cq_arm(cq);
 #ifdef HAVE_TURBO_LRO
 	tcp_tlro_flush(&rq->lro, 1);
