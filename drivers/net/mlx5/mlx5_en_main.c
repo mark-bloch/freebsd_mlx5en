@@ -300,6 +300,11 @@ mlx5e_update_pport_counters(struct mlx5e_priv *priv)
 	mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPCNT, 0, 0);
 	for (x = 0; x != MLX5E_PPORT_RFC2819_STATS_NUM; x++, y++)
 		s->arg[y] = be64toh(ptr[x]);
+
+	MLX5_SET(ppcnt_reg, in, grp, MLX5_PHYSICAL_LAYER_COUNTERS_GROUP);
+        mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPCNT, 0, 0);
+        for (x = 0; x != MLX5E_PPORT_PHYSICAL_LAYER_STATS_NUM; x++, y++)
+                s->arg[y] = be64toh(ptr[x]);
 free_out:
 	kvfree(in);
 	kvfree(out);

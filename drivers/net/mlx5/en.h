@@ -221,10 +221,52 @@ struct mlx5e_vport_stats {
   m(+1, u64 p4096to8191octets, "p4096to8191octets", "Bytes")		\
   m(+1, u64 p8192to10239octets, "p8192to10239octets", "Bytes")
 
+#define MLX5E_PPORT_PHYSICAL_LAYER_STATS(m)                                    		\
+  m(+1, u64 time_since_last_clear, "time_since_last_clear",				\
+			"Time since the last counters clear event (msec)")		\
+  m(+1, u64 symbol_errors, "symbol_errors", "Symbol errors")				\
+  m(+1, u64 sync_headers_errors, "sync_headers_errors", "Sync header error counter")	\
+  m(+1, u64 bip_errors_lane0, "edpl_bip_errors_lane0",					\
+			"Indicates the number of PRBS errors on lane 0")		\
+  m(+1, u64 bip_errors_lane1, "edpl_bip_errors_lane1",					\
+			"Indicates the number of PRBS errors on lane 1")		\
+  m(+1, u64 bip_errors_lane2, "edpl_bip_errors_lane2",					\
+			"Indicates the number of PRBS errors on lane 2")		\
+  m(+1, u64 bip_errors_lane3, "edpl_bip_errors_lane3",					\
+			"Indicates the number of PRBS errors on lane 3")		\
+  m(+1, u64 fc_corrected_blocks_lane0, "fc_corrected_blocks_lane0",			\
+			"FEC correctable block counter lane 0")				\
+  m(+1, u64 fc_corrected_blocks_lane1, "fc_corrected_blocks_lane1",			\
+			"FEC correctable block counter lane 1")				\
+  m(+1, u64 fc_corrected_blocks_lane2, "fc_corrected_blocks_lane2",			\
+			"FEC correctable block counter lane 2")				\
+  m(+1, u64 fc_corrected_blocks_lane3, "fc_corrected_blocks_lane3",			\
+			"FEC correctable block counter lane 3")				\
+  m(+1, u64 rs_corrected_blocks, "rs_corrected_blocks",					\
+			"FEC correcable block counter")					\
+  m(+1, u64 rs_uncorrectable_blocks, "rs_uncorrectable_blocks",				\
+			"FEC uncorrecable block counter")				\
+  m(+1, u64 rs_no_errors_blocks, "rs_no_errors_blocks",					\
+			"The number of RS-FEC blocks received that had no errors")	\
+  m(+1, u64 rs_single_error_blocks, "rs_single_error_blocks",				\
+			"The number of corrected RS-FEC blocks received that had"	\
+			"exactly 1 error symbol")					\
+  m(+1, u64 rs_corrected_symbols_total, "rs_corrected_symbols_total",			\
+			"Port FEC corrected symbol counter")				\
+  m(+1, u64 rs_corrected_symbols_lane0, "rs_corrected_symbols_lane0",			\
+			"FEC corrected symbol counter lane 0")				\
+  m(+1, u64 rs_corrected_symbols_lane1, "rs_corrected_symbols_lane1",			\
+			"FEC corrected symbol counter lane 1")				\
+  m(+1, u64 rs_corrected_symbols_lane2, "rs_corrected_symbols_lane2",			\
+			"FEC corrected symbol counter lane 2")				\
+  m(+1, u64 rs_corrected_symbols_lane3, "rs_corrected_symbols_lane3",			\
+			"FEC corrected symbol counter lane 3")				\
+
 #define	MLX5E_PPORT_STATS(m)			\
   MLX5E_PPORT_IEEE802_3_STATS(m)		\
   MLX5E_PPORT_RFC2863_STATS(m)			\
-  MLX5E_PPORT_RFC2819_STATS(m)
+  MLX5E_PPORT_RFC2819_STATS(m)			\
+  MLX5E_PPORT_PHYSICAL_LAYER_STATS(m)
 
 #define	MLX5E_PPORT_IEEE802_3_STATS_NUM \
   (0 MLX5E_PPORT_IEEE802_3_STATS(MLX5E_STATS_COUNT))
@@ -234,6 +276,8 @@ struct mlx5e_vport_stats {
   (0 MLX5E_PPORT_RFC2819_STATS(MLX5E_STATS_COUNT))
 #define	MLX5E_PPORT_STATS_NUM \
   (0 MLX5E_PPORT_STATS(MLX5E_STATS_COUNT))
+#define MLX5E_PPORT_PHYSICAL_LAYER_STATS_NUM \
+  (0 MLX5E_PPORT_PHYSICAL_LAYER_STATS(MLX5E_STATS_COUNT))
 
 struct mlx5e_pport_stats {
 	struct sysctl_ctx_list ctx;
