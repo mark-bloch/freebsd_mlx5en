@@ -317,8 +317,17 @@ mlx5e_update_stats_work(struct work_struct *work)
 	u32 in[MLX5_ST_SZ_DW(query_vport_counter_in)];
 	u32 *out;
 	int outlen = MLX5_ST_SZ_BYTES(query_vport_counter_out);
-	u64 tx_offload_none;
-	int i, j;
+	u64 tso_packets = 0;
+	u64 tso_bytes = 0;
+	u64 tx_queue_dropped = 0;
+	u64 tx_defragged = 0;
+	u64 tx_offload_none = 0;
+	u64 lro_packets = 0;
+	u64 lro_bytes = 0;
+	u64 rx_csum_none = 0;
+	u64 rx_wqe_err = 0;
+	int i;
+	int j;
 
 	PRIV_LOCK(priv);
 	out = mlx5_vzalloc(outlen);
@@ -328,33 +337,34 @@ mlx5e_update_stats_work(struct work_struct *work)
 		goto free_out;
 
 	/* Collect firts the SW counters and then HW for consistency */
-	s->tso_packets = 0;
-	s->tso_bytes = 0;
-	s->tx_queue_dropped = 0;
-	s->tx_defragged = 0;
-	tx_offload_none = 0;
-	s->lro_packets = 0;
-	s->lro_bytes = 0;
-	s->rx_csum_none = 0;
-	s->rx_wqe_err = 0;
 	for (i = 0; i < priv->params.num_channels; i++) {
 		rq_stats = &priv->channel[i]->rq.stats;
 
-		s->lro_packets += rq_stats->lro_packets;
-		s->lro_bytes += rq_stats->lro_bytes;
-		s->rx_csum_none += rq_stats->csum_none;
-		s->rx_wqe_err += rq_stats->wqe_err;
+		lro_packets += rq_stats->lro_packets;
+		lro_bytes += rq_stats->lro_bytes;
+		rx_csum_none += rq_stats->csum_none;
+		rx_wqe_err += rq_stats->wqe_err;
 
 		for (j = 0; j < priv->num_tc; j++) {
 			sq_stats = &priv->channel[i]->sq[j].stats;
 
-			s->tso_packets += sq_stats->tso_packets;
-			s->tso_bytes += sq_stats->tso_bytes;
-			s->tx_queue_dropped += sq_stats->dropped;
-			s->tx_defragged += sq_stats->defragged;
+			tso_packets += sq_stats->tso_packets;
+			tso_bytes += sq_stats->tso_bytes;
+			tx_queue_dropped += sq_stats->dropped;
+			tx_defragged += sq_stats->defragged;
 			tx_offload_none += sq_stats->csum_offload_none;
 		}
 	}
+
+	/* update counters */
+	s->tso_packets = tso_packets;
+	s->tso_bytes = tso_bytes;
+	s->tx_queue_dropped = tx_queue_dropped;
+	s->tx_defragged = tx_defragged;
+	s->lro_packets = lro_packets;
+	s->lro_bytes = lro_bytes;
+	s->rx_csum_none = rx_csum_none;
+	s->rx_wqe_err = rx_wqe_err;
 
 	/* HW counters */
 	memset(in, 0, sizeof(in));
