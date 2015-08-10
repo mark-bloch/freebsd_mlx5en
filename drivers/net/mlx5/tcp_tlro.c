@@ -64,7 +64,9 @@ __FBSDID("$FreeBSD$");
 #include "tcp_tlro.h"
 
 #ifndef M_HASHTYPE_LRO_TCP
+#ifndef KLD_MODULE
 #warning "M_HASHTYPE_LRO_TCP is not defined"
+#endif
 #define	M_HASHTYPE_LRO_TCP 254
 #endif
 
@@ -305,38 +307,35 @@ tcp_tlro_extract_header(struct tlro_mbuf_data *pinfo, struct mbuf *m, int seq)
 		else
 			m_adj(m, -diff);
 	}
+	/* compute header length */
 	pinfo->buf_length = phdr - (uint8_t *)pinfo->buf;
-	/* pad to 64-bits */
-	while (pinfo->buf_length & 7) {
-		*phdr++ = 0;
-		pinfo->buf_length++;
-	}
-	/* convert to 64-bit integers */
-	pinfo->buf_length /= 8;
+	/* zero-pad rest of buffer */
+	memset(phdr, 0, TLRO_MAX_HEADER - pinfo->buf_length);
 	return;
 error:
 	pinfo->buf_length = 0;
 }
 
 static int
-tcp_tlro_cmp64(const uint64_t *pa, const uint64_t *pb, uint64_t num)
+tcp_tlro_cmp64(const uint64_t *pa, const uint64_t *pb)
 {
-	const uint64_t *pa_end = pa + num;
-	int64_t diff;
+	int64_t diff = 0;
+	unsigned x;
 
-	while (pa != pa_end) {
+	for (x = 0; x != TLRO_MAX_HEADER / 8; x++) {
 		/*
 		 * NOTE: Endianness does not matter in this
 		 * comparisation:
 		 */
-		diff = (*pa++) - (*pb++);
-		if (diff != 0) {
-			if (diff < 0)
-				return (-1);
-			else
-				return (1);
-		}
+		diff = pa[x] - pb[x];
+		if (diff != 0)
+			goto done;
 	}
+done:
+	if (diff < 0)
+		return (-1);
+	else if (diff > 0)
+		return (1);
 	return (0);
 }
 
@@ -357,7 +356,7 @@ tcp_tlro_compare_header(const void *_ppa, const void *_ppb)
 	if (ret != 0)
 		goto done;
 	if (pinfoa->buf_length != 0) {
-		ret = tcp_tlro_cmp64(pinfoa->buf, pinfob->buf, pinfoa->buf_length);
+		ret = tcp_tlro_cmp64(pinfoa->buf, pinfob->buf);
 		if (ret != 0)
 			goto done;
 		ret = ntohl(pinfoa->tcp->th_seq) - ntohl(pinfob->tcp->th_seq);
@@ -420,7 +419,7 @@ tcp_tlro_combine(struct tlro_ctrl *tlro, int force)
 		for (x = y + 1; x != tlro->curr; x++) {
 			pinfob = tlro->mbuf[x].data;
 			if (pinfoa->buf_length != pinfob->buf_length ||
-			    tcp_tlro_cmp64(pinfoa->buf, pinfob->buf, pinfoa->buf_length) != 0)
+			    tcp_tlro_cmp64(pinfoa->buf, pinfob->buf) != 0)
 				break;
 		}
 		if (pinfoa->buf_length == 0) {
