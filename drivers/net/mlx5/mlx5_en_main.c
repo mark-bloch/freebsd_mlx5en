@@ -2123,27 +2123,79 @@ mlx5e_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 	case SIOCSIFCAP:
 		ifr = (struct ifreq *)data;
 		PRIV_LOCK(priv);
-		mask = (ifr->ifr_reqcap ^ ifp->if_capenable) &
-		    (IFCAP_HWCSUM | IFCAP_TSO4 | IFCAP_TSO6 | IFCAP_LRO |
-		    IFCAP_VLAN_HWTAGGING | IFCAP_VLAN_HWFILTER |
-		    IFCAP_WOL_MAGIC);
-		ifp->if_capenable ^= mask;
-		value = ifp->if_capenable;
-		PRIV_UNLOCK(priv);
+		mask = ifr->ifr_reqcap ^ ifp->if_capenable;
+
+		if (mask & IFCAP_TXCSUM) {
+			ifp->if_capenable ^= IFCAP_TXCSUM;
+			ifp->if_hwassist ^= (CSUM_TCP | CSUM_UDP | CSUM_IP);
+
+			if (IFCAP_TSO4 & ifp->if_capenable &&
+			    !(IFCAP_TXCSUM & ifp->if_capenable)) {
+				ifp->if_capenable &= ~IFCAP_TSO4;
+				ifp->if_hwassist &= ~CSUM_IP_TSO;
+				if_printf(ifp,
+				    "tso4 disabled due to -txcsum.\n");
+			}
+		}
+		if (mask & IFCAP_TXCSUM_IPV6) {
+			ifp->if_capenable ^= IFCAP_TXCSUM_IPV6;
+			ifp->if_hwassist ^= (CSUM_UDP_IPV6 | CSUM_TCP_IPV6);
+
+			if (IFCAP_TSO6 & ifp->if_capenable &&
+			    !(IFCAP_TXCSUM_IPV6 & ifp->if_capenable)) {
+				ifp->if_capenable &= ~IFCAP_TSO6;
+				ifp->if_hwassist &= ~CSUM_IP6_TSO;
+				if_printf(ifp,
+				    "tso6 disabled due to -txcsum6.\n");
+			}
+		}
+		if (mask & IFCAP_RXCSUM)
+			ifp->if_capenable ^= IFCAP_RXCSUM;
+		if (mask & IFCAP_RXCSUM_IPV6)
+			ifp->if_capenable ^= IFCAP_RXCSUM_IPV6;
+
+		if (mask & IFCAP_TSO4) {
+			if (!(IFCAP_TSO4 & ifp->if_capenable) &&
+			    !(IFCAP_TXCSUM & ifp->if_capenable)) {
+				if_printf(ifp, "enable txcsum first.\n");
+				error = EAGAIN;
+				goto out;
+			}
+			ifp->if_capenable ^= IFCAP_TSO4;
+			ifp->if_hwassist ^= CSUM_IP_TSO;
+		}
+		if (mask & IFCAP_TSO6) {
+			if (!(IFCAP_TSO6 & ifp->if_capenable) &&
+			    !(IFCAP_TXCSUM_IPV6 & ifp->if_capenable)) {
+				if_printf(ifp, "enable txcsum6 first.\n");
+				error = EAGAIN;
+				goto out;
+			}
+			ifp->if_capenable ^= IFCAP_TSO6;
+			ifp->if_hwassist ^= CSUM_IP6_TSO;
+		}
+
 		if (mask & IFCAP_VLAN_HWFILTER) {
 			if (value & IFCAP_VLAN_HWFILTER)
 				mlx5e_enable_vlan_filter(priv);
 			else
 				mlx5e_disable_vlan_filter(priv);
 		}
+		if (mask & IFCAP_VLAN_HWTAGGING)
+			ifp->if_capenable ^= IFCAP_VLAN_HWTAGGING;
+
+		if (mask & IFCAP_WOL_MAGIC)
+			ifp->if_capenable ^= IFCAP_WOL_MAGIC;
+
 		VLAN_CAPABILITIES(ifp);
 		/* turn off LRO means also turn of HW LRO - if it's on */
 		if (mask & IFCAP_LRO ) {
-			PRIV_LOCK(priv);
 			int was_opened = test_bit(MLX5E_STATE_OPENED, &priv->state);
 			bool need_restart = false;
-			if (!(value & IFCAP_LRO)) {
-				if ( priv->params.hw_lro_en ) {
+
+			ifp->if_capenable ^= IFCAP_LRO;
+			if (!(ifp->if_capenable & IFCAP_LRO)) {
+				if (priv->params.hw_lro_en) {
 					priv->params.hw_lro_en = false;
 					need_restart = true;
 					/* Not sure this is the correct way */
@@ -2154,8 +2206,9 @@ mlx5e_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 				mlx5e_close_locked(ifp);
 				mlx5e_open_locked(ifp);
 			}
-			PRIV_UNLOCK(priv);
 		}
+out:
+		PRIV_UNLOCK(priv);
 		break;
 	default:
 		error = ether_ioctl(ifp, command, data);
@@ -2327,12 +2380,12 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 	/*
          * Set driver features
          */
-	ifp->if_capabilities |= IFCAP_RXCSUM | IFCAP_TXCSUM;
+	ifp->if_capabilities |= IFCAP_HWCSUM | IFCAP_HWCSUM_IPV6;
 	ifp->if_capabilities |= IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING;
 	ifp->if_capabilities |= IFCAP_VLAN_HWCSUM | IFCAP_VLAN_HWFILTER;
 	ifp->if_capabilities |= IFCAP_LINKSTATE | IFCAP_JUMBO_MTU;
 	ifp->if_capabilities |= IFCAP_LRO;
-	ifp->if_capabilities |= IFCAP_TSO4 | IFCAP_TSO6 | IFCAP_VLAN_HWTSO;
+	ifp->if_capabilities |= IFCAP_TSO | IFCAP_VLAN_HWTSO;
 
 	/* set TSO limits so that we don't have to drop TX packets */
 	ifp->if_hw_tsomax = 65536 - (ETHER_HDR_LEN + ETHER_VLAN_ENCAP_LEN);
@@ -2341,10 +2394,12 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 
 	ifp->if_capenable = ifp->if_capabilities;
 	ifp->if_hwassist = 0;
-	if (ifp->if_capenable & (IFCAP_TSO4 | IFCAP_TSO6))
+	if (ifp->if_capenable & IFCAP_TSO)
 		ifp->if_hwassist |= CSUM_TSO;
 	if (ifp->if_capenable & IFCAP_TXCSUM)
 		ifp->if_hwassist |= (CSUM_TCP | CSUM_UDP | CSUM_IP);
+	if (ifp->if_capenable & IFCAP_TXCSUM_IPV6)
+		ifp->if_hwassist |= (CSUM_UDP_IPV6 | CSUM_TCP_IPV6);
 
 	sysctl_ctx_init(&priv->sysctl_ctx);
 	priv->sysctl = SYSCTL_ADD_NODE(&priv->sysctl_ctx, SYSCTL_STATIC_CHILDREN(_hw),

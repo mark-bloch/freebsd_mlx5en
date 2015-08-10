@@ -172,7 +172,7 @@ mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
 	M_HASHTYPE_SET(mb, M_HASHTYPE_OPAQUE);
 	mb->m_pkthdr.rcvif = ifp;
 
-	if (likely(ifp->if_capabilities & IFCAP_RXCSUM) &&
+	if (likely(ifp->if_capenable & (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6)) &&
 	    ((cqe->hds_ip_ext & (CQE_L2_OK | CQE_L3_OK | CQE_L4_OK)) ==
 	    (CQE_L2_OK | CQE_L3_OK | CQE_L4_OK))) {
 		mb->m_pkthdr.csum_flags =

@@ -492,27 +492,23 @@ mlx5e_del_vlan_rule(struct mlx5e_priv *priv,
 void
 mlx5e_enable_vlan_filter(struct mlx5e_priv *priv)
 {
-	PRIV_LOCK(priv);
 	if (priv->vlan.filter_disabled) {
 		priv->vlan.filter_disabled = false;
 		if (test_bit(MLX5E_STATE_OPENED, &priv->state))
 			mlx5e_del_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_ANY_VID,
 			    0);
 	}
-	PRIV_UNLOCK(priv);
 }
 
 void
 mlx5e_disable_vlan_filter(struct mlx5e_priv *priv)
 {
-	PRIV_LOCK(priv);
 	if (!priv->vlan.filter_disabled) {
 		priv->vlan.filter_disabled = true;
 		if (test_bit(MLX5E_STATE_OPENED, &priv->state))
 			mlx5e_add_vlan_rule(priv, MLX5E_VLAN_RULE_TYPE_ANY_VID,
 			    0);
 	}
-	PRIV_UNLOCK(priv);
 }
 
 void
