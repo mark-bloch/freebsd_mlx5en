@@ -1228,6 +1228,7 @@ static void build_inline_wqe(struct mlx4_en_tx_desc *tx_desc, struct mbuf *mb,
 	tx_desc->ctrl.ins_vlan = MLX4_WQE_CTRL_INS_VLAN * !!(*vlan_tag);
 	tx_desc->ctrl.fence_size = (real_size / 16) & 0x3f;
 }
+
 #if __FreeBSD_version >= 1100000
 static uint32_t hashrandom;
 #else
@@ -1236,12 +1237,18 @@ static unsigned long hashrandom;
 static void hashrandom_init(void *arg)
 {
 #if __FreeBSD_version >= 1100000
+	/*
+	 * It is assumed that the random subsystem has been
+	 * initialized when this function is called:
+	 */
 	hashrandom = m_ether_tcpip_hash_init();
+}
+SYSINIT(hashrandom_init, SI_SUB_RANDOM, SI_ORDER_ANY, &hashrandom_init, NULL);
 #else
 	hashrandom = random();
-#endif
 }
 SYSINIT(hashrandom_init, SI_SUB_KLD, SI_ORDER_SECOND, &hashrandom_init, NULL);
+#endif
 
 u16 mlx4_en_select_queue(struct net_device *dev, struct mbuf *mb)
 {
@@ -1337,6 +1344,7 @@ retry:
                         mb = m_defrag(*mbp, M_NOWAIT);
                         if (mb == NULL) {
                                 mb = *mbp;
+				ring->oversized_packets++;
                                 goto tx_drop;
                         }
                         *mbp = mb;
