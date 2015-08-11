@@ -1419,6 +1419,7 @@ mlx5e_build_sq_param(struct mlx5e_priv *priv,
 
 	param->wq.buf_numa_node = 0;
 	param->wq.db_numa_node = 0;
+	param->wq.linear = 1;
 }
 
 static void
