@@ -56,7 +56,8 @@ mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
 	    mb, segs, &nsegs, BUS_DMA_NOWAIT);
 	if (err != 0)
 		goto err_free_mbuf;
-	if (nsegs != 1) {
+	if (unlikely(nsegs != 1)) {
+		bus_dmamap_unload(rq->dma_tag, rq->mbuf[ix].dma_map);
 		err = -ENOMEM;
 		goto err_free_mbuf;
 	}
