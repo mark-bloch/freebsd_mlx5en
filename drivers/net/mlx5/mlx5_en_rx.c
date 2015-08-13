@@ -270,6 +270,18 @@ mlx5e_rx_cq_comp(struct mlx5_core_cq *mcq)
 	struct mlx5e_rq *rq = container_of(mcq, struct mlx5e_rq, cq.mcq);
 	int i = 0;
 
+#ifdef HAVE_PER_CQ_EVENT_PACKET
+	struct mbuf *mb = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, rq->wqe_sz);
+	if (mb != NULL) {
+		/* this code is used for debugging purpose only */
+		mb->m_pkthdr.len = mb->m_len = 15;
+		memset(mb->m_data, 255, 14);
+		mb->m_data[14] = rq->ix;
+		mb->m_pkthdr.rcvif = rq->ifp;
+		rq->ifp->if_input(rq->ifp, mb);
+	}
+#endif
+
 	mtx_lock(&rq->mtx);
 
 	/*

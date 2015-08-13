@@ -17,6 +17,10 @@ CFLAGS+= -DHAVE_TURBO_LRO
 SRCS+= tcp_tlro.c
 .endif
 
+.if defined(HAVE_PER_CQ_EVENT_PACKET)
+CFLAGS+= -DHAVE_PER_CQ_EVENT_PACKET
+.endif
+
 CFLAGS+= -I${SYSDIR}/ofed/include
 CFLAGS+= -I${MLXDIR}/core
 CFLAGS+= -I${.CURDIR}
