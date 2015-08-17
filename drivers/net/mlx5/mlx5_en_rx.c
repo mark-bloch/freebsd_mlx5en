@@ -101,11 +101,9 @@ mlx5e_lro_update_hdr(struct mbuf* mb, struct mlx5_cqe64 *cqe)
 	/* TODO: consider vlans, ip options, ... */
 	struct ether_header *eh;
 	uint16_t eh_type;
-
 	struct ip6_hdr *ip6 = NULL;
 	struct ip *ip4 = NULL;
 	struct tcphdr *th;
-
 
 	eh = mtod(mb, struct ether_header *);
 	eh_type = ntohs(eh->ether_type);
@@ -130,31 +128,29 @@ mlx5e_lro_update_hdr(struct mbuf* mb, struct mlx5_cqe64 *cqe)
 		return;
 	}
 
-
 	/* TODO: handle timestamp */
 
 	if (get_cqe_lro_tcppsh(cqe))
-		th->th_flags           |= TH_PUSH;
+		th->th_flags	|= TH_PUSH;
 
 	if (tcp_ack) {
-		th->th_flags           |= TH_ACK;
-		th->th_ack             = cqe->lro_ack_seq_num;
-		th->th_win             = cqe->lro_tcp_win;
+		th->th_flags	|= TH_ACK;
+		th->th_ack	= cqe->lro_ack_seq_num;
+		th->th_win	= cqe->lro_tcp_win;
 	}
 
 	if (ip4) {
-		ip4->ip_ttl            = cqe->lro_min_ttl;
-		ip4->ip_len            = cpu_to_be16(tot_len);
-		ip4->ip_sum            = 0;
-		ip4->ip_sum            = in_cksum(mb, ip4->ip_hl << 2);
+		ip4->ip_ttl	= cqe->lro_min_ttl;
+		ip4->ip_len	= cpu_to_be16(tot_len);
+		ip4->ip_sum	= 0;
+		ip4->ip_sum	= in_cksum(mb, ip4->ip_hl << 2);
 	} else {
-		ip6->ip6_hlim          = cqe->lro_min_ttl;
-		ip6->ip6_plen	       = cpu_to_be16(tot_len -
-				sizeof(struct ip6_hdr));
+		ip6->ip6_hlim	= cqe->lro_min_ttl;
+		ip6->ip6_plen	= cpu_to_be16(tot_len -
+		    sizeof(struct ip6_hdr));
 	}
 	/* TODO: handle tcp checksum */
 }
-
 
 static inline void
 mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
