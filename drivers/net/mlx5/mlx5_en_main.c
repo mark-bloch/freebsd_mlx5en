@@ -542,7 +542,7 @@ mlx5e_create_rq(struct mlx5e_channel *c,
 		rq->wqe_sz = priv->params.lro_wqe_sz;
 	}
 	else {
-		rq->wqe_sz = priv->ifp->if_mtu + MLX5E_MTU_OVERHEAD;
+		rq->wqe_sz = MLX5E_SW2MB_MTU(priv->ifp->if_mtu);
 	}
 	if (rq->wqe_sz > MJUM16BYTES) {
 		err = -ENOMEM;
@@ -1826,21 +1826,40 @@ mlx5e_close_tirs(struct mlx5e_priv *priv)
 		mlx5e_close_tir(priv, i);
 }
 
+/*
+ * SW MTU does not include headers,
+ * HW MTU includes all headers and checksums.
+ */
 static int
 mlx5e_set_dev_port_mtu(struct ifnet *ifp, int sw_mtu)
 {
 	struct mlx5e_priv *priv = ifp->if_softc;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	int hw_mtu;
+	int min_mtu;
 	int err;
 
-	err = mlx5_set_port_mtu(mdev, sw_mtu + MLX5E_MTU_OVERHEAD);
+	/*
+	 * Trying to set MTU to zero, in order
+	 * to find out the FW's minimal MTU
+	 */
+	err = mlx5_set_port_mtu(mdev, 0);
+	if (err)
+		return (err);
+	mlx5_query_port_oper_mtu(mdev, &min_mtu);
+
+	if (sw_mtu < MLX5E_HW2SW_MTU(min_mtu)) {
+		ifp->if_mtu = sw_mtu;
+		return (0);
+	}
+
+	err = mlx5_set_port_mtu(mdev, MLX5E_SW2HW_MTU(sw_mtu));
 	if (err)
 		return (err);
 
 	mlx5_query_port_oper_mtu(mdev, &hw_mtu);
 
-	ifp->if_mtu = (hw_mtu - MLX5E_MTU_OVERHEAD);
+	ifp->if_mtu = MLX5E_HW2SW_MTU(hw_mtu);
 
 	if (ifp->if_mtu != sw_mtu) {
 		if_printf(ifp, "Port MTU %d is different than "
@@ -2021,7 +2040,7 @@ mlx5e_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		ifr = (struct ifreq *)data;
 
 		if (ifr->ifr_mtu > 0 &&
-		    ifr->ifr_mtu + MLX5E_MTU_OVERHEAD <= MLX5E_MTU_MAX) {
+		    MLX5E_SW2MB_MTU(ifr->ifr_mtu) <= MLX5E_MTU_MAX) {
 			int was_opened;
 
 			PRIV_LOCK(priv);
