@@ -1902,13 +1902,6 @@ static int mlx4_en_calc_media(struct mlx4_en_priv *priv)
 	active = IFM_ETHER;
 	if (priv->last_link_state == MLX4_DEV_EVENT_PORT_DOWN)
 		return (active);
-	/*
-	 * [ShaharK] mlx4_en_QUERY_PORT sleeps and cannot be called under a
-	 * non-sleepable lock.
-	 * I moved it to the periodic mlx4_en_do_get_stats.
- 	if (mlx4_en_QUERY_PORT(priv->mdev, priv->port))
- 		return (active);
-	*/
 	active |= IFM_FDX;
 	trans_type = priv->port_state.transciver;
 	/* XXX I don't know all of the transceiver values. */
