@@ -1704,7 +1704,7 @@ mlx5e_build_tir_ctx(struct mlx5e_priv *priv, u32 * tirc, int tt)
 	    MLX5_SET(tirc, tirc, lro_enable_mask,
 	         MLX5_TIRC_LRO_ENABLE_MASK_IPV4_LRO |
 	         MLX5_TIRC_LRO_ENABLE_MASK_IPV6_LRO);
-	    MLX5_SET(tirc, tirc, lro_max_ip_payload_size,
+	    MLX5_SET(tirc, tirc, lro_max_msg_sz,
 	         (priv->params.lro_wqe_sz -
 	         ROUGH_MAX_L2_L3_HDR_SZ) >> 8);
 		/* TODO: add the option to choose timer value dynamically */
@@ -1809,7 +1809,7 @@ mlx5e_open_tir(struct mlx5e_priv *priv, int tt)
 	in = mlx5_vzalloc(inlen);
 	if (in == NULL)
 		return (-ENOMEM);
-	tirc = MLX5_ADDR_OF(create_tir_in, in, ctx);
+	tirc = MLX5_ADDR_OF(create_tir_in, in, tir_context);
 
 	mlx5e_build_tir_ctx(priv, tirc, tt);
 
