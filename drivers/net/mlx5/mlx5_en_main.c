@@ -589,7 +589,7 @@ mlx5e_create_rq(struct mlx5e_channel *c,
 	rq->ix = c->ix;
 
 	snprintf(buffer, sizeof(buffer), "rxstat%d", c->ix);
-	mlx5e_create_stats(&rq->stats.ctx, SYSCTL_CHILDREN(priv->sysctl),
+	mlx5e_create_stats(&rq->stats.ctx, SYSCTL_CHILDREN(priv->sysctl_dev),
 	    buffer, mlx5e_rq_stats_desc, MLX5E_RQ_STATS_NUM,
 	    rq->stats.arg);
 
@@ -902,7 +902,7 @@ mlx5e_create_sq(struct mlx5e_channel *c,
 
 
 	snprintf(buffer, sizeof(buffer), "txstat%dtc%d", c->ix, tc);
-	mlx5e_create_stats(&sq->stats.ctx, SYSCTL_CHILDREN(priv->sysctl),
+	mlx5e_create_stats(&sq->stats.ctx, SYSCTL_CHILDREN(priv->sysctl_dev),
 	    buffer, mlx5e_sq_stats_desc, MLX5E_SQ_STATS_NUM,
 	    sq->stats.arg);
 
@@ -2348,6 +2348,7 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 	struct ifnet *ifp;
 	struct mlx5e_priv *priv;
 	u8 dev_addr[ETHER_ADDR_LEN] __aligned(4);
+	struct sysctl_oid_list *child;
 	int ncv = mdev->priv.eq_table.num_comp_vectors;
 	int err;
 
@@ -2402,12 +2403,16 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 		ifp->if_hwassist |= (CSUM_UDP_IPV6 | CSUM_TCP_IPV6);
 
 	sysctl_ctx_init(&priv->sysctl_ctx);
-	priv->sysctl = SYSCTL_ADD_NODE(&priv->sysctl_ctx, SYSCTL_STATIC_CHILDREN(_hw),
-	    OID_AUTO, ifp->if_xname, CTLFLAG_RD, 0, "MLX5 ethernet");
-	if (priv->sysctl == NULL) {
+
+	child = SYSCTL_CHILDREN(device_get_sysctl_tree(mdev->pdev->dev.bsddev));
+	priv->sysctl_dev = SYSCTL_ADD_NODE(&priv->sysctl_ctx, child,
+	    OID_AUTO, "en", CTLFLAG_RD, 0, "MLX5 ethernet dev");
+	if (priv->sysctl_dev == NULL) {
 		mlx5_core_err(mdev, "SYSCTL_ADD_NODE() failed\n");
-		goto err_free_ifp;
+
+		goto err_free_sysctl;
 	}
+
 	mlx5e_build_ifp_priv(mdev, priv, ncv);
 
 	err = mlx5_alloc_map_uar(mdev, &priv->cq_uar);
@@ -2480,11 +2485,11 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 
 	mlx5e_enable_async_events(priv);
 
-	mlx5e_create_stats(&priv->stats.vport.ctx, SYSCTL_CHILDREN(priv->sysctl),
+	mlx5e_create_stats(&priv->stats.vport.ctx, SYSCTL_CHILDREN(priv->sysctl_dev),
 	    "vstats", mlx5e_vport_stats_desc, MLX5E_VPORT_STATS_NUM,
 	    priv->stats.vport.arg);
 
-	mlx5e_create_stats(&priv->stats.pport.ctx, SYSCTL_CHILDREN(priv->sysctl),
+	mlx5e_create_stats(&priv->stats.pport.ctx, SYSCTL_CHILDREN(priv->sysctl_dev),
 	    "pstats", mlx5e_pport_stats_desc, MLX5E_PPORT_STATS_NUM,
 	    priv->stats.pport.arg);
 
@@ -2507,8 +2512,6 @@ err_unmap_free_uar:
 
 err_free_sysctl:
 	sysctl_ctx_free(&priv->sysctl_ctx);
-
-err_free_ifp:
 	if_free(ifp);
 
 err_free_priv:

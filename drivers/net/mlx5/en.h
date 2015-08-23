@@ -573,7 +573,7 @@ struct mlx5e_priv {
 	struct mlx5_core_dev *mdev;
 	struct ifnet *ifp;
 	struct sysctl_ctx_list sysctl_ctx;
-	struct sysctl_oid *sysctl;
+	struct sysctl_oid *sysctl_dev;
 	struct mlx5e_stats stats;
 
 	eventhandler_tag vlan_detach;

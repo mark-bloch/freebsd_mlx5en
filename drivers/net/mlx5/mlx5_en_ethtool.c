@@ -171,7 +171,7 @@ mlx5e_create_ethtool(struct mlx5e_priv *priv)
 
 	/* create root node */
 	node = SYSCTL_ADD_NODE(&priv->sysctl_ctx,
-	    SYSCTL_CHILDREN(priv->sysctl), OID_AUTO,
+	    SYSCTL_CHILDREN(priv->sysctl_dev), OID_AUTO,
 	    "conf", CTLFLAG_RW, NULL, "Configuration");
 	if (node == NULL)
 		return;
