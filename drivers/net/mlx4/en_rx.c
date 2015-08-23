@@ -611,7 +611,8 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
 			mb->m_pkthdr.ether_vtag = be16_to_cpu(cqe->sl_vid);
 			mb->m_flags |= M_VLANTAG;
 		}
-		if (likely(dev->if_capabilities & IFCAP_RXCSUM) &&
+		if (likely(dev->if_capenable &
+		    (IFCAP_RXCSUM | IFCAP_RXCSUM_IPV6)) &&
 		    (cqe->status & cpu_to_be16(MLX4_CQE_STATUS_IPOK)) &&
 		    (cqe->checksum == cpu_to_be16(0xffff))) {
 			priv->port_stats.rx_chksum_good++;

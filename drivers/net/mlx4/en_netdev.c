@@ -2044,14 +2044,58 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 	case SIOCSIFCAP:
 		mutex_lock(&mdev->state_lock);
 		mask = ifr->ifr_reqcap ^ dev->if_capenable;
-		if (mask & IFCAP_HWCSUM)
-			dev->if_capenable ^= IFCAP_HWCSUM;
-		if (mask & IFCAP_TSO4)
+		if (mask & IFCAP_TXCSUM) {
+			dev->if_capenable ^= IFCAP_TXCSUM;
+			dev->if_hwassist ^= (CSUM_TCP | CSUM_UDP | CSUM_IP);
+
+			if (IFCAP_TSO4 & dev->if_capenable &&
+			    !(IFCAP_TXCSUM & dev->if_capenable)) {
+				dev->if_capenable &= ~IFCAP_TSO4;
+				dev->if_hwassist &= ~CSUM_IP_TSO;
+				if_printf(dev,
+				    "tso4 disabled due to -txcsum.\n");
+			}
+		}
+		if (mask & IFCAP_TXCSUM_IPV6) {
+			dev->if_capenable ^= IFCAP_TXCSUM_IPV6;
+			dev->if_hwassist ^= (CSUM_UDP_IPV6 | CSUM_TCP_IPV6);
+
+			if (IFCAP_TSO6 & dev->if_capenable &&
+			    !(IFCAP_TXCSUM_IPV6 & dev->if_capenable)) {
+				dev->if_capenable &= ~IFCAP_TSO6;
+				dev->if_hwassist &= ~CSUM_IP6_TSO;
+				if_printf(dev,
+				    "tso6 disabled due to -txcsum6.\n");
+			}
+		}
+		if (mask & IFCAP_RXCSUM)
+			dev->if_capenable ^= IFCAP_RXCSUM;
+		if (mask & IFCAP_RXCSUM_IPV6)
+			dev->if_capenable ^= IFCAP_RXCSUM_IPV6;
+
+		if (mask & IFCAP_TSO4) {
+			if (!(IFCAP_TSO4 & dev->if_capenable) &&
+			    !(IFCAP_TXCSUM & dev->if_capenable)) {
+				if_printf(dev, "enable txcsum first.\n");
+				error = EAGAIN;
+				goto out;
+			}
 			dev->if_capenable ^= IFCAP_TSO4;
-		if (mask & IFCAP_TSO6)
+			dev->if_hwassist ^= CSUM_IP_TSO;
+		}
+		if (mask & IFCAP_TSO6) {
+			if (!(IFCAP_TSO6 & dev->if_capenable) &&
+			    !(IFCAP_TXCSUM_IPV6 & dev->if_capenable)) {
+				if_printf(dev, "enable txcsum6 first.\n");
+				error = EAGAIN;
+				goto out;
+			}
 			dev->if_capenable ^= IFCAP_TSO6;
+			dev->if_hwassist ^= CSUM_IP6_TSO;
+		}
 		if (mask & IFCAP_LRO)
 			dev->if_capenable ^= IFCAP_LRO;
+
 		if (mask & IFCAP_VLAN_HWTAGGING)
 			dev->if_capenable ^= IFCAP_VLAN_HWTAGGING;
 		if (mask & IFCAP_VLAN_HWFILTER)
@@ -2060,6 +2104,7 @@ static int mlx4_en_ioctl(struct ifnet *dev, u_long command, caddr_t data)
 			dev->if_capenable ^= IFCAP_WOL_MAGIC;
 		if (dev->if_drv_flags & IFF_DRV_RUNNING)
 			mlx4_en_start_port(dev);
+out:
 		mutex_unlock(&mdev->state_lock);
 		VLAN_CAPABILITIES(dev);
 		break;
@@ -2311,7 +2356,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 	/*
 	 * Set driver features
 	 */
-	dev->if_capabilities |= IFCAP_RXCSUM | IFCAP_TXCSUM;
+	dev->if_capabilities |= IFCAP_HWCSUM | IFCAP_HWCSUM_IPV6;
 	dev->if_capabilities |= IFCAP_VLAN_MTU | IFCAP_VLAN_HWTAGGING;
 	dev->if_capabilities |= IFCAP_VLAN_HWCSUM | IFCAP_VLAN_HWFILTER;
 	dev->if_capabilities |= IFCAP_LINKSTATE | IFCAP_JUMBO_MTU;
@@ -2338,6 +2383,8 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
 		dev->if_hwassist |= CSUM_TSO;
 	if (dev->if_capenable & IFCAP_TXCSUM)
 		dev->if_hwassist |= (CSUM_TCP | CSUM_UDP | CSUM_IP);
+	if (dev->if_capenable & IFCAP_TXCSUM_IPV6)
+		dev->if_hwassist |= (CSUM_UDP_IPV6 | CSUM_TCP_IPV6);
 
 
         /* Register for VLAN events */
