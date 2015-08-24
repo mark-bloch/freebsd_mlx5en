@@ -1135,7 +1135,7 @@ mlx5e_destroy_cq(struct mlx5e_cq *cq)
 
 static int
 mlx5e_enable_cq(struct mlx5e_cq *cq, struct mlx5e_cq_param *param,
-		u8 moderation_mode)
+    u8 moderation_mode)
 {
 	struct mlx5e_channel *c = cq->channel;
 	struct mlx5e_priv *priv = c->priv;
@@ -1163,11 +1163,7 @@ mlx5e_enable_cq(struct mlx5e_cq *cq, struct mlx5e_cq_param *param,
 
 	mlx5_vector2eqn(mdev, param->eq_ix, &eqn, &irqn_not_used);
 
-	MLX5_SET(cqc, cqc, cq_period_mode,
-		 MLX5_CAP_GEN(mdev, cq_period_start_from_cqe) &&
-		 moderation_mode == MLX5_CQ_PERIOD_MODE_START_FROM_CQE ?
-		 MLX5_CQ_PERIOD_MODE_START_FROM_CQE:
-		 MLX5_CQ_PERIOD_MODE_START_FROM_EQE);
+	MLX5_SET(cqc, cqc, cq_period_mode, moderation_mode);
 	MLX5_SET(cqc, cqc, c_eqn, eqn);
 	MLX5_SET(cqc, cqc, uar_page, mcq->uar->index);
 	MLX5_SET(cqc, cqc, log_page_size, cq->wq_ctrl.buf.page_shift -
@@ -1335,6 +1331,7 @@ mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
     struct mlx5e_channel * volatile *cp)
 {
 	struct mlx5e_channel *c;
+	u8 rx_moderation_mode;
 	int err;
 
 	c = malloc(sizeof(*c), M_MLX5EN, M_WAITOK | M_ZERO);
@@ -1357,9 +1354,21 @@ mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	if (err)
 		goto err_free;
 
+	switch (priv->params.rx_cq_moderation_mode) {
+	case 0:
+		rx_moderation_mode = MLX5_CQ_PERIOD_MODE_START_FROM_EQE;
+		break;
+	default:
+		if (MLX5_CAP_GEN(priv->mdev, cq_period_start_from_cqe))
+			rx_moderation_mode = MLX5_CQ_PERIOD_MODE_START_FROM_CQE;
+		else
+			rx_moderation_mode = MLX5_CQ_PERIOD_MODE_START_FROM_EQE;
+		break;
+	}
+
 	/* open receive completion queue */
 	err = mlx5e_open_cq(c, &cparam->rx_cq, &c->rq.cq,
-	    &mlx5e_rx_cq_comp, MLX5_CQ_PERIOD_MODE_START_FROM_CQE);
+	    &mlx5e_rx_cq_comp, rx_moderation_mode);
 	if (err)
 		goto err_close_tx_cqs;
 
@@ -2250,6 +2259,8 @@ mlx5e_build_ifp_priv(struct mlx5_core_dev *mdev,
 	    MLX5_CAP_GEN(mdev, cq_period_start_from_cqe) ?
 	    MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_USEC_FROM_CQE :
 	    MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_USEC;
+	priv->params.rx_cq_moderation_mode =
+	    MLX5_CAP_GEN(mdev, cq_period_start_from_cqe) ? 1 : 0;
 	priv->params.rx_cq_moderation_pkts =
 	    MLX5E_PARAMS_DEFAULT_RX_CQ_MODERATION_PKTS;
 	priv->params.tx_cq_moderation_usec =
