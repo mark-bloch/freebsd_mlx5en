@@ -183,7 +183,32 @@ struct mlx5e_vport_stats {
   m(+1, u64 pause_ctrl_rx, "pause_ctrl_rx", "Pause control received")	\
   m(+1, u64 pause_ctrl_tx, "pause_ctrl_tx", "Pause control transmitted")
 
-#define	MLX5E_PPORT_RFC2863_STATS(m)					\
+#define	MLX5E_PPORT_RFC2819_STATS(m)					\
+  m(+1, u64 drop_events, "drop_events", "Dropped events")		\
+  m(+1, u64 octets, "octets", "Octets")					\
+  m(+1, u64 pkts, "pkts", "Packets")					\
+  m(+1, u64 broadcast_pkts, "broadcast_pkts", "Broadcast packets")	\
+  m(+1, u64 multicast_pkts, "multicast_pkts", "Multicast packets")	\
+  m(+1, u64 crc_align_errors, "crc_align_errors", "CRC alignment errors") \
+  m(+1, u64 undersize_pkts, "undersize_pkts", "Undersized packets")	\
+  m(+1, u64 oversize_pkts, "oversize_pkts", "Oversized packets")	\
+  m(+1, u64 fragments, "fragments", "Fragments")			\
+  m(+1, u64 jabbers, "jabbers", "Jabbers")				\
+  m(+1, u64 collisions, "collisions", "Collisions")
+
+#define	MLX5E_PPORT_RFC2819_STATS_DEBUG(m)				\
+  m(+1, u64 p64octets, "p64octets", "Bytes")				\
+  m(+1, u64 p65to127octets, "p65to127octets", "Bytes")			\
+  m(+1, u64 p128to255octets, "p128to255octets", "Bytes")		\
+  m(+1, u64 p256to511octets, "p256to511octets", "Bytes")		\
+  m(+1, u64 p512to1023octets, "p512to1023octets", "Bytes")		\
+  m(+1, u64 p1024to1518octets, "p1024to1518octets", "Bytes")		\
+  m(+1, u64 p1519to2047octets, "p1519to2047octets", "Bytes")		\
+  m(+1, u64 p2048to4095octets, "p2048to4095octets", "Bytes")		\
+  m(+1, u64 p4096to8191octets, "p4096to8191octets", "Bytes")		\
+  m(+1, u64 p8192to10239octets, "p8192to10239octets", "Bytes")
+
+#define	MLX5E_PPORT_RFC2863_STATS_DEBUG(m)				\
   m(+1, u64 in_octets, "in_octets", "In octets")			\
   m(+1, u64 in_ucast_pkts, "in_ucast_pkts", "In unicast packets")	\
   m(+1, u64 in_discards, "in_discards", "In discards")			\
@@ -198,30 +223,7 @@ struct mlx5e_vport_stats {
   m(+1, u64 out_multicast_pkts, "out_multicast_pkts", "Out multicast packets") \
   m(+1, u64 out_broadcast_pkts, "out_broadcast_pkts", "Out broadcast packets")
 
-#define	MLX5E_PPORT_RFC2819_STATS(m)					\
-  m(+1, u64 drop_events, "drop_events", "Dropped events")		\
-  m(+1, u64 octets, "octets", "Octets")				\
-  m(+1, u64 pkts, "pkts", "Packets")					\
-  m(+1, u64 broadcast_pkts, "broadcast_pkts", "Broadcast packets")	\
-  m(+1, u64 multicast_pkts, "multicast_pkts", "Multicast packets")	\
-  m(+1, u64 crc_align_errors, "crc_align_errors", "CRC alignment errors") \
-  m(+1, u64 undersize_pkts, "undersize_pkts", "Undersized packets")	\
-  m(+1, u64 oversize_pkts, "oversize_pkts", "Oversized packets")	\
-  m(+1, u64 fragments, "fragments", "Fragments")			\
-  m(+1, u64 jabbers, "jabbers", "Jabbers")				\
-  m(+1, u64 collisions, "collisions", "Collisions")			\
-  m(+1, u64 p64octets, "p64octets", "Bytes")				\
-  m(+1, u64 p65to127octets, "p65to127octets", "Bytes")			\
-  m(+1, u64 p128to255octets, "p128to255octets", "Bytes")		\
-  m(+1, u64 p256to511octets, "p256to511octets", "Bytes")		\
-  m(+1, u64 p512to1023octets, "p512to1023octets", "Bytes")		\
-  m(+1, u64 p1024to1518octets, "p1024to1518octets", "Bytes")		\
-  m(+1, u64 p1519to2047octets, "p1519to2047octets", "Bytes")		\
-  m(+1, u64 p2048to4095octets, "p2048to4095octets", "Bytes")		\
-  m(+1, u64 p4096to8191octets, "p4096to8191octets", "Bytes")		\
-  m(+1, u64 p8192to10239octets, "p8192to10239octets", "Bytes")
-
-#define MLX5E_PPORT_PHYSICAL_LAYER_STATS(m)                                    		\
+#define MLX5E_PPORT_PHYSICAL_LAYER_STATS_DEBUG(m)                                    		\
   m(+1, u64 time_since_last_clear, "time_since_last_clear",				\
 			"Time since the last counters clear event (msec)")		\
   m(+1, u64 symbol_errors, "symbol_errors", "Symbol errors")				\
@@ -264,25 +266,39 @@ struct mlx5e_vport_stats {
 
 #define	MLX5E_PPORT_STATS(m)			\
   MLX5E_PPORT_IEEE802_3_STATS(m)		\
-  MLX5E_PPORT_RFC2863_STATS(m)			\
-  MLX5E_PPORT_RFC2819_STATS(m)			\
-  MLX5E_PPORT_PHYSICAL_LAYER_STATS(m)
+  MLX5E_PPORT_RFC2819_STATS(m)
+
+#define	MLX5E_PORT_STATS_DEBUG(m)		\
+  MLX5E_PPORT_RFC2819_STATS_DEBUG(m)		\
+  MLX5E_PPORT_RFC2863_STATS_DEBUG(m)		\
+  MLX5E_PPORT_PHYSICAL_LAYER_STATS_DEBUG(m)
 
 #define	MLX5E_PPORT_IEEE802_3_STATS_NUM \
   (0 MLX5E_PPORT_IEEE802_3_STATS(MLX5E_STATS_COUNT))
-#define	MLX5E_PPORT_RFC2863_STATS_NUM \
-  (0 MLX5E_PPORT_RFC2863_STATS(MLX5E_STATS_COUNT))
 #define	MLX5E_PPORT_RFC2819_STATS_NUM \
   (0 MLX5E_PPORT_RFC2819_STATS(MLX5E_STATS_COUNT))
 #define	MLX5E_PPORT_STATS_NUM \
   (0 MLX5E_PPORT_STATS(MLX5E_STATS_COUNT))
-#define MLX5E_PPORT_PHYSICAL_LAYER_STATS_NUM \
-  (0 MLX5E_PPORT_PHYSICAL_LAYER_STATS(MLX5E_STATS_COUNT))
+
+#define	MLX5E_PPORT_RFC2819_STATS_DEBUG_NUM \
+  (0 MLX5E_PPORT_RFC2819_STATS_DEBUG(MLX5E_STATS_COUNT))
+#define	MLX5E_PPORT_RFC2863_STATS_DEBUG_NUM \
+  (0 MLX5E_PPORT_RFC2863_STATS_DEBUG(MLX5E_STATS_COUNT))
+#define MLX5E_PPORT_PHYSICAL_LAYER_STATS_DEBUG_NUM \
+  (0 MLX5E_PPORT_PHYSICAL_LAYER_STATS_DEBUG(MLX5E_STATS_COUNT))
+#define	MLX5E_PORT_STATS_DEBUG_NUM \
+  (0 MLX5E_PORT_STATS_DEBUG(MLX5E_STATS_COUNT))
 
 struct mlx5e_pport_stats {
 	struct sysctl_ctx_list ctx;
 	u64	arg [0];
 	MLX5E_PPORT_STATS(MLX5E_STATS_VAR)
+};
+
+struct mlx5e_port_stats_debug {
+	struct sysctl_ctx_list ctx;
+	u64	arg [0];
+	MLX5E_PORT_STATS_DEBUG(MLX5E_STATS_VAR)
 };
 
 #define	MLX5E_RQ_STATS(m)					\
@@ -320,6 +336,7 @@ struct mlx5e_sq_stats {
 struct mlx5e_stats {
 	struct mlx5e_vport_stats vport;
 	struct mlx5e_pport_stats pport;
+	struct mlx5e_port_stats_debug port_stats_debug;
 };
 
 struct mlx5e_params {
@@ -577,6 +594,7 @@ struct mlx5e_priv {
 	struct sysctl_ctx_list sysctl_ctx;
 	struct sysctl_oid *sysctl_dev;
 	struct sysctl_oid *sysctl_hw;
+	int	sysctl_debug;
 	struct mlx5e_stats stats;
 
 	eventhandler_tag vlan_detach;

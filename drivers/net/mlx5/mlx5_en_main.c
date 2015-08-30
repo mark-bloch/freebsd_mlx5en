@@ -274,6 +274,7 @@ mlx5e_update_pport_counters(struct mlx5e_priv *priv)
 {
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_pport_stats *s = &priv->stats.pport;
+	struct mlx5e_port_stats_debug *s_debug = &priv->stats.port_stats_debug;
 	u32 *in;
 	u32 *out;
 	u64 *ptr;
@@ -295,20 +296,23 @@ mlx5e_update_pport_counters(struct mlx5e_priv *priv)
 	for (x = y = 0; x != MLX5E_PPORT_IEEE802_3_STATS_NUM; x++, y++)
 		s->arg[y] = be64toh(ptr[x]);
 
-	MLX5_SET(ppcnt_reg, in, grp, MLX5_RFC_2863_COUNTERS_GROUP);
-	mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPCNT, 0, 0);
-	for (x = 0; x != MLX5E_PPORT_RFC2863_STATS_NUM; x++, y++)
-		s->arg[y] = be64toh(ptr[x]);
-
 	MLX5_SET(ppcnt_reg, in, grp, MLX5_RFC_2819_COUNTERS_GROUP);
 	mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPCNT, 0, 0);
 	for (x = 0; x != MLX5E_PPORT_RFC2819_STATS_NUM; x++, y++)
 		s->arg[y] = be64toh(ptr[x]);
+	for (y = 0; x != MLX5E_PPORT_RFC2819_STATS_NUM +
+	   MLX5E_PPORT_RFC2819_STATS_DEBUG_NUM; x++, y++)
+		s_debug->arg[y] = be64toh(ptr[x]);
+
+	MLX5_SET(ppcnt_reg, in, grp, MLX5_RFC_2863_COUNTERS_GROUP);
+	mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPCNT, 0, 0);
+	for (x = 0; x != MLX5E_PPORT_RFC2863_STATS_DEBUG_NUM; x++, y++)
+		s_debug->arg[y] = be64toh(ptr[x]);
 
 	MLX5_SET(ppcnt_reg, in, grp, MLX5_PHYSICAL_LAYER_COUNTERS_GROUP);
         mlx5_core_access_reg(mdev, in, sz, out, sz, MLX5_REG_PPCNT, 0, 0);
-        for (x = 0; x != MLX5E_PPORT_PHYSICAL_LAYER_STATS_NUM; x++, y++)
-                s->arg[y] = be64toh(ptr[x]);
+        for (x = 0; x != MLX5E_PPORT_PHYSICAL_LAYER_STATS_DEBUG_NUM; x++, y++)
+		s_debug->arg[y] = be64toh(ptr[x]);
 free_out:
 	kvfree(in);
 	kvfree(out);
@@ -2596,6 +2600,8 @@ mlx5e_destroy_ifp(struct mlx5_core_dev *mdev, void *vpriv)
 	PRIV_UNLOCK(priv);
 
 	/* destroy all remaining sysctl nodes */
+	if (priv->sysctl_debug)
+		sysctl_ctx_free(&priv->stats.port_stats_debug.ctx);
 	sysctl_ctx_free(&priv->stats.vport.ctx);
 	sysctl_ctx_free(&priv->stats.pport.ctx);
 	sysctl_ctx_free(&priv->sysctl_ctx);

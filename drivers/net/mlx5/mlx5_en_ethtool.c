@@ -32,6 +32,26 @@
 
 #include "en.h"
 
+void
+mlx5e_create_stats(struct sysctl_ctx_list *ctx,
+    struct sysctl_oid_list *parent, const char *buffer,
+    const char **desc, unsigned num, u64 * arg)
+{
+	struct sysctl_oid *node;
+	unsigned x;
+
+	sysctl_ctx_init(ctx);
+
+	node = SYSCTL_ADD_NODE(ctx, parent, OID_AUTO,
+	    buffer, CTLFLAG_RD, NULL, "Statistics");
+	if (node == NULL)
+		return;
+	for (x = 0; x != num; x++) {
+		SYSCTL_ADD_UQUAD(ctx, SYSCTL_CHILDREN(node), OID_AUTO,
+		    desc[2 * x], CTLFLAG_RD, arg + x, desc[2 * x + 1]);
+	}
+}
+
 static int
 mlx5e_ethtool_handler(SYSCTL_HANDLER_ARGS)
 {
@@ -153,6 +173,34 @@ static const char *mlx5e_params_desc[] = {
 	MLX5E_PARAMS(MLX5E_STATS_DESC)
 };
 
+static const char *mlx5e_port_stats_debug_desc[] = {
+	MLX5E_PORT_STATS_DEBUG(MLX5E_STATS_DESC)
+};
+
+static int
+mlx5e_ethtool_debug_stats(SYSCTL_HANDLER_ARGS)
+{
+	struct mlx5e_priv *priv = arg1;
+	int error;
+	int sys_debug;
+
+	sys_debug = priv->sysctl_debug;
+	error = sysctl_handle_int(oidp, &priv->sysctl_debug, 0, req);
+	if (error || !req->newptr)
+		return (error);
+	priv->sysctl_debug = !!priv->sysctl_debug;
+	if (sys_debug == priv->sysctl_debug)
+		return (error);
+	if (priv->sysctl_debug)
+		mlx5e_create_stats(&priv->stats.port_stats_debug.ctx,
+		    SYSCTL_CHILDREN(priv->sysctl_dev), "debug_stats",
+		    mlx5e_port_stats_debug_desc, MLX5E_PORT_STATS_DEBUG_NUM,
+		    priv->stats.port_stats_debug.arg);
+	else
+		sysctl_ctx_free(&priv->stats.port_stats_debug.ctx);
+	return (error);
+}
+
 void
 mlx5e_create_ethtool(struct mlx5e_priv *priv)
 {
@@ -196,6 +244,10 @@ mlx5e_create_ethtool(struct mlx5e_priv *priv)
 		}
 	}
 
+	SYSCTL_ADD_PROC(&priv->sysctl_ctx, SYSCTL_CHILDREN(node), OID_AUTO,
+	    "debug_stats", CTLTYPE_INT | CTLFLAG_RW | CTLFLAG_MPSAFE, priv,
+	    0, &mlx5e_ethtool_debug_stats, "I", "Extended debug statistics");
+
 	pnameunit = device_get_nameunit(priv->mdev->pdev->dev.bsddev);
 
 	SYSCTL_ADD_STRING(&priv->sysctl_ctx, SYSCTL_CHILDREN(node),
@@ -204,22 +256,3 @@ mlx5e_create_ethtool(struct mlx5e_priv *priv)
 	    "PCI device name");
 }
 
-void
-mlx5e_create_stats(struct sysctl_ctx_list *ctx,
-    struct sysctl_oid_list *parent, const char *buffer,
-    const char **desc, unsigned num, u64 * arg)
-{
-	struct sysctl_oid *node;
-	unsigned x;
-
-	sysctl_ctx_init(ctx);
-
-	node = SYSCTL_ADD_NODE(ctx, parent, OID_AUTO,
-	    buffer, CTLFLAG_RD, NULL, "Statistics");
-	if (node == NULL)
-		return;
-	for (x = 0; x != num; x++) {
-		SYSCTL_ADD_UQUAD(ctx, SYSCTL_CHILDREN(node), OID_AUTO,
-		    desc[2 * x], CTLFLAG_RD, arg + x, desc[2 * x + 1]);
-	}
-}
