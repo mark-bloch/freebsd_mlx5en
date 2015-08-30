@@ -34,6 +34,10 @@
 
 #include <sys/sockio.h>
 
+#define	ETH_DRIVER_VERSION	"3.0.0-beta-PRERELEASE"
+char mlx5e_version[] = "Mellanox Ethernet driver"
+    " (" ETH_DRIVER_VERSION ")";
+
 struct mlx5e_rq_param {
 	u32	rqc [MLX5_ST_SZ_DW(rqc)];
 	struct mlx5_wq_param wq;
@@ -2352,6 +2356,37 @@ mlx5e_priv_mtx_destroy(struct mlx5e_priv *priv)
 	sx_destroy(&priv->state_lock);
 }
 
+static int
+sysctl_firmware(SYSCTL_HANDLER_ARGS)
+{
+	/* %d.%d%.d the string format.
+	 * fw_rev_{maj,min,sub} return u16, 2^16 = 65536.
+	 * We need at most 5 chars to store that.
+	 * it also has: two "." and NULL at the end.
+	 * Which means we need 18 (5*3 + 3) chars at most.
+	 */
+	char fw[18];
+	struct mlx5e_priv *priv = arg1;
+	int error;
+
+	sprintf(fw, "%d.%d.%d", fw_rev_maj(priv->mdev), fw_rev_min(priv->mdev),
+	    fw_rev_sub(priv->mdev));
+	error = sysctl_handle_string(oidp, fw, sizeof(fw), req);
+	return (error);
+}
+
+static void
+mlx5e_add_hw_stats(struct mlx5e_priv *priv)
+{
+	SYSCTL_ADD_PROC(&priv->sysctl_ctx, SYSCTL_CHILDREN(priv->sysctl_hw),
+	    OID_AUTO, "fw_version", CTLTYPE_STRING | CTLFLAG_RD, priv, 0,
+	    sysctl_firmware, "A", "HCA firmware version");
+
+	SYSCTL_ADD_STRING(&priv->sysctl_ctx, SYSCTL_CHILDREN(priv->sysctl_hw),
+	    OID_AUTO, "board_id", CTLFLAG_RD, priv->mdev->board_id, 0,
+	    "Board ID");
+}
+
 static void *
 mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 {
@@ -2420,7 +2455,12 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 	    OID_AUTO, "en", CTLFLAG_RD, 0, "MLX5 ethernet dev");
 	if (priv->sysctl_dev == NULL) {
 		mlx5_core_err(mdev, "SYSCTL_ADD_NODE() failed\n");
-
+		goto err_free_sysctl;
+	}
+	priv->sysctl_hw = SYSCTL_ADD_NODE(&priv->sysctl_ctx, child,
+	    OID_AUTO, "hw", CTLFLAG_RD, 0, "MLX5 ethernet dev hw");
+	if (priv->sysctl_hw == NULL) {
+		mlx5_core_err(mdev, "SYSCTL_ADD_NODE() failed\n");
 		goto err_free_sysctl;
 	}
 
@@ -2457,6 +2497,9 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 
 	/* set default MTU */
 	mlx5e_set_dev_port_mtu(ifp, ifp->if_mtu);
+
+	/* Set desc */
+	device_set_desc(mdev->pdev->dev.bsddev, mlx5e_version);
 
 	ether_ifattach(ifp, dev_addr);
 
@@ -2495,6 +2538,8 @@ mlx5e_create_ifp(struct mlx5_core_dev *mdev)
 	ifmedia_set(&priv->media, IFM_ETHER | IFM_AUTO);
 
 	mlx5e_enable_async_events(priv);
+
+	mlx5e_add_hw_stats(priv);
 
 	mlx5e_create_stats(&priv->stats.vport.ctx, SYSCTL_CHILDREN(priv->sysctl_dev),
 	    "vstats", mlx5e_vport_stats_desc, MLX5E_VPORT_STATS_NUM,
