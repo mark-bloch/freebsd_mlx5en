@@ -7,8 +7,15 @@ fi
 
 function get_irq_list
 {
-        intf=$1
-        device=$(sysctl hw.$intf.conf.device_name | cut -d " " -f 2)
+        case $1 in
+        mlx5*)
+	        PORT=${1:~0}
+	        device=$(sysctl dev.mlx5.${PORT}.en.conf.device_name | cut -d " " -f 2)
+                ;;
+        *) #mlx4
+                device=$(sysctl hw.$1.conf.device_name | cut -d " " -f 2)
+                ;;
+        esac
         IRQS=$(vmstat -ia | grep $device | awk '{print $1}' | sed s/irq// | sed s/://)
         echo $IRQS
 }
