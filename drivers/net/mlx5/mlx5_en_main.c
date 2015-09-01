@@ -34,7 +34,7 @@
 
 #include <sys/sockio.h>
 
-#define	ETH_DRIVER_VERSION	"3.0.0-beta-PRERELEASE"
+#define	ETH_DRIVER_VERSION	"3.0.0-beta-RC1"
 char mlx5e_version[] = "Mellanox Ethernet driver"
     " (" ETH_DRIVER_VERSION ")";
 
