@@ -392,6 +392,7 @@ struct mlx5e_cq {
 
 struct mlx5e_rq_mbuf {
 	bus_dmamap_t dma_map;
+	caddr_t data;
 	struct mbuf *mbuf;
 };
 

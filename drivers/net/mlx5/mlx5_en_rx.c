@@ -42,6 +42,9 @@ mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
 	int nsegs;
 	int err;
 
+	if (rq->mbuf[ix].mbuf != NULL)
+		return (0);
+
 	mb = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, rq->wqe_sz);
 	if (unlikely(!mb))
 		return (-ENOMEM);
@@ -64,6 +67,7 @@ mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq,
 	wqe->data.addr = cpu_to_be64(segs[0].ds_addr);
 
 	rq->mbuf[ix].mbuf = mb;
+	rq->mbuf[ix].data = mb->m_data;
 
 	bus_dmamap_sync(rq->dma_tag, rq->mbuf[ix].dma_map,
 	    BUS_DMASYNC_PREREAD);
@@ -154,10 +158,10 @@ mlx5e_lro_update_hdr(struct mbuf* mb, struct mlx5_cqe64 *cqe)
 
 static inline void
 mlx5e_build_rx_mbuf(struct mlx5_cqe64 *cqe,
-    struct mlx5e_rq *rq, struct mbuf *mb)
+    struct mlx5e_rq *rq, struct mbuf *mb,
+    u32 cqe_bcnt)
 {
 	struct ifnet *ifp = rq->ifp;
-	u32 cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
 	int lro_num_seg; /* HW LRO session aggregated packets counter */
 
 	lro_num_seg = be32_to_cpu(cqe->srqn) >> 24;
@@ -203,6 +207,7 @@ mlx5e_poll_rx_cq(struct mlx5e_rq *rq, int budget)
 		struct mbuf *mb;
 		__be16 wqe_counter_be;
 		u16 wqe_counter;
+		u32 byte_cnt;
 
 		cqe = mlx5e_get_cqe(&rq->cq);
 		if (!cqe)
@@ -211,19 +216,30 @@ mlx5e_poll_rx_cq(struct mlx5e_rq *rq, int budget)
 		wqe_counter_be = cqe->wqe_counter;
 		wqe_counter = be16_to_cpu(wqe_counter_be);
 		wqe = mlx5_wq_ll_get_wqe(&rq->wq, wqe_counter);
-		mb = rq->mbuf[wqe_counter].mbuf;
-		rq->mbuf[wqe_counter].mbuf = NULL;	/* safety clear */
+		byte_cnt = be32_to_cpu(cqe->byte_cnt);
 
-		bus_dmamap_sync(rq->dma_tag, rq->mbuf[wqe_counter].dma_map,
+		bus_dmamap_sync(rq->dma_tag,
+		    rq->mbuf[wqe_counter].dma_map,
 		    BUS_DMASYNC_POSTREAD);
-		bus_dmamap_unload(rq->dma_tag, rq->mbuf[wqe_counter].dma_map);
+
+		if (MHLEN >= byte_cnt &&
+		    (mb = m_gethdr(M_NOWAIT, MT_DATA)) != NULL) {
+			bcopy(rq->mbuf[wqe_counter].data, mtod(mb, caddr_t),
+			    byte_cnt);
+		} else {
+			mb = rq->mbuf[wqe_counter].mbuf;
+			rq->mbuf[wqe_counter].mbuf = NULL;	/* safety clear */
+
+			bus_dmamap_unload(rq->dma_tag,
+			    rq->mbuf[wqe_counter].dma_map);
+		}
 
 		if (unlikely((cqe->op_own >> 4) != MLX5_CQE_RESP_SEND)) {
 			rq->stats.wqe_err++;
 			m_freem(mb);
 			goto wq_ll_pop;
 		}
-		mlx5e_build_rx_mbuf(cqe, rq, mb);
+		mlx5e_build_rx_mbuf(cqe, rq, mb, byte_cnt);
 		rq->stats.packets++;
 #ifdef HAVE_TURBO_LRO
 		if (mb->m_pkthdr.csum_flags == 0 ||
